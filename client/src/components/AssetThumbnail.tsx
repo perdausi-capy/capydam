@@ -8,13 +8,15 @@ interface Props {
 }
 
 const AssetThumbnail: React.FC<Props> = ({ mimeType, thumbnailPath, className = "" }) => {
-  // 1. If we have a thumbnail (It's an image), show it
+  // 1. If we have a thumbnail (It's an image or video screenshot), show it
   if (thumbnailPath) {
     return (
         <img
-        src={`http://localhost:5000/${thumbnailPath}`}
+        // ✅ FIX: Removed "http://localhost:5000/"
+        // The DB now holds the full Supabase URL (https://...)
+        src={thumbnailPath}
         alt="Thumbnail"
-        className={`block w-full h-auto ${className}`} // <--- h-auto is key!
+        className={`block w-full h-auto object-cover ${className}`} 
         loading="lazy"
         />
     );
@@ -41,13 +43,12 @@ const AssetThumbnail: React.FC<Props> = ({ mimeType, thumbnailPath, className = 
         flex w-full items-center justify-center 
         ${colorClass} 
         ${className}
-        h-56            // <--- FIX: Force a nice height (224px)
-        lg:h-64         // <--- Taller on desktop
+        h-56            // Force a nice height for icons
+        lg:h-64         // Taller on desktop
       `}
     >
       <div className="flex flex-col items-center gap-2">
         <Icon size={64} strokeWidth={1} className="opacity-80" />
-        {/* Optional label for file type */}
         <span className="text-xs font-bold uppercase tracking-wider opacity-60">
             {mimeType.split('/')[1].toUpperCase()}
         </span>
