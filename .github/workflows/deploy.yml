@@ -1,0 +1,51 @@
+name: Deploy Capydam
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            # 1. Stop on any error
+            set -e
+
+            # 2. Navigate to project folder
+            # (Make sure this matches the folder you cloned into on your server)
+            cd /var/www/capydam
+
+            # 3. Pull latest code
+            echo "⬇️ Pulling latest changes..."
+            git pull origin main
+
+            # 4. Backend: Install & Build
+            echo "🛠️ Building Backend..."
+            cd server
+            npm install
+            npx prisma generate
+            npm run build
+            cd ..
+
+            # 5. Frontend: Install & Build
+            echo "🎨 Building Frontend..."
+            cd client
+            npm install
+            npm run build
+            cd ..
+
+            # 6. Restart PM2 (Backend)
+            echo "🔄 Restarting Server..."
+            # Try to restart, if it fails (doesn't exist), start it new
+            pm2 restart capydam-api || pm2 start server/dist/index.js --name capydam-api
+            pm2 save
+
+            echo "✅ Deployment Successful!"
