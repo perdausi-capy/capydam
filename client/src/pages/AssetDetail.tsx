@@ -147,21 +147,21 @@ useEffect(() => {
         <div className="flex items-center justify-center rounded-xl bg-gray-100 p-4 border min-h-[400px]">
            {asset.mimeType.startsWith('image/') ? (
              <img
-               src={`http://localhost:5000/${asset.path}`}
-               alt={asset.originalName}
+              src={asset.path} 
+              alt={asset.originalName}
                className="max-h-[80vh] max-w-full rounded shadow-sm object-contain"
              />
            ) : asset.mimeType.startsWith('video/') ? (
              <video 
                controls 
                className="max-h-[80vh] max-w-full rounded shadow-sm"
-               src={`http://localhost:5000/${asset.path}`}
+               src={asset.path}
              >
                Your browser does not support the video tag.
              </video>
            ) : asset.mimeType === 'application/pdf' ? (
              <iframe
-               src={`http://localhost:5000/${asset.path}`}
+             src={asset.path}
                className="h-[80vh] w-full rounded border"
              />
            ) : (
@@ -171,7 +171,7 @@ useEffect(() => {
                </div>
                <p className="mb-4 text-gray-500">Preview not available for this file type.</p>
                <a 
-                 href={`http://localhost:5000/${asset.path}`}
+                 href={asset.path}
                  download={asset.originalName}
                  className="rounded bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700"
                >
