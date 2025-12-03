@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { Check, X, User, Loader2, ShieldAlert } from 'lucide-react';
+import { Check, X, Loader2, ShieldAlert } from 'lucide-react';
 
 interface UserData {
   id: string;

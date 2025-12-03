@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Film, Music, File, Image as ImageIcon } from 'lucide-react';
+import { FileText, Film, Music, File } from 'lucide-react';
 
 interface Props {
   mimeType: string;

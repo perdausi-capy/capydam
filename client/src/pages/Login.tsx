@@ -10,8 +10,8 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [keepLoggedIn, setKeepLoggedIn] = useState(false);
   const [error, setError] = useState('');
-  const [focusedField, setFocusedField] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [isLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 

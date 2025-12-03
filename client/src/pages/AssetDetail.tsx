@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { ArrowLeft, Save, Tag, FileText, Calendar, Trash2, FolderPlus } from 'lucide-react';
@@ -102,25 +102,6 @@ const AssetDetail = () => {
       toast.error('Failed to save changes');
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!asset) return;
-    
-    // Simple confirmation
-    if (!window.confirm('Are you sure you want to permanently delete this asset? This cannot be undone.')) {
-      return;
-    }
-
-    setDeleting(true);
-    try {
-      await client.delete(`/assets/${asset.id}`);
-      toast.success('Asset deleted permanently');
-      navigate('/'); // Return to dashboard
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to delete asset');
-      setDeleting(false);
     }
   };
 

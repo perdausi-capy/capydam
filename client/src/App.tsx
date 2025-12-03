@@ -11,7 +11,7 @@ import RequestAccount from './pages/RequestAccount';
 import Users from './pages/Users';
 
 // Wrapper for protected pages that includes the Sidebar Layout
-const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" />;
   
