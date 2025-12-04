@@ -133,7 +133,7 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
 // --- GET ALL ---
 export const getAssets = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { search, type } = req.query;
+    const { search, type, color } = req.query;
     const whereClause: any = { AND: [] };
 
     if (search) {
@@ -149,6 +149,14 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
       if (type === 'image') whereClause.AND.push({ mimeType: { startsWith: 'image/' } });
       else if (type === 'video') whereClause.AND.push({ mimeType: { startsWith: 'video/' } });
       else if (type === 'document') whereClause.AND.push({ mimeType: 'application/pdf' }); 
+    }
+
+    if (color) {
+      // The AI usually adds color names to 'tags' (e.g., "Red", "Blue")
+      // OR we can search the 'colors' array string in the JSON
+      whereClause.AND.push({
+        aiData: { contains: String(color) } 
+      });
     }
 
     const assets = await prisma.asset.findMany({

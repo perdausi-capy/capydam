@@ -22,8 +22,23 @@ interface CollectionSimple {
   name: string;
 }
 
+
 // Define valid filter types
 type FilterType = 'image' | 'video' | 'document'; // 'all' removed from UI types
+
+const colorFilters = [
+  { name: 'Red', hex: '#ef4444' },
+  { name: 'Orange', hex: '#f97316' },
+  { name: 'Yellow', hex: '#eab308' },
+  { name: 'Green', hex: '#22c55e' },
+  { name: 'Teal', hex: '#14b8a6' },
+  { name: 'Blue', hex: '#3b82f6' },
+  { name: 'Purple', hex: '#a855f7' },
+  { name: 'Pink', hex: '#ec4899' },
+  { name: 'Black', hex: '#000000' },
+  { name: 'White', hex: '#ffffff' },
+  { name: 'Gray', hex: '#6b7280' },
+];
 
 const Dashboard = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -33,6 +48,7 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
   
   // FIX 1: Set default to 'image' so it doesn't show mixed content
   const [filterType, setFilterType] = useState<FilterType>('image');
@@ -46,15 +62,20 @@ const Dashboard = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Update useEffect
   useEffect(() => {
-    fetchData(debouncedSearch, filterType);
-  }, [debouncedSearch, filterType]);
+    fetchData(debouncedSearch, filterType, selectedColor);
+  }, [debouncedSearch, filterType, selectedColor]);
 
-  const fetchData = async (query = '', type: FilterType) => {
+  const fetchData = async (query = '', type: FilterType, color: string | null) => {
     setLoading(true);
     try {
       const assetsRes = await client.get(`/assets`, {
-        params: { search: query, type: type }
+        params: { 
+            search: query, 
+            type: type,
+            color: color // <--- Pass to backend
+        }
       });
       setAssets(assetsRes.data);
       
@@ -183,6 +204,34 @@ const Dashboard = () => {
             <FilterTab label="Images" type="image" icon={ImageIcon} />
             <FilterTab label="Videos" type="video" icon={Film} />
             <FilterTab label="Documents" type="document" icon={FileText} />
+        </div>
+
+        {/* Color Filters */}
+        <div className="flex flex-wrap gap-2 items-center mt-4 border-t border-gray-100 pt-4">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mr-2">Filter by Color:</span>
+            
+            {/* Reset Color Button */}
+            {selectedColor && (
+                <button 
+                    onClick={() => setSelectedColor(null)}
+                    className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
+                >
+                    Clear
+                </button>
+            )}
+
+            {colorFilters.map((c) => (
+                <button
+                    key={c.name}
+                    onClick={() => setSelectedColor(selectedColor === c.name ? null : c.name)}
+                    title={`Filter by ${c.name}`}
+                    className={`
+                        w-6 h-6 rounded-full border border-gray-200 shadow-sm transition-all hover:scale-110
+                        ${selectedColor === c.name ? 'ring-2 ring-offset-2 ring-blue-500 scale-110' : ''}
+                    `}
+                    style={{ backgroundColor: c.hex }}
+                />
+            ))}
         </div>
 
       </div>
