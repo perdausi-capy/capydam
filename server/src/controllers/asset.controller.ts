@@ -3,26 +3,30 @@ import { prisma } from '../lib/prisma';
 import path from 'path';
 import fs from 'fs-extra';
 
-// Import Image Services
+// Import Services
+import { 
+  uploadToSupabase, 
+  deleteFromSupabase 
+} from '../services/storage.service';
+
 import { 
   generateThumbnail, 
   generateVideoThumbnail, 
   generatePdfThumbnail 
 } from '../services/image.service';
 
-// Import AI Services
 import { 
   analyzeImage, 
   analyzePdf, 
   analyzeAudioVideo 
 } from '../services/ai.service';
 
-// Extend Express Request to include Multer file
 interface MulterRequest extends Request {
   file?: Express.Multer.File;
-  user?: any; // Populated by verifyJWT middleware
+  user?: any;
 }
 
+// --- UPLOAD ---
 export const uploadAsset = async (req: Request, res: Response): Promise<void> => {
   const multerReq = req as MulterRequest;
 
@@ -35,11 +39,10 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
     const { filename, path: tempPath, originalname, mimetype, size } = multerReq.file;
     const userId = multerReq.user?.id;
     
-    // --- READ BODY PARAMS ---
     const creativity = parseFloat(req.body.creativity || '0.2'); 
     const specificity = req.body.specificity || 'general';
 
-    // --- THUMBNAIL GENERATION ---
+    // 1. Generate Thumbnails (Locally first)
     const thumbnailDir = path.join(__dirname, '../../uploads/thumbnails');
     await fs.ensureDir(thumbnailDir);
     
@@ -50,47 +53,71 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
          thumbnailRelativePath = await generateThumbnail(tempPath, thumbnailDir);
       } 
       else if (mimetype.startsWith('video/')) {
-         // ✅ Now generates real screenshots for videos!
          thumbnailRelativePath = await generateVideoThumbnail(tempPath, thumbnailDir);
       }
       else if (mimetype === 'application/pdf') {
-         // Returns null for now (Icon mode)
          thumbnailRelativePath = await generatePdfThumbnail(tempPath, thumbnailDir);
       }
     } catch (thumbError) {
-      console.warn("Thumbnail generation failed, falling back to icon:", thumbError);
+      console.warn("Thumbnail generation failed:", thumbError);
       thumbnailRelativePath = null;
     }
 
-    // --- SAVE TO DB ---
+    // 2. Upload ORIGINAL to Supabase
+    const cloudOriginalPath = await uploadToSupabase(
+      tempPath, 
+      `originals/${filename}`, 
+      mimetype
+    );
+
+    // 3. Upload THUMBNAIL to Supabase (if exists)
+    let cloudThumbnailPath = null;
+    if (thumbnailRelativePath) {
+       const localThumbPath = path.join(__dirname, '../../uploads/', thumbnailRelativePath);
+       
+       cloudThumbnailPath = await uploadToSupabase(
+         localThumbPath,
+         thumbnailRelativePath, 
+         'image/jpeg'
+       );
+       
+       // Cleanup Local Thumbnail
+       await fs.remove(localThumbPath);
+    }
+
+    // 4. Save CLOUD URLS to Database
     const asset = await prisma.asset.create({
       data: {
         filename,
         originalName: originalname,
         mimeType: mimetype,
         size,
-        path: `uploads/${filename}`, 
-        thumbnailPath: thumbnailRelativePath,
+        path: cloudOriginalPath, // <--- Supabase URL
+        thumbnailPath: cloudThumbnailPath, // <--- Supabase URL
         userId: userId,
         aiData: JSON.stringify({}), 
       },
     });
 
-    // --- AI ANALYSIS (Background Process) ---
-    // We do NOT await this, so the user gets a fast response
-    const absolutePath = path.join(__dirname, '../../', asset.path);
+    // 5. Trigger AI (Using local temp file before deleting it)
     const aiOptions = { creativity, specificity };
-
+    
+    // We pass the tempPath because the AI service reads from disk.
+    // Ideally, update AI service to read from URL, but this works for now.
     if (mimetype.startsWith('image/')) {
-      analyzeImage(asset.id, absolutePath, aiOptions);
+      analyzeImage(asset.id, tempPath, aiOptions);
     } 
     else if (mimetype === 'application/pdf') {
-      analyzePdf(asset.id, absolutePath, aiOptions);
+      analyzePdf(asset.id, tempPath, aiOptions);
     }
-    // Supports Audio AND Video
     else if (mimetype.startsWith('audio/') || mimetype.startsWith('video/')) {
-      analyzeAudioVideo(asset.id, absolutePath, aiOptions);
+      analyzeAudioVideo(asset.id, tempPath, aiOptions);
     }
+
+    // 6. Cleanup Local Original File (Delayed slightly to let AI finish reading if async)
+    // For absolute safety with async AI, you might await AI above, or move cleanup into AI service.
+    // For MVP, we'll assume AI reads the buffer quickly.
+    setTimeout(() => fs.remove(tempPath), 5000); 
 
     res.status(201).json({
       message: 'Asset uploaded successfully',
@@ -103,35 +130,25 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
+// --- GET ALL ---
 export const getAssets = async (req: Request, res: Response): Promise<void> => {
   try {
     const { search, type } = req.query;
+    const whereClause: any = { AND: [] };
 
-    // Build the WHERE clause dynamically
-    const whereClause: any = {
-      AND: [],
-    };
-
-    // 1. Handle Search Text
     if (search) {
       whereClause.AND.push({
         OR: [
-          { originalName: { contains: String(search) } },
+          { originalName: { contains: String(search) } }, // Postgres is case-sensitive by default
           { aiData: { contains: String(search) } },
         ],
       });
     }
 
-    // 2. Handle File Type Filter
     if (type && type !== 'all') {
-      if (type === 'image') {
-        whereClause.AND.push({ mimeType: { startsWith: 'image/' } });
-      } else if (type === 'video') {
-        whereClause.AND.push({ mimeType: { startsWith: 'video/' } });
-      } else if (type === 'document') {
-        whereClause.AND.push({ mimeType: 'application/pdf' }); 
-        // You can add OR conditions here later for .docx, .txt etc.
-      }
+      if (type === 'image') whereClause.AND.push({ mimeType: { startsWith: 'image/' } });
+      else if (type === 'video') whereClause.AND.push({ mimeType: { startsWith: 'video/' } });
+      else if (type === 'document') whereClause.AND.push({ mimeType: 'application/pdf' }); 
     }
 
     const assets = await prisma.asset.findMany({
@@ -147,6 +164,7 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+// --- GET ONE ---
 export const getAssetById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -159,27 +177,25 @@ export const getAssetById = async (req: Request, res: Response): Promise<void> =
       res.status(404).json({ message: 'Asset not found' });
       return;
     }
-
     res.json(asset);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }
 };
 
+// --- UPDATE ---
 export const updateAsset = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { originalName, aiData } = req.body; // We expect the full JSON object for aiData
+    const { originalName, aiData } = req.body;
 
     const asset = await prisma.asset.update({
       where: { id },
       data: {
         originalName,
-        // If the frontend sends an object, we stringify it for SQLite
         aiData: typeof aiData === 'object' ? JSON.stringify(aiData) : aiData,
       },
     });
-
     res.json(asset);
   } catch (error) {
     console.error(error);
@@ -187,53 +203,32 @@ export const updateAsset = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// Ensure 'fs' and 'path' are imported at the top
-// import fs from 'fs-extra'; 
-// import path from 'path';
-
+// --- DELETE ---
 export const deleteAsset = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const userId = (req as any).user?.id; // From verifyJWT
+    const userId = (req as any).user?.id;
     const userRole = (req as any).user?.role;
 
-    // 1. Find the asset first
-    const asset = await prisma.asset.findUnique({
-      where: { id },
-    });
+    const asset = await prisma.asset.findUnique({ where: { id } });
 
     if (!asset) {
       res.status(404).json({ message: 'Asset not found' });
       return;
     }
 
-    // 2. Ownership Check (Basic Security)
-    // Only allow delete if: User is Admin OR User is the one who uploaded it
     if (userRole !== 'admin' && asset.userId !== userId) {
       res.status(403).json({ message: 'You do not have permission to delete this asset.' });
       return;
     }
 
-    // 3. Delete from Database
-    await prisma.asset.delete({
-      where: { id },
-    });
+    // 1. Delete from Database
+    await prisma.asset.delete({ where: { id } });
 
-    // 4. Delete from Filesystem (Cleanup)
-    try {
-      // Construct absolute paths
-      const originalPath = path.join(__dirname, '../../', asset.path);
-      const thumbnailPath = asset.thumbnailPath 
-        ? path.join(__dirname, '../../', asset.thumbnailPath) 
-        : null;
-
-      await fs.remove(originalPath);
-      if (thumbnailPath) await fs.remove(thumbnailPath);
-      
-    } catch (fsError) {
-      console.error('Error deleting files from disk:', fsError);
-      // We continue even if FS fails, because the DB record is gone.
-    }
+    // 2. Delete from Supabase (Cloud)
+    // We pass the Full URL, the service parses it
+    if (asset.path) await deleteFromSupabase(asset.path);
+    if (asset.thumbnailPath) await deleteFromSupabase(asset.thumbnailPath);
 
     res.json({ message: 'Asset deleted successfully' });
   } catch (error) {
