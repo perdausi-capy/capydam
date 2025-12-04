@@ -2,10 +2,11 @@ import sharp from 'sharp';
 import fs from 'fs-extra';
 import path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
-import ffmpegPath from 'ffmpeg-static';
+// import ffmpegPath from 'ffmpeg-static';
 
 // Configure FFmpeg (This works fine on Node 22)
-if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
+// if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
+ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
 
 // 1. IMAGES (Sharp)
 export const generateThumbnail = async (filePath: string, outputDir: string): Promise<string> => {
