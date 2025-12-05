@@ -22,12 +22,55 @@ interface AiOptions {
   specificity: string;
 }
 
+
+
+export const generateEmbedding = async (text: string) => {
+  try {
+    // Clean text to avoid newlines breaking things
+    const cleanText = text.replace(/\n/g, ' ');
+    
+    const response = await openai.embeddings.create({
+      model: "text-embedding-3-small", // Fast & cheap
+      input: cleanText,
+      encoding_format: "float",
+    });
+    return response.data[0].embedding;
+  } catch (error) {
+    console.error("Error generating embedding:", error);
+    return null;
+  }
+};
+
 // --- HELPER: SAVE TO DB ---
 const saveAiData = async (id: string, data: any) => {
-  await prisma.asset.update({
-    where: { id },
-    data: { aiData: JSON.stringify(data) },
-  });
+  // Combine description + tags into one rich text string
+  const textToEmbed = `${data.description || ''} ${data.tags?.join(', ') || ''}`;
+  
+  // Generate the vector
+  const embedding = await generateEmbedding(textToEmbed);
+
+  // Save to DB
+  if (embedding) {
+    // Update JSON data first
+    await prisma.asset.update({
+      where: { id },
+      data: { aiData: JSON.stringify(data) },
+    });
+
+    // Update Vector using raw SQL (Prisma doesn't support vector write natively yet)
+    const vectorString = `[${embedding.join(',')}]`;
+    await prisma.$executeRaw`
+      UPDATE "Asset" 
+      SET embedding = ${vectorString}::vector
+      WHERE id = ${id}
+    `;
+  } else {
+    // Fallback (just save JSON)
+    await prisma.asset.update({
+      where: { id },
+      data: { aiData: JSON.stringify(data) },
+    });
+  }
 };
 
 // --- HELPER: TEXT TAGGING (For PDF/Audio) ---
@@ -70,20 +113,37 @@ const extractVideoFrame = (videoPath: string): Promise<string> => {
 };
 
 // --- MAIN HANDLER 1: IMAGES (Vision) ---
+// --- HANDLER 1: IMAGES (Vision) ---
 export const analyzeImage = async (assetId: string, filePath: string, options?: AiOptions) => {
   try {
     const imageBuffer = await fs.readFile(filePath);
     const base64Image = imageBuffer.toString('base64');
     const dataUrl = `data:image/jpeg;base64,${base64Image}`;
     
+    // 1. Determine Prompt based on Specificity
     const isSpecific = options?.specificity === 'high';
+    
+    const tagInstruction = isSpecific 
+      ? "1. 'tags': array of 15-20 highly precise visual keywords (e.g., 'Canon 5D', 'Bokeh', 'Golden Hour', 'MacBook Pro 16')."
+      : "1. 'tags': array of 5-8 broad visual categories (e.g., 'Laptop', 'Office', 'Technology').";
+
+    const descInstruction = isSpecific
+      ? "2. 'description': detailed visual analysis referencing lighting, composition, and specific objects."
+      : "2. 'description': a short concise summary (max 1 sentence).";
+
+    // 2. Call OpenAI with Temperature Control
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
-      temperature: options?.creativity || 0.2,
+      // Use the slider value! (0.0 = Robot, 1.0 = Creative)
+      temperature: options?.creativity || 0.2, 
       messages: [
         { role: "system", content: "You are a Digital Asset Manager. Output valid JSON." },
         { role: "user", content: [
-            { type: "text", text: `Analyze this image. Return JSON with tags (${isSpecific ? 'specific' : 'general'}), description, and colors.` },
+            { 
+              type: "text", 
+              // Inject the strict instructions
+              text: `Analyze this image. Return a JSON object with: \n${tagInstruction}\n${descInstruction}\n3. 'colors': Array of 3 dominant color names.` 
+            },
             { type: "image_url", image_url: { url: dataUrl } }
           ]
         }
@@ -93,6 +153,8 @@ export const analyzeImage = async (assetId: string, filePath: string, options?: 
     
     const aiData = JSON.parse(response.choices[0].message.content || '{}');
     await saveAiData(assetId, aiData);
+    
+    console.log(`✅ Image Analysis complete for ${assetId} (Mode: ${options?.specificity}, Temp: ${options?.creativity})`);
   } catch (e) {
     console.error(`Image Analysis failed for ${assetId}`, e);
   }

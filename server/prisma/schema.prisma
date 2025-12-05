@@ -38,6 +38,9 @@ model Asset {
   // AI Metadata
   // We store tags/colors/descriptions as JSON so we can evolve the AI structure easily
   aiData        String?  // Stored as JSON string in SQLite (Native JSON in Postgres)
+
+  // NEW: Store the OpenAI embedding (1536 dimensions for text-embedding-3-small)
+  embedding     Unsupported("vector(1536)")?
   
   // Relations
   uploadedBy    User     @relation(fields: [userId], references: [id])

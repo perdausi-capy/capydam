@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { Prisma } from '@prisma/client';
+import { generateEmbedding } from '../services/ai.service';
 import path from 'path';
 import fs from 'fs-extra';
 
@@ -41,6 +43,8 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
     
     const creativity = parseFloat(req.body.creativity || '0.2'); 
     const specificity = req.body.specificity || 'general';
+
+    console.log('🎛️ AI Settings Received:', { creativity, specificity });
 
     // 1. Generate Thumbnails (Locally first)
     const thumbnailDir = path.join(__dirname, '../../uploads/thumbnails');
@@ -131,41 +135,99 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
 };
 
 // --- GET ALL ---
+// ... imports (Prisma, generateEmbedding, etc)
+
+// ... imports
+
 export const getAssets = async (req: Request, res: Response): Promise<void> => {
   try {
+    // 1. ADD 'color' to destructuring
     const { search, type, color } = req.query;
-    const whereClause: any = { AND: [] };
+    
+    let vectorMatches: any[] = [];
+    let keywordMatches: any[] = [];
 
+    // --- A. VECTOR SEARCH ---
+    if (search && String(search).length > 2) {
+      try {
+        const embedding = await generateEmbedding(String(search));
+        
+        if (embedding) {
+          const vectorString = `[${embedding.join(',')}]`;
+          
+          const rawVectorAssets = await prisma.$queryRaw`
+            SELECT id
+            FROM "Asset"
+            WHERE 1=1
+            ${type && type !== 'all' 
+               ? Prisma.sql`AND "mimeType" LIKE ${type === 'image' ? 'image/%' : type === 'video' ? 'video/%' : '%pdf%'}` 
+               : Prisma.empty}
+            
+            -- NEW: Color Filter for Vector Path
+            ${color ? Prisma.sql`AND "aiData" ILIKE ${'%' + color + '%'}` : Prisma.empty}
+
+            AND embedding IS NOT NULL
+            AND (embedding <=> ${vectorString}::vector) < 0.50
+            ORDER BY embedding <=> ${vectorString}::vector
+            LIMIT 20;
+          `;
+
+          if (Array.isArray(rawVectorAssets) && rawVectorAssets.length > 0) {
+             const ids = rawVectorAssets.map((a: any) => a.id);
+             vectorMatches = await prisma.asset.findMany({
+               where: { id: { in: ids } },
+               include: { uploadedBy: { select: { name: true } } },
+             });
+          }
+        }
+      } catch (err) {
+        console.warn("Vector search failed", err);
+      }
+    }
+
+    // --- B. KEYWORD SEARCH ---
+    const keywordWhere: any = { AND: [] };
+    
+    // Type Filter
+    if (type && type !== 'all') {
+      if (type === 'image') keywordWhere.AND.push({ mimeType: { startsWith: 'image/' } });
+      else if (type === 'video') keywordWhere.AND.push({ mimeType: { startsWith: 'video/' } });
+      else if (type === 'document') keywordWhere.AND.push({ mimeType: 'application/pdf' }); 
+    }
+
+    // NEW: Color Filter
+    if (color) {
+        keywordWhere.AND.push({
+            aiData: { contains: String(color), mode: 'insensitive' }
+        });
+    }
+
+    // Text Search
     if (search) {
-      whereClause.AND.push({
+      keywordWhere.AND.push({
         OR: [
-          { originalName: { contains: String(search) } }, // Postgres is case-sensitive by default
-          { aiData: { contains: String(search) } },
+          { originalName: { contains: String(search), mode: 'insensitive' } },
+          { aiData: { contains: String(search), mode: 'insensitive' } },
         ],
       });
     }
 
-    if (type && type !== 'all') {
-      if (type === 'image') whereClause.AND.push({ mimeType: { startsWith: 'image/' } });
-      else if (type === 'video') whereClause.AND.push({ mimeType: { startsWith: 'video/' } });
-      else if (type === 'document') whereClause.AND.push({ mimeType: 'application/pdf' }); 
-    }
-
-    if (color) {
-      // The AI usually adds color names to 'tags' (e.g., "Red", "Blue")
-      // OR we can search the 'colors' array string in the JSON
-      whereClause.AND.push({
-        aiData: { contains: String(color) } 
-      });
-    }
-
-    const assets = await prisma.asset.findMany({
-      where: whereClause,
+    keywordMatches = await prisma.asset.findMany({
+      where: keywordWhere,
       orderBy: { createdAt: 'desc' },
       include: { uploadedBy: { select: { name: true } } },
+      take: 50,
     });
-    
-    res.json(assets);
+
+    // --- C. MERGE ---
+    const combinedMap = new Map();
+    keywordMatches.forEach(asset => combinedMap.set(asset.id, asset));
+    vectorMatches.forEach(asset => combinedMap.set(asset.id, asset));
+
+    const finalResults = Array.from(combinedMap.values());
+
+    res.json(finalResults);
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Error fetching assets' });

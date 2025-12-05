@@ -7,13 +7,21 @@ import assetRoutes from './routes/asset.routes';
 import collectionRoutes from './routes/collection.routes';
 import userRoutes from './routes/user.routes';
 
+
 dotenv.config();
 
 const app: Express = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors()); // Allow frontend to talk to backend
+app.use(cors({
+  origin: [
+    'http://localhost:5173', // Allow your local Vite frontend
+    'http://65.109.234.134/' // Allow your production domain/IP
+    // 'https://your-domain.com'
+  ],
+  credentials: true // Allow cookies/headers if needed
+})); // Allow frontend to talk to backend
 app.use(express.json()); // Parse JSON bodies
 
 // Serve static files (uploads)
