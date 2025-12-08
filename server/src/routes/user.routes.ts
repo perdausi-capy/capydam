@@ -4,7 +4,8 @@ import {
   getAllUsers, 
   approveUser, 
   rejectUser, 
-  updateUserRole 
+  updateUserRole,
+  createUser
 } from '../controllers/user.controller';
 
 const router = Router();
@@ -16,5 +17,7 @@ router.get('/', verifyJWT, getAllUsers);
 router.patch('/:id/approve', verifyJWT, approveUser);
 router.delete('/:id/reject', verifyJWT, rejectUser);
 router.patch('/:id/role', verifyJWT, updateUserRole);
+// POST /api/users (Create new member)
+router.post('/', verifyJWT, createUser);
 
 export default router;

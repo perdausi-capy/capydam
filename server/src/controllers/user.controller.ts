@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import bcrypt from 'bcryptjs';
 
 // 1. Get All Users (Admin Dashboard)
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
@@ -67,5 +68,35 @@ export const updateUserRole = async (req: Request, res: Response): Promise<void>
     res.json({ message: 'User role updated' });
   } catch (error) {
     res.status(500).json({ message: 'Error updating role' });
+  }
+};
+
+// 5. Create User (Admin Action)
+export const createUser = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, password, name, role } = req.body;
+
+    // Check if exists
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      res.status(400).json({ message: 'User already exists' });
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        name,
+        role,
+        status: 'ACTIVE', // Admin created users are auto-active
+      },
+    });
+
+    res.status(201).json(user);
+  } catch (error) {
+    res.status(500).json({ message: 'Error creating user' });
   }
 };

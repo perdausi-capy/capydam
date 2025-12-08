@@ -1,13 +1,17 @@
 // server/prisma/schema.prisma
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // 1. Enable the preview feature for extensions
+  previewFeatures = ["postgresqlExtensions"] 
 }
 
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL") // <--- THIS IS THE MAGIC LINE
+  directUrl = env("DIRECT_URL")
+  // 2. Explicitly tell Prisma we need the vector extension
+  extensions = [vector]
 }
 
 // User Roles for RBAC (Role Based Access Control)
@@ -70,4 +74,21 @@ model AssetOnCollection {
   assignedAt   DateTime   @default(now())
 
   @@id([assetId, collectionId])
+}
+
+model SearchLog {
+  id        String   @id @default(uuid())
+  query     String
+  resultCount Int
+  userId    String?
+  createdAt DateTime @default(now())
+}
+
+model AssetClick {
+  id          String   @id @default(uuid())
+  assetId     String
+  query       String
+  position    Int      // 1 = Top result, 10 = 10th result
+  userId      String?
+  createdAt   DateTime @default(now())
 }

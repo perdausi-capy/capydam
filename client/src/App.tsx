@@ -9,6 +9,7 @@ import Collections from './pages/Collections';
 import CollectionDetail from './pages/CollectionDetail';
 import RequestAccount from './pages/RequestAccount';
 import Users from './pages/Users';
+import { ThemeProvider } from './context/ThemeContext';
 
 // Wrapper for protected pages that includes the Sidebar Layout
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -21,6 +22,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 function App() {
   return (
     <AuthProvider>
+      <ThemeProvider>
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -82,6 +84,7 @@ function App() {
 
         </Routes>
       </Router>
+      </ThemeProvider>
     </AuthProvider>
   );
 }

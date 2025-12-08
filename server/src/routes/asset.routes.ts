@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import { verifyJWT } from '../middleware/auth.middleware'; // We need to create this! // already created 
-import { uploadAsset, getAssets, getAssetById, updateAsset, deleteAsset } from '../controllers/asset.controller';
+import { uploadAsset, getAssets, getAssetById, updateAsset, deleteAsset, getRelatedAssets, trackAssetClick  } from '../controllers/asset.controller';
 
 
 const router = Router();
@@ -33,6 +33,12 @@ router.get('/', verifyJWT, getAssets);
 
 // GET /api/assets/:id (Fetch single asset)
 router.get('/:id', verifyJWT, getAssetById);
+
+// GET /api/assets/:id/related
+router.get('/:id/related', verifyJWT, getRelatedAssets);
+
+// POST /api/assets/track-click (For Analytics)
+router.post('/track-click', verifyJWT, trackAssetClick);
 
 // PATCH /api/assets/:id (Update metadata)
 router.patch('/:id', verifyJWT, updateAsset);

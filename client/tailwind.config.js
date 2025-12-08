@@ -4,6 +4,7 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  darkMode: 'class', // <--- THIS ENABLES THE LIGHT/DARK TOGGLE
   theme: {
     extend: {
       fontFamily: {

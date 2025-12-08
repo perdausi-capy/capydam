@@ -1,17 +1,35 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../api/client';
-import { Folder, Plus, Loader2 } from 'lucide-react';
+import { 
+    Folder, 
+    Plus, 
+    Loader2, 
+    Search, 
+    LayoutGrid, 
+    List, 
+    FolderOpen, 
+    MoreVertical, 
+    Clock, 
+    Image as ImageIcon 
+} from 'lucide-react';
+import { toast } from 'react-toastify';
 
 interface Collection {
   id: string;
   name: string;
+  createdAt?: string; 
   _count: { assets: number };
+  coverImage?: string; 
 }
 
 const Collections = () => {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState('');
 
   const fetchCollections = async () => {
@@ -20,6 +38,7 @@ const Collections = () => {
       setCollections(data);
     } catch (error) {
       console.error(error);
+      toast.error("Failed to load collections");
     } finally {
       setLoading(false);
     }
@@ -34,50 +53,171 @@ const Collections = () => {
     if (!newCollectionName.trim()) return;
 
     try {
-      await client.post('/collections', { name: newCollectionName });
+      await client.post('pi/collections', { name: newCollectionName });
+      toast.success(`Collection "${newCollectionName}" created`);
       setNewCollectionName('');
-      fetchCollections(); // Refresh list
+      setIsCreating(false);
+      fetchCollections(); 
     } catch (error) {
-      alert('Failed to create collection');
+      console.error(error);
+      toast.error('Failed to create collection');
     }
   };
 
-  if (loading) return <div className="p-10"><Loader2 className="animate-spin" /></div>;
+  const filteredCollections = collections.filter(c => 
+    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  if (loading) {
+    return (
+        <div className="flex h-[50vh] items-center justify-center">
+            <Loader2 className="animate-spin text-blue-600 dark:text-blue-400" size={40} />
+        </div>
+    );
+  }
 
   return (
-    <div>
-      <h1 className="mb-6 text-2xl font-bold text-gray-800">Collections</h1>
-
-      {/* Create New Bar */}
-      <form onSubmit={handleCreate} className="mb-8 flex gap-2">
-        <input
-          type="text"
-          value={newCollectionName}
-          onChange={(e) => setNewCollectionName(e.target.value)}
-          placeholder="New Collection Name (e.g. 'Social Media 2025')"
-          className="w-full max-w-md rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none"
-        />
-        <button type="submit" className="flex items-center rounded-lg bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700">
-          <Plus size={20} className="mr-1" /> Create
-        </button>
-      </form>
-
-      {/* Grid */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
-        {collections.map((col) => (
-            <Link 
-            to={`/collections/${col.id}`} // <--- Wrap with Link
-            key={col.id} 
-            className="group relative flex flex-col items-center justify-center rounded-xl border bg-white p-6 shadow-sm transition hover:shadow-md hover:border-blue-300 cursor-pointer"
-          >
-          <div key={col.id} className="group relative flex flex-col items-center justify-center rounded-xl border bg-white p-6 shadow-sm transition hover:shadow-md">
-            <Folder size={48} className="mb-2 text-blue-200 group-hover:text-blue-400" />
-            <h3 className="font-semibold text-gray-800">{col.name}</h3>
-            <p className="text-sm text-gray-500">{col._count.assets} assets</p>
-            {/* Note: We will add linking logic later, for now just display */}
+    <div className="min-h-screen p-6 md:p-8 bg-[#F3F4F6] dark:bg-[#0B0D0F] transition-colors duration-500">
+      
+      {/* --- HEADER --- */}
+      <div className="mx-auto max-w-7xl mb-8">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Collections</h1>
+            <p className="mt-1 text-gray-500 dark:text-gray-400">Organize your assets into managed folders.</p>
           </div>
-          </Link>
-        ))}
+
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input 
+                type="text" 
+                placeholder="Search..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-10 w-full md:w-64 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 pl-10 pr-4 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30 transition-all shadow-sm"
+              />
+            </div>
+
+            <div className="hidden md:flex items-center rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-1 shadow-sm">
+              <button 
+                onClick={() => setViewMode('grid')}
+                className={`rounded-md p-1.5 transition-all ${viewMode === 'grid' ? 'bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-sm' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+              >
+                <LayoutGrid size={18} />
+              </button>
+              <button 
+                onClick={() => setViewMode('list')}
+                className={`rounded-md p-1.5 transition-all ${viewMode === 'list' ? 'bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-sm' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+              >
+                <List size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* --- CONTENT GRID --- */}
+      <div className="mx-auto max-w-7xl">
+        <div className={`grid gap-6 ${viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'}`}>
+
+            {/* CREATE NEW CARD */}
+            <div 
+                onClick={() => setIsCreating(true)}
+                className={`group relative flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 transition-all hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 hover:shadow-md 
+                ${viewMode === 'list' ? 'h-24 flex-row justify-start px-6 gap-4' : 'aspect-[4/3] min-h-[220px]'}`}
+            >
+                {isCreating ? (
+                    <form onSubmit={handleCreate} className="w-full px-6" onClick={(e) => e.stopPropagation()}>
+                        <label className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase mb-1 block">New Collection</label>
+                        <input
+                            autoFocus
+                            type="text"
+                            placeholder="Name..."
+                            value={newCollectionName}
+                            onChange={(e) => setNewCollectionName(e.target.value)}
+                            onBlur={() => !newCollectionName && setIsCreating(false)}
+                            className="w-full rounded-lg border border-blue-300 dark:border-blue-700 bg-white dark:bg-black/20 px-3 py-2 text-center text-sm font-medium text-gray-900 dark:text-white outline-none ring-4 ring-blue-100 dark:ring-blue-900/30 placeholder:text-gray-300 dark:placeholder:text-gray-600"
+                        />
+                        <button type="submit" className="hidden">Create</button>
+                        <p className="mt-2 text-center text-[10px] text-gray-400">Press Enter to save</p>
+                    </form>
+                ) : (
+                    <>
+                        <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-white dark:bg-white/10 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-gray-200 dark:ring-white/10 transition-transform group-hover:scale-110 group-hover:shadow-md">
+                            <Plus size={28} />
+                        </div>
+                        <h3 className="font-semibold text-gray-900 dark:text-white">Create New</h3>
+                    </>
+                )}
+            </div>
+
+            {/* COLLECTION CARDS */}
+            {filteredCollections.map((col) => (
+                <Link 
+                    to={`/collections/${col.id}`} 
+                    key={col.id}
+                    className={`group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1D21] shadow-sm transition-all hover:-translate-y-1 hover:shadow-lg hover:border-blue-200 dark:hover:border-blue-900
+                    ${viewMode === 'list' ? 'flex items-center gap-4 p-4 h-24' : 'flex flex-col aspect-[4/3] min-h-[220px]'}`}
+                >
+                    {viewMode === 'grid' && (
+                        <div className="relative flex-1 w-full overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 dark:from-white/5 dark:to-white/10 flex items-center justify-center">
+                            {col.coverImage ? (
+                                <>
+                                    <img src={col.coverImage} alt={col.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                                    <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors" />
+                                </>
+                            ) : (
+                                <FolderOpen size={64} className="text-blue-100 dark:text-white/10 group-hover:text-blue-200 dark:group-hover:text-white/20 transition-colors" strokeWidth={1.5} />
+                            )}
+                            
+                            <div className="absolute top-3 right-3 rounded-full bg-white/90 dark:bg-black/60 px-2.5 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 shadow-sm backdrop-blur-sm border border-transparent dark:border-white/10">
+                                {col._count.assets}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className={`flex items-center justify-between ${viewMode === 'grid' ? 'p-4 border-t border-gray-50 dark:border-white/5 h-20' : 'w-full'}`}>
+                        <div className="flex items-center gap-4">
+                            {viewMode === 'list' && (
+                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
+                                    <Folder size={24} />
+                                </div>
+                            )}
+
+                            <div>
+                                <h3 className="font-bold text-gray-800 dark:text-gray-100 text-lg leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate max-w-[180px]">
+                                    {col.name}
+                                </h3>
+                                <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400 font-medium">
+                                    <span className="flex items-center gap-1">
+                                        <ImageIcon size={12} /> {col._count.assets} items
+                                    </span>
+                                    {col.createdAt && (
+                                        <span className="flex items-center gap-1">
+                                            <Clock size={12} /> {new Date(col.createdAt).toLocaleDateString()}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <button className="rounded-full p-2 text-gray-300 dark:text-gray-600 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <MoreVertical size={20} />
+                        </button>
+                    </div>
+                </Link>
+            ))}
+
+        </div>
+
+        {filteredCollections.length === 0 && !loading && (
+            <div className="mt-20 flex flex-col items-center justify-center text-center opacity-60 dark:opacity-40">
+                <FolderOpen size={48} className="text-gray-300 dark:text-gray-600 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white">No collections found</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Create a new one to get started.</p>
+            </div>
+        )}
       </div>
     </div>
   );

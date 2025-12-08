@@ -16,6 +16,17 @@
   }
 }
 
+/* client/src/index.css */
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
 /* Premium Gradient Background for Dashboard */
 body {
   @apply bg-neutral-light text-neutral-mid;

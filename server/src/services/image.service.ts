@@ -2,13 +2,25 @@ import sharp from 'sharp';
 import fs from 'fs-extra';
 import path from 'path';
 import ffmpeg from 'fluent-ffmpeg';
-// import ffmpegPath from 'ffmpeg-static';
+import os from 'os';
 
-// Configure FFmpeg (This works fine on Node 22)
-// if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
-ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
+// --- DYNAMIC PATH CONFIGURATION ---
+const platform = os.platform();
 
-// 1. IMAGES (Sharp)
+if (platform === 'linux') {
+    // PRODUCTION (Linux VPS)
+    ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
+} else {
+    // LOCAL DEV (Windows)
+    try {
+        const ffmpegPath = require('ffmpeg-static');
+        if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
+    } catch (e) {
+        console.warn("Could not load static ffmpeg for thumbnails.");
+    }
+}
+
+// 1. IMAGES
 export const generateThumbnail = async (filePath: string, outputDir: string): Promise<string> => {
   const fileName = path.basename(filePath);
   const nameWithoutExt = path.parse(fileName).name; 
@@ -16,14 +28,14 @@ export const generateThumbnail = async (filePath: string, outputDir: string): Pr
   const thumbnailPath = path.join(outputDir, thumbnailFilename);
 
   await sharp(filePath)
-    .resize({ width: 400 }) 
+    .resize({ width: 400 }) // Width only (Pinterest style)
     .jpeg({ quality: 80 })
     .toFile(thumbnailPath);
 
   return `thumbnails/${thumbnailFilename}`;
 };
 
-// 2. VIDEOS (FFmpeg) - This is what we want!
+// 2. VIDEOS
 export const generateVideoThumbnail = async (filePath: string, outputDir: string): Promise<string> => {
   return new Promise((resolve, reject) => {
     const fileName = path.basename(filePath);
@@ -35,21 +47,14 @@ export const generateVideoThumbnail = async (filePath: string, outputDir: string
         timestamps: ['20%'], 
         filename: thumbnailFilename,
         folder: outputDir,
-        // CHANGE: size '400x?' tells FFmpeg to keep aspect ratio
-        size: '400x?', 
+        size: '400x?',
       })
-      .on('end', () => {
-        resolve(`thumbnails/${thumbnailFilename}`);
-      })
-      .on('error', (err) => {
-        console.error('FFmpeg thumbnail error:', err);
-        reject(err);
-      });
+      .on('end', () => resolve(`thumbnails/${thumbnailFilename}`))
+      .on('error', (err) => reject(err));
   });
 };
 
-// 3. PDFS (Skip)
+// 3. PDFS
 export const generatePdfThumbnail = async (filePath: string, outputDir: string): Promise<string | null> => {
-  // Return null so the Frontend shows the "PDF File" icon
-  return null; 
+  return null; // Return null -> Frontend shows Icon
 };
