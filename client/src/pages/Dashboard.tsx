@@ -20,6 +20,7 @@ interface Asset {
   aiData?: string;
 }
 
+// 1. Ensure this interface is exported or used
 interface CollectionSimple {
   id: string;
   name: string;
@@ -29,9 +30,8 @@ const cleanFilename = (name: string) => {
   return name.replace(/\.[^/.]+$/, "");
 };
 
-// Session Storage Keys
 const SCROLL_KEY = 'capydam_dashboard_scroll_y';
-const MAIN_SCROLL_KEY = 'capydam_dashboard_main_scroll_y'; // <--- NEW
+const MAIN_SCROLL_KEY = 'capydam_dashboard_main_scroll_y'; 
 
 const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,7 +42,6 @@ const Dashboard = () => {
 
   const navigate = useNavigate();
 
-  // --- 1. QUERY FOR ASSETS ---
   const { data: assetData, isLoading: assetsLoading, error: assetError } = useQuery({
     queryKey: ['assets', debouncedSearch, filterType, selectedColor], 
     queryFn: async () => {
@@ -70,7 +69,8 @@ const Dashboard = () => {
     queryKey: ['collections'],
     queryFn: async () => {
       const res = await client.get('/collections');
-      return res.data || [];
+      // Ensure we return an array, defaulting to empty if null
+      return (res.data || []) as CollectionSimple[];
     },
     staleTime: 1000 * 60 * 10, 
   });
@@ -78,7 +78,6 @@ const Dashboard = () => {
   const assets = assetData?.results || [];
   const loading = assetsLoading;
 
-  // --- 2. SCROLL RESTORATION ---
   useLayoutEffect(() => {
     if (assets.length > 0) {
       const savedPosition = sessionStorage.getItem(SCROLL_KEY);
@@ -90,27 +89,16 @@ const Dashboard = () => {
     }
   }, [assets]); 
 
-  // --- 3. SMART SEARCH HANDLER ---
   const handleSearchChange = (newQuery: string) => {
-    // A. Starting a search? Save main feed position
     if (!searchQuery && newQuery) {
         sessionStorage.setItem(MAIN_SCROLL_KEY, window.scrollY.toString());
-        sessionStorage.removeItem(SCROLL_KEY); // Reset for new results
-    }
-    
-    // B. Clearing search? Restore main feed position
-    else if (searchQuery && !newQuery) {
+        sessionStorage.removeItem(SCROLL_KEY);
+    } else if (searchQuery && !newQuery) {
         const mainScroll = sessionStorage.getItem(MAIN_SCROLL_KEY);
-        if (mainScroll) {
-            sessionStorage.setItem(SCROLL_KEY, mainScroll);
-        }
-    }
-    
-    // C. Changing query? Reset to top
-    else if (searchQuery && newQuery && searchQuery !== newQuery) {
+        if (mainScroll) sessionStorage.setItem(SCROLL_KEY, mainScroll);
+    } else if (searchQuery && newQuery && searchQuery !== newQuery) {
          sessionStorage.removeItem(SCROLL_KEY);
     }
-
     setSearchQuery(newQuery);
   };
 
@@ -193,11 +181,10 @@ const Dashboard = () => {
         <div className="fixed inset-0 z-40 cursor-default" onClick={() => setActiveDropdownId(null)} />
       )}
 
-      {/* Header with Smart Search Handler */}
       <DashboardHeader 
         assetsCount={assets?.length || 0}
         searchQuery={searchQuery}
-        setSearchQuery={handleSearchChange} // <--- Updated
+        setSearchQuery={handleSearchChange}
         filterType={filterType}
         setFilterType={(val) => {
             sessionStorage.removeItem(SCROLL_KEY);
@@ -210,7 +197,6 @@ const Dashboard = () => {
         }}
       />
 
-      {/* Content Wrapper */}
       <div className="px-4 lg:px-8 mt-6 max-w-[2000px] mx-auto">
         
         {loading ? (
@@ -236,7 +222,6 @@ const Dashboard = () => {
                     ${activeDropdownId === asset.id ? 'z-50 ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-[#0B0D0F]' : 'z-0'}
                     `}
                 >
-                    {/* Image Container */}
                     <div className="relative w-full bg-gray-50 dark:bg-black/20 rounded-xl overflow-hidden min-h-[100px]">
                         <Link to={`/assets/${asset.id}`} className="block cursor-pointer" onClick={() => handleAssetClick(asset.id, index)}>
                             <div className="transition-all duration-300 group-hover:brightness-90">
@@ -244,21 +229,19 @@ const Dashboard = () => {
                             </div>
                         </Link>
                         
-                        {/* Buttons & Dropdown */}
                         <div className={`absolute top-2 right-2 flex gap-2 transition-opacity duration-200 ${activeDropdownId === asset.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                             <div className="relative">
-                                {/* Add Button */}
                                 <button onClick={(e) => toggleDropdown(e, asset.id)} className={`rounded-full p-2 shadow-sm backdrop-blur-md transition-colors ${activeDropdownId === asset.id ? 'bg-blue-600 text-white' : 'bg-white/90 dark:bg-black/60 text-gray-700 dark:text-gray-200 hover:bg-blue-600 hover:text-white'}`}><FolderPlus size={16} /></button>
                                 
-                                {/* Dropdown Menu */}
                                 {activeDropdownId === asset.id && (
                                     <div className="absolute right-0 top-full mt-2 w-56 origin-top-right rounded-xl bg-white dark:bg-[#1F2227] shadow-xl ring-1 ring-black/5 dark:ring-white/10 overflow-hidden animate-in fade-in zoom-in-95 duration-100 cursor-default z-50">
                                         <div className="max-h-56 overflow-y-auto py-1 custom-scrollbar">
                                             <div className="px-3 py-2 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider border-b border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/5">Add to Collection</div>
-                                            {collections?.length === 0 ? (
+                                            {collections.length === 0 ? (
                                                 <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">No collections found.</div>
                                             ) : (
-                                                collections?.map(col => (
+                                                // ✅ FIX 2: Explicit Type for map argument
+                                                collections.map((col: CollectionSimple) => (
                                                     <button key={col.id} onClick={(e) => addToCollection(e, col.id, col.name)} className="flex w-full items-center px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-white/5 hover:text-blue-700 dark:hover:text-blue-400 transition-colors cursor-pointer border-b border-gray-50 dark:border-white/5 last:border-0">
                                                         <FolderPlus size={14} className="mr-2 text-gray-400 dark:text-gray-500" />
                                                         <span className="truncate font-medium">{col.name}</span>
@@ -276,7 +259,6 @@ const Dashboard = () => {
                         </div>
                     </div>
                     
-                    {/* Text Info */}
                     <div className="px-2 pt-3 pb-1">
                         <Link to={`/assets/${asset.id}`} onClick={() => handleAssetClick(asset.id, index)}>
                             <p className="truncate font-medium text-sm text-gray-900 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title={asset.originalName}>{cleanFilename(asset.originalName)}</p>

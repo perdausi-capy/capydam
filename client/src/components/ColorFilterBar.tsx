@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, X, Palette } from 'lucide-react';
+import { Check, Palette } from 'lucide-react';
 
 interface ColorFilterBarProps {
   selectedColor: string | null;

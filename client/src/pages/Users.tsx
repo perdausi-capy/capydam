@@ -9,15 +9,12 @@ import {
     Users as UsersIcon, 
     UserPlus, 
     Shield, 
-    MoreVertical,
-    Trash2,
     Plus,
     Mail,
     Lock,
     User
 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import ConfirmModal from '../components/ConfirmModal';
 
 interface UserData {
   id: string;
