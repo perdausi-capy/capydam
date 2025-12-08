@@ -5,7 +5,6 @@ import {
   Loader2, 
   Settings, 
   CheckCircle, 
-  AlertCircle, 
   FileText, 
   Image as ImageIcon, 
   Film, 
@@ -51,7 +50,7 @@ const Upload = () => {
   const queryClient = useQueryClient();
 
   // Settings State
-  const [showSettings, setShowSettings] = useState(true); 
+  // const [showSettings, setShowSettings] = useState(true); 
   const [creativity, setCreativity] = useState(0.2);
   const [specificity, setSpecificity] = useState<'general' | 'high'>('general');
 
