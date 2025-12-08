@@ -15,12 +15,12 @@ interface DashboardHeaderProps {
   setSelectedColor: (color: string | null) => void;
 }
 
-// --- 1. MOVED COMPONENT OUTSIDE (Fixes typing bug) ---
+// Extracted Search Input
 const SearchInput = ({ 
-  className = "", 
   value, 
   onChange, 
-  onClear 
+  onClear, 
+  className = "" 
 }: { 
   className?: string, 
   value: string, 
@@ -61,10 +61,22 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20); // Increased threshold slightly for smoothness
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const offset = window.scrollY;
+          setIsScrolled((prev) => {
+            if (offset < 10) return false; 
+            if (offset > 100) return true;
+            return prev;
+          });
+          ticking = false;
+        });
+        ticking = true;
+      }
     };
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -88,16 +100,17 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         bg-[#F2F4F7]/95 dark:bg-[#0B0D0F]/90 backdrop-blur-md 
         border-b border-white/50 dark:border-white/5 
         shadow-sm transition-all duration-500 ease-in-out
-        ${isScrolled ? 'py-2' : 'py-4 lg:py-6'} 
-        px-4 lg:px-8
+        px-4 lg:px-8 py-4
+        will-change-transform
+        ${/* ✅ FIX: Removed -mx-4 and lg:-mx-8 */ ''}
     `}>
-      <div className="max-w-[2000px] mx-auto flex flex-col transition-all duration-500 gap-0">
+      <div className="max-w-[2000px] mx-auto flex flex-col transition-all duration-500 gap-0 relative">
         
-        {/* --- ROW 1: Title & Initial Search (Collapses on Scroll) --- */}
+        {/* ROW 1: Title & Initial Search */}
         <div 
             className={`
-                flex flex-col md:flex-row md:items-center justify-between gap-4 overflow-hidden transition-all duration-500 ease-in-out
-                ${isScrolled ? 'h-0 opacity-0 mb-0 -translate-y-4' : 'h-auto opacity-100 mb-5 translate-y-0'}
+                flex flex-col md:flex-row md:items-center justify-between gap-4 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]
+                ${isScrolled ? 'max-h-0 opacity-0 mb-0 -translate-y-2' : 'max-h-40 opacity-100 mb-5 translate-y-0'}
             `}
         >
             <div>
@@ -107,7 +120,6 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               </p>
             </div>
 
-            {/* Top Right Search (Visible when NOT scrolled) */}
             <div className="w-full md:max-w-md">
                 <SearchInput 
                   value={searchQuery} 
@@ -117,7 +129,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             </div>
         </div>
 
-        {/* --- ROW 2: Filters, Center Search, Colors --- */}
+        {/* ROW 2: Filters, Center Search, Colors */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 overflow-visible relative">
             
             {/* Left: Tabs */}
@@ -127,17 +139,15 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                 <FilterTab label="Documents" type="document" icon={FileText} />
             </div>
 
-            {/* Center: Search Bar (Appears on Scroll) */}
-            {/* Added 'pointer-events-none' when hidden so it doesn't block clicks */}
+            {/* Center: Search Bar */}
             <div 
                 className={`
-                    absolute left-0 right-0 mx-auto w-full lg:max-w-xl transition-all duration-500 ease-in-out z-10
+                    absolute left-0 right-0 mx-auto transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] z-10 flex justify-center
                     ${isScrolled 
-                        ? 'opacity-100 translate-y-0 relative pointer-events-auto' 
-                        : 'opacity-0 -translate-y-4 absolute pointer-events-none'
+                        ? 'opacity-100 translate-y-0 pointer-events-auto w-full lg:max-w-md' 
+                        : 'opacity-0 -translate-y-4 pointer-events-none w-1/2'
                     }
-                    ${/* Mobile layout adjustment */ ''}
-                    order-last lg:order-none mt-2 lg:mt-0
+                    hidden lg:flex
                 `}
             >
                  <SearchInput 

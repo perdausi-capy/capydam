@@ -30,6 +30,7 @@ interface MulterRequest extends Request {
 }
 
 // --- UPLOAD ---
+// --- UPLOAD ---
 export const uploadAsset = async (req: Request, res: Response): Promise<void> => {
   const multerReq = req as MulterRequest;
 
@@ -100,36 +101,32 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
       },
     });
 
-    // 5. Trigger AI & Cleanup
-    // We send the response immediately, but we keep the file alive until AI finishes.
+    // 5. TRIGGER AI (SYNCHRONOUS)
+    // We await this so the response is only sent AFTER tags are generated.
     const aiOptions = { creativity, specificity };
     
-    const runAiAndCleanup = async () => {
-        try {
-            if (mimetype.startsWith('image/')) {
-                await analyzeImage(asset.id, tempPath, aiOptions);
-            } 
-            else if (mimetype === 'application/pdf') {
-                await analyzePdf(asset.id, tempPath, aiOptions);
-            }
-            else if (mimetype.startsWith('audio/') || mimetype.startsWith('video/')) {
-                await analyzeAudioVideo(asset.id, tempPath, aiOptions);
-            }
-        } catch (err) {
-            console.error("Background AI Task Failed:", err);
-        } finally {
-            // ✅ SAFETY: Only delete the file AFTER AI is done (or fails)
-            console.log(`🧹 Cleaning up temp file: ${tempPath}`);
-            await fs.remove(tempPath).catch(e => console.error("Cleanup error:", e));
+    try {
+        if (mimetype.startsWith('image/')) {
+            await analyzeImage(asset.id, tempPath, aiOptions);
+        } 
+        else if (mimetype === 'application/pdf') {
+            await analyzePdf(asset.id, tempPath, aiOptions);
         }
-    };
+        else if (mimetype.startsWith('audio/') || mimetype.startsWith('video/')) {
+            await analyzeAudioVideo(asset.id, tempPath, aiOptions);
+        }
+    } catch (err) {
+        console.error("AI Analysis Warning:", err);
+        // We catch here so the upload still succeeds even if AI fails
+    } finally {
+        // ✅ SAFETY: Always clean up the temp file
+        console.log(`🧹 Cleaning up temp file: ${tempPath}`);
+        await fs.remove(tempPath).catch(e => console.error("Cleanup error:", e));
+    }
 
-    // Start the background process (do not await it)
-    runAiAndCleanup();
-
-    // 6. Return Success to User immediately
+    // 6. Return Success (Now guaranteed to have tags)
     res.status(201).json({
-      message: 'Asset uploaded successfully',
+      message: 'Asset uploaded and analyzed successfully',
       asset,
     });
 

@@ -1,10 +1,11 @@
 import { useCallback, useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { 
-  UploadCloud,  
+  UploadCloud, 
   Loader2, 
   Settings, 
-  CheckCircle,  
+  CheckCircle, 
+  AlertCircle, 
   FileText, 
   Image as ImageIcon, 
   Film, 
@@ -20,30 +21,123 @@ import {
 import client from '../api/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+// 1. IMPORT QUERY CLIENT
+import { useQueryClient } from '@tanstack/react-query';
 
-// ... (Keep your Interfaces: ExtendedFile, UploadItem, RecentAsset same as before) ...
-interface ExtendedFile extends File { preview?: string; }
-interface UploadItem { file: ExtendedFile; status: 'pending' | 'uploading' | 'success' | 'error'; errorMessage?: string; }
-interface RecentAsset { id: string; originalName: string; mimeType: string; createdAt: string; }
+// Types
+interface ExtendedFile extends File {
+  preview?: string;
+}
+
+interface UploadItem {
+  file: ExtendedFile;
+  status: 'pending' | 'uploading' | 'success' | 'error';
+  errorMessage?: string;
+}
+
+interface RecentAsset {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  createdAt: string;
+}
 
 const Upload = () => {
-  // ... (Keep all your state and logic functions: onDrop, startUpload, etc. EXACTLY the same) ...
   const [queue, setQueue] = useState<UploadItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const navigate = useNavigate();
+  
+  // 2. INITIALIZE CLIENT
+  const queryClient = useQueryClient();
+
+  // Settings State
+  const [showSettings, setShowSettings] = useState(true); 
   const [creativity, setCreativity] = useState(0.2);
   const [specificity, setSpecificity] = useState<'general' | 'high'>('general');
+
+  // Recent Activity State
   const [recentUploads, setRecentUploads] = useState<RecentAsset[]>([]);
   const [isRecentOpen, setIsRecentOpen] = useState(false);
 
-  // ... (Paste your fetchRecent, onDrop, useEffects, removeFile, startUpload logic here) ...
-  const fetchRecent = async () => { try { const res = await client.get('/assets'); if (Array.isArray(res.data)) { setRecentUploads(res.data.slice(0, 5)); } else if (res.data.results) { setRecentUploads(res.data.results.slice(0, 5)); } } catch (e) {} };
+  // Fetch Recent
+  const fetchRecent = async () => {
+    try {
+      const res = await client.get('/assets');
+      if (Array.isArray(res.data)) {
+        setRecentUploads(res.data.slice(0, 5));
+      } else if (res.data.results && Array.isArray(res.data.results)) {
+        setRecentUploads(res.data.results.slice(0, 5));
+      }
+    } catch (error) { console.warn("Could not fetch recent uploads"); }
+  };
+
   useEffect(() => { fetchRecent(); }, []);
-  const onDrop = useCallback((acceptedFiles: File[]) => { const newItems = acceptedFiles.map(file => ({ file: Object.assign(file, { preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined }), status: 'pending' as const })); setQueue(prev => [...prev, ...newItems]); }, []);
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, multiple: true, accept: { 'image/*': [], 'video/*': [], 'application/pdf': [], 'audio/*': [] } });
-  useEffect(() => { return () => queue.forEach(item => { if (item.file.preview) URL.revokeObjectURL(item.file.preview); }); }, [queue]);
-  const removeFile = (index: number) => { setQueue(prev => prev.filter((_, i) => i !== index)); };
-  const startUpload = async () => { setIsProcessing(true); const newQueue = [...queue]; for (let i = 0; i < newQueue.length; i++) { if (newQueue[i].status === 'success') continue; newQueue[i].status = 'uploading'; setQueue([...newQueue]); const formData = new FormData(); formData.append('file', newQueue[i].file); formData.append('creativity', creativity.toString()); formData.append('specificity', specificity); try { await client.post('/assets/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }); newQueue[i].status = 'success'; } catch (err: any) { newQueue[i].status = 'error'; newQueue[i].errorMessage = err.response?.data?.message || 'Failed'; toast.error(`Failed to upload ${newQueue[i].file.name}`); } setQueue([...newQueue]); } setIsProcessing(false); fetchRecent(); if (newQueue.every(item => item.status === 'success')) { toast.success('All files uploaded successfully!'); setTimeout(() => navigate('/'), 1500); } };
+
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    const newItems = acceptedFiles.map(file => ({
+      file: Object.assign(file, {
+        preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
+      }),
+      status: 'pending' as const
+    }));
+    setQueue(prev => [...prev, ...newItems]);
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    multiple: true,
+    accept: { 'image/*': [], 'video/*': [], 'application/pdf': [], 'audio/*': [] }
+  });
+
+  useEffect(() => {
+    return () => queue.forEach(item => {
+      if (item.file.preview) URL.revokeObjectURL(item.file.preview);
+    });
+  }, [queue]);
+
+  const removeFile = (index: number) => {
+    setQueue(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const startUpload = async () => {
+    setIsProcessing(true);
+    const newQueue = [...queue];
+
+    for (let i = 0; i < newQueue.length; i++) {
+      if (newQueue[i].status === 'success') continue;
+      newQueue[i].status = 'uploading';
+      setQueue([...newQueue]);
+
+      const formData = new FormData();
+      formData.append('file', newQueue[i].file);
+      formData.append('creativity', creativity.toString());
+      formData.append('specificity', specificity);
+
+      try {
+        await client.post('/assets/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        newQueue[i].status = 'success';
+      } catch (err: any) {
+        newQueue[i].status = 'error';
+        newQueue[i].errorMessage = err.response?.data?.message || 'Failed';
+        toast.error(`Failed to upload ${newQueue[i].file.name}`);
+      }
+      setQueue([...newQueue]);   
+    }
+    
+    setIsProcessing(false);
+    fetchRecent();
+
+    if (newQueue.every(item => item.status === 'success')) {
+      toast.success('All files uploaded successfully!');
+      
+      // ✅ 3. INVALIDATE CACHE BEFORE REDIRECT
+      // This forces the Dashboard to re-fetch data when we land there
+      await queryClient.invalidateQueries({ queryKey: ['assets'] });
+      await queryClient.invalidateQueries({ queryKey: ['collections'] });
+      
+      setTimeout(() => navigate('/'), 1500);
+    }
+  };
 
   const getFileIcon = (mimeType: string) => {
     if (mimeType.startsWith('image/')) return <ImageIcon size={20} className="text-purple-500" />;
@@ -53,7 +147,6 @@ const Upload = () => {
   };
 
   return (
-    // 1. GRADIENT BACKGROUND WRAPPER (Updated for Dark Mode)
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-[#0B0D0F] dark:via-[#131619] dark:to-[#0F0B15] pb-20 transition-colors duration-500">
       
       <div className="max-w-5xl mx-auto px-4 py-8">
@@ -91,7 +184,6 @@ const Upload = () => {
               >
                   <input {...getInputProps()} />
                   
-                  {/* Floating Background Blobs (Adjusted for Dark) */}
                   <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700">
                      <div className="absolute top-[-20%] left-[-10%] w-40 h-40 bg-purple-200/30 dark:bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
                      <div className="absolute bottom-[-20%] right-[-10%] w-40 h-40 bg-blue-200/30 dark:bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-700"></div>
@@ -236,7 +328,17 @@ const Upload = () => {
                           : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:scale-[1.02] hover:shadow-indigo-500/30'
                       }`}
               >
-                  {isProcessing ? <><Loader2 className="animate-spin" size={24} /> Processing...</> : <><span className="drop-shadow-sm">Start Upload</span> <UploadCloud size={24} className="group-hover:-translate-y-1 transition-transform" /></>}
+                  {isProcessing ? (
+                      <>
+                          <Loader2 className="animate-spin" size={24} /> 
+                          <span>Uploading & Analyzing...</span>
+                      </>
+                  ) : (
+                      <>
+                          <span className="drop-shadow-sm">Start Upload</span> 
+                          <UploadCloud size={24} className="group-hover:-translate-y-1 transition-transform" />
+                      </>
+                  )}
               </button>
 
           </div>

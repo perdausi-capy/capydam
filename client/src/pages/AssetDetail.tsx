@@ -19,6 +19,9 @@ import ConfirmModal from '../components/ConfirmModal';
 import AssetThumbnail from '../components/AssetThumbnail';
 import Masonry from 'react-masonry-css'; 
 
+// 1. IMPORT QUERY CLIENT HOOK
+import { useQueryClient } from '@tanstack/react-query';
+
 interface AssetData {
   id: string;
   filename: string; 
@@ -35,6 +38,9 @@ interface AssetData {
 const AssetDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  
+  // 2. INITIALIZE QUERY CLIENT
+  const queryClient = useQueryClient();
   
   // --- STATE ---
   const [loading, setLoading] = useState(true);
@@ -109,6 +115,10 @@ const AssetDetail = () => {
         originalName: title, 
         aiData: updatedAiData
       });
+      
+      // OPTIONAL: Invalidate list to show new title/tags on dashboard immediately
+      await queryClient.invalidateQueries({ queryKey: ['assets'] });
+
       toast.success('Changes saved successfully!');
     } catch (error) {
       toast.error('Failed to save changes');
@@ -122,6 +132,11 @@ const AssetDetail = () => {
     setDeleting(true);
     try {
       await client.delete(`/assets/${asset.id}`);
+      
+      // ✅ 3. INVALIDATE CACHE
+      // This forces Dashboard to re-fetch from the server next time it loads
+      await queryClient.invalidateQueries({ queryKey: ['assets'] });
+      
       toast.success('Asset deleted permanently');
       navigate('/'); 
     } catch (error: any) {
@@ -135,6 +150,10 @@ const AssetDetail = () => {
     if (!selectedCollectionId) return;
     try {
       await client.post(`/collections/${selectedCollectionId}/assets`, { assetId: id });
+      
+      // Invalidate collections cache to update counts
+      await queryClient.invalidateQueries({ queryKey: ['collections'] });
+      
       toast.success('Added to collection!');
       setSelectedCollectionId('');
     } catch (error) {
@@ -148,6 +167,7 @@ const AssetDetail = () => {
       toast.info('Starting download...', { autoClose: 2000 });
       const response = await fetch(asset.path);
       if (!response.ok) throw new Error('Network response was not ok');
+      
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -163,6 +183,7 @@ const AssetDetail = () => {
     }
   };
 
+  // Tag Logic
   const addTag = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && newTag.trim()) {
         e.preventDefault();
@@ -184,7 +205,7 @@ const AssetDetail = () => {
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-[#0B0D0F] overflow-hidden transition-colors duration-300">
       
-      {/* --- 1. HEADER (Sticky) --- */}
+      {/* HEADER */}
       <div className="flex h-16 items-center justify-between border-b border-gray-200 dark:border-white/10 px-6 bg-white/80 dark:bg-[#1A1D21]/80 backdrop-blur-md shrink-0 z-20 shadow-sm sticky top-0 transition-colors">
          <div className="flex items-center gap-4 flex-1 min-w-0">
              <button onClick={() => navigate('/')} className="rounded-full p-2 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-gray-300 transition-colors" title="Back">
@@ -217,7 +238,7 @@ const AssetDetail = () => {
          </div>
       </div>
 
-      {/* --- 2. SCROLLABLE CONTENT AREA --- */}
+      {/* SCROLLABLE CONTENT */}
       <div className="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-[#0B0D0F]">
           
           <div className="mx-auto max-w-[1600px]">
@@ -330,7 +351,7 @@ const AssetDetail = () => {
                 </div>
             </div>
 
-            {/* BOTTOM SECTION: "MORE LIKE THIS" */}
+            {/* BOTTOM SECTION: RELATED */}
             {related.length > 0 && (
                 <div className="border-t border-gray-100 dark:border-white/10 bg-white dark:bg-[#1A1D21] px-6 py-12 md:px-12 transition-colors">
                     <h2 className="text-center text-xl font-bold text-gray-900 dark:text-white mb-8 flex items-center justify-center gap-2">

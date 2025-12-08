@@ -18,6 +18,7 @@ const AssetThumbnail: React.FC<Props> = ({ mimeType, thumbnailPath, className = 
         alt="Thumbnail"
         className={`block w-full h-auto object-cover ${className}`} 
         loading="lazy"
+        decoding="async"
         />
     );
   }
