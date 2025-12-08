@@ -1,12 +1,10 @@
 import { useCallback, useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { 
-  UploadCloud, 
-  X, 
+  UploadCloud,  
   Loader2, 
   Settings, 
-  CheckCircle, 
-  AlertCircle, 
+  CheckCircle,  
   FileText, 
   Image as ImageIcon, 
   Film, 
@@ -17,7 +15,6 @@ import {
   FileCheck,
   Clock,
   ChevronDown,
-  ChevronUp,
   Sparkles
 } from 'lucide-react';
 import client from '../api/client';
