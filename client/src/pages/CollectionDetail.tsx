@@ -45,7 +45,7 @@ const CollectionDetail = () => {
   useEffect(() => {
     const fetchCollection = async () => {
       try {
-        const { data } = await client.get(`/api/collections/${id}`); // Fixed path
+        const { data } = await client.get(`/collections/${id}`); // Fixed path
         setCollection(data);
       } catch (error) {
         console.error("Failed to load collection");
@@ -63,10 +63,10 @@ const CollectionDetail = () => {
     setAssetToRemove(assetId);
   };
 
-  const confirmRemove = async () => {
+  const confirmRemove = async () => {   
     if (!assetToRemove) return;
     try {
-      await client.delete(`/api/collections/${id}/assets/${assetToRemove}`); // Fixed path
+      await client.delete(`/collections/${id}/assets/${assetToRemove}`); // Fixed path
       
       setCollection(prev => prev ? ({
         ...prev,
