@@ -10,6 +10,8 @@ import CollectionDetail from './pages/CollectionDetail';
 import RequestAccount from './pages/RequestAccount';
 import Users from './pages/Users';
 import { ThemeProvider } from './context/ThemeContext';
+import Categories from './pages/Categories';
+import CategoryDetail from './pages/CategoryDetail';
 
 // Wrapper for protected pages that includes the Sidebar Layout
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -81,6 +83,20 @@ function App() {
               </ProtectedRoute>
             } 
           />
+
+          <Route path="/categories" 
+            element={<
+              ProtectedRoute>
+                <Categories />
+              </ProtectedRoute>
+            } 
+            />
+
+          <Route path="/categories/:id" 
+            element={<ProtectedRoute>
+              <CategoryDetail />
+              </ProtectedRoute>} />
+
 
         </Routes>
       </Router>

@@ -29,8 +29,7 @@ interface MulterRequest extends Request {
   user?: any;
 }
 
-// --- UPLOAD ---
-// --- UPLOAD ---
+// --- UPLOAD (Synchronous: Waits for AI) ---
 export const uploadAsset = async (req: Request, res: Response): Promise<void> => {
   const multerReq = req as MulterRequest;
 
@@ -39,7 +38,6 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
     return;
   }
 
-  // Define paths early so we can use them in cleanup
   const { filename, path: tempPath, originalname, mimetype, size } = multerReq.file;
   
   try {
@@ -79,12 +77,16 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
     let cloudThumbnailPath = null;
     if (thumbnailRelativePath) {
        const localThumbPath = path.join(__dirname, '../../uploads/', thumbnailRelativePath);
+       
+       // Handle WebP thumbnails (created for GIFs)
+       const isWebP = thumbnailRelativePath.endsWith('.webp');
+       
        cloudThumbnailPath = await uploadToSupabase(
          localThumbPath,
          thumbnailRelativePath, 
-         'image/jpeg'
+         isWebP ? 'image/webp' : 'image/jpeg'
        );
-       await fs.remove(localThumbPath); // Delete thumbnail immediately
+       await fs.remove(localThumbPath);
     }
 
     // 4. Save to Database
@@ -101,12 +103,18 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
       },
     });
 
-    // 5. TRIGGER AI (SYNCHRONOUS)
-    // We await this so the response is only sent AFTER tags are generated.
+    // 5. Trigger AI (SYNCHRONOUS WAIT)
+    // We wait here so the user doesn't get redirected until tags are ready.
     const aiOptions = { creativity, specificity };
     
     try {
-        if (mimetype.startsWith('image/')) {
+        console.log(`🤖 Starting AI Analysis for ${asset.id} (${mimetype})...`);
+        
+        // GIF Routing Logic
+        if (mimetype === 'image/gif') {
+            await analyzeAudioVideo(asset.id, tempPath, aiOptions);
+        } 
+        else if (mimetype.startsWith('image/')) {
             await analyzeImage(asset.id, tempPath, aiOptions);
         } 
         else if (mimetype === 'application/pdf') {
@@ -115,23 +123,25 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
         else if (mimetype.startsWith('audio/') || mimetype.startsWith('video/')) {
             await analyzeAudioVideo(asset.id, tempPath, aiOptions);
         }
+        console.log(`✅ AI Analysis Finished for ${asset.id}`);
+        
     } catch (err) {
-        console.error("AI Analysis Warning:", err);
+        console.error("AI Analysis Warning (continuing):", err);
         // We catch here so the upload still succeeds even if AI fails
     } finally {
-        // ✅ SAFETY: Always clean up the temp file
+        // Safe Cleanup: Add slight delay for FFmpeg file locks on Windows
+        await new Promise(resolve => setTimeout(resolve, 500));
         console.log(`🧹 Cleaning up temp file: ${tempPath}`);
         await fs.remove(tempPath).catch(e => console.error("Cleanup error:", e));
     }
 
-    // 6. Return Success (Now guaranteed to have tags)
+    // 6. Return Success (Only AFTER AI is done)
     res.status(201).json({
       message: 'Asset uploaded and analyzed successfully',
       asset,
     });
 
   } catch (error) {
-    // If the main logic fails, ensure we still clean up the temp file
     if (await fs.pathExists(tempPath)) {
         await fs.remove(tempPath).catch(() => {});
     }
@@ -140,7 +150,7 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// --- NEW ENDPOINT: TRACK CLICKS ---
+// --- TRACK CLICKS ---
 export const trackAssetClick = async (req: Request, res: Response): Promise<void> => {
   try {
     const { assetId, query, position } = req.body;
@@ -151,160 +161,168 @@ export const trackAssetClick = async (req: Request, res: Response): Promise<void
     });
     res.json({ success: true });
   } catch (error) {
-    console.error("Tracking error:", error);
     res.status(500).json({ success: false });
   }
 };
 
-// --- GET ALL ---
-// ... imports (Prisma, generateEmbedding, etc)
-
-// --- THE V2 SEARCH ENGINE ---
-// --- SEARCH ENGINE V2.3 (Precision Mode) ---
+// --- GET ASSETS (Search Engine V2.5) ---
 export const getAssets = async (req: Request, res: Response): Promise<void> => {
   try {
     const { search, type, color } = req.query;
-    const rawSearch = String(search || '').trim().toLowerCase();
+    const cleanSearch = String(search || '').trim().toLowerCase();
     
-    // 1. PREPARE TOKENS
-    let tokens: string[] = [];
-    if (rawSearch) {
-        // Clean: "Cat, Black!" -> "cat black"
-        const clean = rawSearch.replace(/[^\w\s]/g, ''); 
-        const words = clean.split(/\s+/).filter(w => w.length > 2); 
-        
-        // Stem: "wearing" -> "wear"
+    const scoredMap = new Map<string, { asset: any, score: number, debug: string }>();
+
+    // 1. SMART EXPANSION
+    let searchTerms: string[] = [];
+    if (cleanSearch) {
         const stemmer = natural.PorterStemmer;
-        const stems = words.map(w => stemmer.stem(w));
+        const stem = stemmer.stem(cleanSearch);
         
-        // Combine: ["wearing", "wear", "black"]
-        tokens = [...new Set([...words, ...stems])];
-        // console.log("🔍 Tokens:", tokens);
+        const shouldExpand = cleanSearch.length > 2 && cleanSearch.length < 6 && !cleanSearch.includes(' ');
+
+        if (shouldExpand) {
+            const expanded = await expandQuery(cleanSearch);
+            searchTerms = [...new Set([cleanSearch, stem, ...expanded])];
+        } else {
+            searchTerms = [cleanSearch, stem];
+        }
     }
 
-    // 2. BASE FILTERS
-    const baseFilters: any[] = [];
+    // 2. VECTOR SEARCH
+    if (cleanSearch.length > 2) {
+      try {
+        const embedding = await generateEmbedding(cleanSearch);
+        if (embedding) {
+          const vectorString = `[${embedding.join(',')}]`;
+          
+          const rawVectorAssets: any[] = await prisma.$queryRaw`
+            SELECT id, (embedding <=> ${vectorString}::vector) as distance
+            FROM "Asset"
+            WHERE 1=1
+            ${type && type !== 'all' ? Prisma.sql`AND "mimeType" LIKE ${type === 'image' ? 'image/%' : type === 'video' ? 'video/%' : '%pdf%'}` : Prisma.empty}
+            ${color ? Prisma.sql`AND "aiData" ILIKE ${'%' + color + '%'}` : Prisma.empty}
+            AND embedding IS NOT NULL
+            ORDER BY distance ASC
+            LIMIT 50;
+          `;
+
+          if (rawVectorAssets.length > 0) {
+             const ids = rawVectorAssets.map(a => a.id);
+             const vectorAssets = await prisma.asset.findMany({
+               where: { id: { in: ids } },
+               include: { uploadedBy: { select: { name: true } } },
+             });
+
+             vectorAssets.forEach(asset => {
+                const match = rawVectorAssets.find(r => r.id === asset.id);
+                const distance = match?.distance || 1;
+                
+                if (distance < 0.40) { 
+                    const semanticScore = 50 * Math.exp(-5 * distance);
+                    scoredMap.set(asset.id, { asset, score: semanticScore, debug: `Vector (${distance.toFixed(3)})` });
+                }
+             });
+          }
+        }
+      } catch (err) { console.warn("Vector search failed", err); }
+    }
+
+    // 3. KEYWORD SEARCH
+    const keywordWhere: any = { AND: [] };
+    
     if (type && type !== 'all') {
-        const mimeStart = type === 'image' ? 'image/' : type === 'video' ? 'video/' : 'application/pdf';
-        baseFilters.push({ mimeType: { startsWith: mimeStart } });
+      if (type === 'image') keywordWhere.AND.push({ mimeType: { startsWith: 'image/' } });
+      else if (type === 'video') keywordWhere.AND.push({ mimeType: { startsWith: 'video/' } });
+      else if (type === 'document') keywordWhere.AND.push({ mimeType: 'application/pdf' }); 
     }
     if (color) {
-        // Strict Color Filter: Looks for the word in the JSON blob
-        baseFilters.push({ aiData: { contains: String(color), mode: 'insensitive' } });
+        keywordWhere.AND.push({ aiData: { contains: String(color), mode: 'insensitive' } });
     }
 
-    // 3. CANDIDATE FETCHING (Wide Net)
-    // We grab anything that matches matching filters + AT LEAST ONE token
-    let candidates: any[] = [];
-    
-    if (tokens.length > 0) {
-        candidates = await prisma.asset.findMany({
-            where: {
-                AND: baseFilters,
-                OR: [
-                    // Broad match first, we filter strictly in JS
-                    ...tokens.map(t => ({ originalName: { contains: t, mode: 'insensitive' as const } })),
-                    ...tokens.map(t => ({ aiData: { contains: t, mode: 'insensitive' as const } }))
-                ]
-            },
-            include: { uploadedBy: { select: { name: true } } },
-            take: 200 
-        });
-    } else {
-        // No search? Return recent
-        candidates = await prisma.asset.findMany({
-            where: { AND: baseFilters },
-            orderBy: { createdAt: 'desc' },
-            take: 50,
-            include: { uploadedBy: { select: { name: true } } }
-        });
-        res.json(candidates);
-        return;
+    if (searchTerms.length > 0) {
+      keywordWhere.AND.push({
+        OR: searchTerms.flatMap(term => [
+          { originalName: { contains: term, mode: 'insensitive' } },
+          { aiData: { contains: term, mode: 'insensitive' } },
+        ])
+      });
     }
 
-    // 4. PRECISION SCORING ENGINE
-    const scoredResults = candidates.map(asset => {
-        let score = 0;
-        let aiJson: any = {};
-        try { aiJson = JSON.parse(asset.aiData || '{}'); } catch(e) {}
-
-        const filename = (asset.originalName || '').toLowerCase();
-        const tags = (aiJson.tags || []).map((t: string) => t.toLowerCase());
-        const description = (aiJson.description || '').toLowerCase();
-        const transcript = (aiJson.transcript || '').toLowerCase();
-
-        // CHECK 1: EXACT PHRASE MATCH (The "Perfect" Match)
-        // Does "cat wearing black" appear exactly?
-        if (filename.includes(rawSearch)) score += 100;
-        if (tags.some((t: string) => t === rawSearch)) score += 80;
-        if (description.includes(rawSearch)) score += 50;
-
-        // CHECK 2: TOKEN COVERAGE (The "Precision" Match)
-        // If I searched 3 words, how many did we find?
-        let tokensMatched = 0;
-        tokens.forEach(token => {
-            let found = false;
-            
-            // Priority A: Filename
-            if (filename.includes(token)) { score += 20; found = true; }
-            
-            // Priority B: Tags (Specific Keywords)
-            if (tags.some((t: string) => t.includes(token))) { score += 15; found = true; }
-            
-            // Priority C: Description/Transcript (General Text)
-            if (description.includes(token) || transcript.includes(token)) { score += 5; found = true; }
-
-            if (found) tokensMatched++;
-        });
-
-        // BONUSES
-        // "All words found" Bonus (Huge boost for precision)
-        if (tokensMatched === tokens.length && tokens.length > 0) score += 200;
-        
-        // "Most words found" Bonus
-        else if (tokensMatched > (tokens.length * 0.7)) score += 50;
-
-        return { asset, score, tokensMatched };
+    const keywordAssets = await prisma.asset.findMany({
+      where: keywordWhere,
+      include: { uploadedBy: { select: { name: true } } },
+      take: 100,
     });
 
-    // 5. FILTER & SORT
-    const finalResults = scoredResults
-        .filter(item => item.score > 0) // Remove things with 0 relevance
-        .sort((a, b) => b.score - a.score) // Highest score first
+    // 4. SCORING
+    keywordAssets.forEach(asset => {
+        let score = 0;
+        const lowerName = asset.originalName.toLowerCase();
+        const lowerAI = (asset.aiData || '').toLowerCase();
+        const nameWithoutExt = lowerName.replace(/\.[^/.]+$/, "");
+
+        if (nameWithoutExt === cleanSearch) score += 100;
+        else if (nameWithoutExt.startsWith(cleanSearch)) score += 70;
+        else if (nameWithoutExt.includes(cleanSearch)) score += 40;
+
+        if (lowerAI.includes(cleanSearch)) score += 30;
+
+        const daysOld = (Date.now() - new Date(asset.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+        if (daysOld < 30) score += 10 * (1 - daysOld / 30);
+
+        if (scoredMap.has(asset.id)) {
+            const existing = scoredMap.get(asset.id)!;
+            scoredMap.set(asset.id, { 
+                asset, 
+                score: existing.score + score, 
+                debug: existing.debug + ` + Keyword (${score.toFixed(0)})` 
+            });
+        } else {
+            scoredMap.set(asset.id, { asset, score, debug: `Keyword (${score.toFixed(0)})` });
+        }
+    });
+
+    // 5. CLICK BOOST
+    if (cleanSearch) {
+        const clickCounts = await prisma.assetClick.groupBy({
+            by: ['assetId'],
+            where: { query: cleanSearch },
+            _count: true
+        });
+        
+        clickCounts.forEach(c => {
+            if (scoredMap.has(c.assetId)) {
+                const entry = scoredMap.get(c.assetId)!;
+                const boost = Math.log10(c._count + 1) * 10;
+                entry.score += boost;
+            }
+        });
+    }
+
+    // 6. SORT & RETURN
+    let finalResults = Array.from(scoredMap.values())
+        .sort((a, b) => b.score - a.score)
         .map(item => item.asset);
 
-    // 6. VECTOR FALLBACK (Only if few results)
-    // If strict text failed to find enough, we ask the AI for help
-    if (finalResults.length < 5 && rawSearch.length > 2) {
-        try {
-            const embedding = await generateEmbedding(rawSearch);
-            if (embedding) {
-                const vectorString = `[${embedding.join(',')}]`;
-                const rawVectorAssets: any[] = await prisma.$queryRaw`
-                    SELECT id 
-                    FROM "Asset" 
-                    WHERE 1=1
-                    ${color ? Prisma.sql`AND "aiData" ILIKE ${'%' + color + '%'}` : Prisma.empty}
-                    AND embedding IS NOT NULL
-                    -- Very strict vector threshold to ensure relevance
-                    AND (embedding <=> ${vectorString}::vector) < 0.40
-                    ORDER BY embedding <=> ${vectorString}::vector
-                    LIMIT 10;
-                `;
-                
-                // Fetch and append unique vector matches to the bottom
-                const existingIds = new Set(finalResults.map(a => a.id));
-                const newIds = rawVectorAssets.map(r => r.id).filter(id => !existingIds.has(id));
-                
-                if (newIds.length > 0) {
-                    const vectorAssets = await prisma.asset.findMany({
-                        where: { id: { in: newIds } },
-                        include: { uploadedBy: { select: { name: true } } }
-                    });
-                    finalResults.push(...vectorAssets);
-                }
+    if (cleanSearch) {
+        await prisma.searchLog.create({
+            data: {
+                query: cleanSearch,
+                resultCount: finalResults.length,
+                userId: (req as any).user?.id || null
             }
-        } catch (e) { console.warn("Vector fallback failed", e); }
+        }).catch(e => {});
+    }
+
+    if (finalResults.length === 0 && cleanSearch) {
+        const fallbackAssets = await prisma.asset.findMany({
+            orderBy: { createdAt: 'desc' },
+            take: 20,
+            include: { uploadedBy: { select: { name: true } } }
+        });
+        res.json({ results: fallbackAssets, isFallback: true });
+        return;
     }
 
     res.json(finalResults);
@@ -334,13 +352,10 @@ export const getAssetById = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-// --- RECOMMENDATIONS (Pinterest "More Like This") ---
+// --- RECOMMENDATIONS ---
 export const getRelatedAssets = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-
-    // 1. Get the target asset's embedding
-    // We need the vector to compare against others
     const targetAsset: any = await prisma.$queryRaw`
       SELECT embedding::text 
       FROM "Asset" 
@@ -354,18 +369,15 @@ export const getRelatedAssets = async (req: Request, res: Response): Promise<voi
 
     const vectorString = targetAsset[0].embedding;
 
-    // 2. Find closest neighbors (excluding itself)
-    // FIX: Tighten threshold to 0.35 (Strict Similarity)
-        // "Show me things that are VERY similar to this"
-        const relatedAssets = await prisma.$queryRaw`
-          SELECT id, filename, "originalName", "mimeType", "thumbnailPath", "aiData"
-          FROM "Asset"
-          WHERE id != ${id}
-          AND embedding IS NOT NULL
-          AND (embedding <=> ${vectorString}::vector) < 0.35
-          ORDER BY embedding <=> ${vectorString}::vector
-          LIMIT 10;
-        `;
+    const relatedAssets = await prisma.$queryRaw`
+      SELECT id, filename, "originalName", "mimeType", "thumbnailPath", "aiData"
+      FROM "Asset"
+      WHERE id != ${id}
+      AND embedding IS NOT NULL
+      AND (embedding <=> ${vectorString}::vector) < 0.60
+      ORDER BY embedding <=> ${vectorString}::vector
+      LIMIT 20;
+    `;
 
     res.json(relatedAssets);
   } catch (error) {
@@ -425,5 +437,45 @@ export const deleteAsset = async (req: Request, res: Response): Promise<void> =>
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error deleting asset' });
+  }
+};
+
+// 7. UPDATE CATEGORY (Rename or Change Cover)
+export const updateCategory = async (req: Request, res: Response): Promise<void> => {
+  const multerReq = req as MulterRequest;
+  const { id } = req.params;
+  const { name, group } = req.body;
+
+  try {
+    let coverImagePath = undefined;
+
+    // Handle File Upload if present
+    if (multerReq.file) {
+        const { path: tempPath, filename, mimetype } = multerReq.file;
+        
+        // Upload to Supabase (Categories folder)
+        coverImagePath = await uploadToSupabase(
+            tempPath,
+            `categories/${filename}`,
+            mimetype
+        );
+        
+        // Cleanup local file
+        await fs.remove(tempPath);
+    }
+
+    const category = await prisma.category.update({
+      where: { id },
+      data: {
+        ...(name && { name }),
+        ...(group && { group }),
+        ...(coverImagePath && { coverImage: coverImagePath }) // Only update if new file
+      }
+    });
+
+    res.json(category);
+  } catch (error) {
+    console.error("Update Category Error:", error);
+    res.status(500).json({ message: 'Failed to update category' });
   }
 };

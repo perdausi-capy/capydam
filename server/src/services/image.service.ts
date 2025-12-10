@@ -20,15 +20,31 @@ if (platform === 'linux') {
     }
 }
 
-// 1. IMAGES
+// 1. IMAGES (Smart: Handles Static & Animated)
 export const generateThumbnail = async (filePath: string, outputDir: string): Promise<string> => {
   const fileName = path.basename(filePath);
+  const ext = path.extname(filePath).toLowerCase();
   const nameWithoutExt = path.parse(fileName).name; 
+
+  // A. Handle GIFs (Animated WebP)
+  if (ext === '.gif') {
+      const thumbnailFilename = `thumb_${nameWithoutExt}.webp`;
+      const thumbnailPath = path.join(outputDir, thumbnailFilename);
+
+      await sharp(filePath, { animated: true }) // <--- Enable Animation
+        .resize({ width: 400 })
+        .webp({ quality: 80, effort: 4 }) // <--- Save as WebP (Better than GIF)
+        .toFile(thumbnailPath);
+
+      return `thumbnails/${thumbnailFilename}`;
+  }
+
+  // B. Handle Static Images (JPEG)
   const thumbnailFilename = `thumb_${nameWithoutExt}.jpg`;
   const thumbnailPath = path.join(outputDir, thumbnailFilename);
 
   await sharp(filePath)
-    .resize({ width: 400 }) // Width only (Pinterest style)
+    .resize({ width: 400 }) 
     .jpeg({ quality: 80 })
     .toFile(thumbnailPath);
 

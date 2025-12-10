@@ -55,3 +55,4 @@ export const deleteFromSupabase = async (pathUrl: string) => {
     console.error('Supabase Delete Error:', error);
   }
 };
+

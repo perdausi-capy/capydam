@@ -15,6 +15,7 @@ import Masonry from 'react-masonry-css';
 import ConfirmModal from '../components/ConfirmModal';
 import { toast } from 'react-toastify';
 import AssetThumbnail from '../components/AssetThumbnail'; 
+import { useAuth } from '../context/AuthContext';
 
 interface Asset {
   id: string;
@@ -41,6 +42,9 @@ const CollectionDetail = () => {
   const [collection, setCollection] = useState<CollectionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [assetToRemove, setAssetToRemove] = useState<string | null>(null);
+
+  const { user } = useAuth();
+    const isViewer = user?.role === 'viewer';
 
   useEffect(() => {
     const fetchCollection = async () => {
@@ -206,6 +210,8 @@ const CollectionDetail = () => {
                         </div>
 
                         {/* Floating Action Button */}
+
+                        {!isViewer && (
                         <button
                             onClick={(e) => handleRemoveClick(e, asset.id)}
                             className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 dark:bg-black/80 text-gray-400 shadow-md backdrop-blur-sm opacity-0 transform scale-90 transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-600"
@@ -213,6 +219,7 @@ const CollectionDetail = () => {
                         >
                             <Trash2 size={14} />
                         </button>
+                        )}
 
                     </div>
                 ))}

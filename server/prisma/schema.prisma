@@ -25,7 +25,29 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
+  collections Collection[]
   assets    Asset[]  // Relation: User uploaded these
+}
+
+
+// GLOBAL CATEGORIES (System Folders)
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  group     String   // "Features" or "Inspiration"
+  coverImage String?
+  assets    AssetOnCategory[]
+  createdAt DateTime @default(now())
+}
+
+model AssetOnCategory {
+  assetId    String
+  categoryId String
+  asset      Asset    @relation(fields: [assetId], references: [id])
+  category   Category @relation(fields: [categoryId], references: [id])
+  assignedAt DateTime @default(now())
+
+  @@id([assetId, categoryId])
 }
 
 model Asset {
@@ -35,6 +57,7 @@ model Asset {
   mimeType      String
   size          Int
   
+  categories AssetOnCategory[]
   // Storage Paths (Abstracted so they work for Local or S3)
   path          String   
   thumbnailPath String?
@@ -63,6 +86,15 @@ model Collection {
   id        String   @id @default(uuid())
   name      String
   slug      String   @unique
+  
+
+  // New Ownership Fields
+  userId    String   // <--- Required: The Owner
+  owner     User     @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now()) // Good practice to have this
+  updatedAt DateTime @updatedAt
+
   assets    AssetOnCollection[]
 }
 

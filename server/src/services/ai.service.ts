@@ -5,14 +5,16 @@ import { prisma } from '../lib/prisma';
 import ffmpeg from 'fluent-ffmpeg';
 import os from 'os';
 
-// --- DYNAMIC CONFIGURATION ---
+// --- 1. DYNAMIC CONFIGURATION ---
 const platform = os.platform();
 
 if (platform === 'linux') {
+    // PRODUCTION (VPS)
     console.log('🐧 Linux detected: Using system FFmpeg');
     ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
     ffmpeg.setFfprobePath('/usr/bin/ffprobe');
 } else {
+    // LOCAL (Windows/Mac)
     console.log('💻 Local OS detected: Using static FFmpeg');
     try {
         const ffmpegPath = require('ffmpeg-static');
@@ -28,24 +30,33 @@ const pdfParse = require('pdf-extraction');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-  timeout: 60 * 1000, // Increase timeout to 60 seconds for videos
+  timeout: 90 * 1000, 
   maxRetries: 2,
 });
+
+const VALID_COLORS = "Red, Orange, Yellow, Green, Teal, Blue, Purple, Pink, Black, White, Gray";
 
 interface AiOptions {
   creativity: number;
   specificity: string;
 }
 
-// 1. IMPROVED CACHE (With Expiry)
+// --- 2. SYSTEM PROMPTS (Instructional Design Specialized) ---
+
+const IMAGE_SYSTEM_PROMPT = `You are an expert Visual Analyst for Instructional Design.
+Your goal is to categorize assets for use in e-learning courses (Storyline, Rise, Captivate).
+COLORS: Use ONLY [${VALID_COLORS}].`;
+
+const VIDEO_SYSTEM_PROMPT = `You are an expert Video Content Analyst for E-Learning.
+Your goal is to describe the instructional value, pacing, and content of videos/GIFs.
+COLORS: Use ONLY [${VALID_COLORS}].`;
+
+// --- 3. SEARCH EXPANSION ---
 const queryCache = new Map<string, { terms: string[], expires: number }>();
 
 export const expandQuery = async (term: string): Promise<string[]> => {
-  // Check Cache
   const cached = queryCache.get(term);
-  if (cached && cached.expires > Date.now()) {
-      return cached.terms;
-  }
+  if (cached && cached.expires > Date.now()) return cached.terms;
 
   try {
     const response = await openai.chat.completions.create({
@@ -53,40 +64,35 @@ export const expandQuery = async (term: string): Promise<string[]> => {
       temperature: 0.3,
       messages: [{
         role: "user",
-        content: `Given search term "${term}", return JSON object with an array 'terms' containing 3-5 synonyms or related concepts. Example: "cat" -> ["kitten", "feline", "pet"].`
+        content: `Given search term "${term}" in an EdTech context, return JSON with 'terms' array (3-5 synonyms). Example: "tutorial" -> ["walkthrough", "demonstration", "guide"].`
       }],
       response_format: { type: "json_object" }
     });
     
-    const content = response.choices[0].message.content || '{}';
-    const data = JSON.parse(content);
+    const data = JSON.parse(response.choices[0].message.content || '{}');
     const results = [term, ...(data.terms || [])]; 
-    
-    // Save to Cache (24 Hours TTL)
-    queryCache.set(term, { 
-        terms: results, 
-        expires: Date.now() + (24 * 60 * 60 * 1000) 
-    });
-    
-    // Cleanup Memory (Every 100 entries)
-    if (queryCache.size > 100) {
-        const now = Date.now();
-        for (const [key, val] of queryCache.entries()) {
-            if (val.expires < now) queryCache.delete(key);
-        }
-    }
-    
+    queryCache.set(term, { terms: results, expires: Date.now() + (24 * 60 * 60 * 1000) });
     return results;
-  } catch (e) {
-    console.warn("Query expansion failed:", e);
-    return [term]; 
-  }
+  } catch (e) { return [term]; }
 };
 
-// --- HELPERS ---
+// --- 4. EMBEDDINGS ---
+export const generateEmbedding = async (text: string) => {
+  try {
+    const cleanText = text.replace(/\n/g, ' ').slice(0, 8000);
+    const response = await openai.embeddings.create({
+      model: "text-embedding-3-small",
+      input: cleanText,
+      encoding_format: "float",
+    });
+    return response.data[0].embedding;
+  } catch (error) { return null; }
+};
 
+// --- 5. DB HELPERS ---
 const saveAiData = async (id: string, data: any) => {
-  const textToEmbed = `${data.description || ''} ${data.tags?.join(', ') || ''} ${data.transcript || ''}`;
+  // Combine all text fields for the vector embedding
+  const textToEmbed = `${data.description || ''} ${data.tags?.join(', ') || ''} ${data.educationalContext || ''} ${data.transcript || ''}`;
   const embedding = await generateEmbedding(textToEmbed);
 
   if (embedding) {
@@ -98,65 +104,33 @@ const saveAiData = async (id: string, data: any) => {
   }
 };
 
-export const generateEmbedding = async (text: string) => {
-  try {
-    const cleanText = text.replace(/\n/g, ' ').slice(0, 8000);
-    const response = await openai.embeddings.create({
-      model: "text-embedding-3-small",
-      input: cleanText,
-      encoding_format: "float",
-    });
-    return response.data[0].embedding;
-  } catch (error) {
-    console.error("Error generating embedding:", error);
-    return null;
-  }
-};
-
-const getTagsFromText = async (text: string, options?: AiOptions) => {
-  const safeText = text.slice(0, 10000);
-  const isSpecific = options?.specificity === 'high';
-
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    temperature: options?.creativity || 0.2,
-    messages: [
-      { role: "system", content: "You are a Semantic Asset Tagger." },
-      { role: "user", content: `Analyze this text:\n\n${safeText}\n\nReturn JSON: 1. tags, 2. description, 3. colors (empty).` }
-    ],
-    response_format: { type: "json_object" },
-  });
-
-  return JSON.parse(response.choices[0].message.content || '{}');
-};
-
 const extractKeyFrames = async (videoPath: string): Promise<string[]> => {
   const screenshots: string[] = [];
-  
   const absoluteVideoPath = path.resolve(videoPath);
 
   const duration = await new Promise<number>((resolve, reject) => {
     ffmpeg.ffprobe(absoluteVideoPath, (err, metadata) => {
-      if (err) reject(err);
-      else resolve(metadata.format.duration || 0);
+      if (err) return reject(err);
+      const d = parseFloat(metadata.format.duration as any);
+      resolve(isNaN(d) ? 0 : d);
     });
   });
 
-  // Timestamps at 20%, 50%, 80% (Better distribution)
-  const timestamps = [duration * 0.2, duration * 0.5, duration * 0.8];
+  let timestamps: number[] = [];
+  if (duration > 0) {
+      // Extract more frames if video is long
+      if (duration > 60) timestamps = [duration * 0.1, duration * 0.5, duration * 0.9];
+      else timestamps = [duration * 0.2, duration * 0.8];
+  } else {
+      timestamps = [0]; 
+  }
 
   for (let i = 0; i < timestamps.length; i++) {
     const filename = `frame-${i}-${Date.now()}.jpg`;
     const outPath = path.join(path.dirname(absoluteVideoPath), filename);
-    
     await new Promise((resolve, reject) => {
       ffmpeg(absoluteVideoPath)
-        .screenshots({
-          timestamps: [timestamps[i]],
-          filename: filename,
-          folder: path.dirname(absoluteVideoPath),
-          size: '400x?', // Reduced size for speed/reliability
-        })
+        .screenshots({ timestamps: [timestamps[i]], filename, folder: path.dirname(absoluteVideoPath), size: '400x?' })
         .on('end', resolve)
         .on('error', reject);
     });
@@ -167,20 +141,36 @@ const extractKeyFrames = async (videoPath: string): Promise<string[]> => {
 
 const encodeImage = async (p: string) => (await fs.readFile(p)).toString('base64');
 
-// --- ANALYZERS ---
+// --- 6. ANALYZERS ---
 
+// A. IMAGE (With Slider Logic)
 export const analyzeImage = async (assetId: string, filePath: string, options?: AiOptions) => {
   try {
     const base64Image = await encodeImage(filePath);
     const isSpecific = options?.specificity === 'high';
     
+    const userPrompt = isSpecific 
+      ? `Analyze this image in high detail for e-learning use.
+         Return JSON:
+         1. 'tags': 20-25 precise keywords (Objects, Style, Technical).
+         2. 'description': Detailed breakdown of composition and utility.
+         3. 'colors': 3 standard color names.
+         4. 'educationalContext': "How can this be used in training?"
+         5. 'storylineUseCase': "Specific slide suggestion (e.g. 'Background', 'Character')."`
+      : `Analyze this image generally.
+         Return JSON:
+         1. 'tags': 8-10 broad categories.
+         2. 'description': Brief summary.
+         3. 'colors': 3 standard color names.`;
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      temperature: options?.creativity || 0.2,
+      // SLIDER CONNECTED HERE: 0.0 (Robot) -> 1.0 (Creative)
+      temperature: options?.creativity || 0.4, 
       messages: [
-        { role: "system", content: "You are a Visual Tagger." },
+        { role: "system", content: IMAGE_SYSTEM_PROMPT },
         { role: "user", content: [
-            { type: "text", text: `Analyze this image. Return JSON: 1. tags (${isSpecific ? '20 precise' : '8 broad'}), 2. description, 3. colors (names).` },
+            { type: "text", text: userPrompt },
             { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } }
           ]
         }
@@ -189,51 +179,62 @@ export const analyzeImage = async (assetId: string, filePath: string, options?: 
     });
     
     const aiData = JSON.parse(response.choices[0].message.content || '{}');
+    aiData.assetType = 'image';
     await saveAiData(assetId, aiData);
-    console.log(`✅ Image Analysis complete for ${assetId}`);
-  } catch (e) {
-    console.error(`Image Analysis failed for ${assetId}`, e);
-  }
+    console.log(`✅ Image Analysis complete (Spec: ${options?.specificity}, Temp: ${options?.creativity})`);
+  } catch (e) { console.error(e); }
 };
 
+// B. PDF
 export const analyzePdf = async (assetId: string, filePath: string, options?: AiOptions) => {
   try {
     const dataBuffer = await fs.readFile(filePath);
     const data = await pdfParse(dataBuffer);
-    const aiData = await getTagsFromText(data.text, options);
+    const textSample = data.text.slice(0, 12000);
+    
+    const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        temperature: options?.creativity || 0.2,
+        messages: [
+            { role: "system", content: "You are an Instructional Design Archivist." },
+            { role: "user", content: `Analyze this document text. Return JSON: { "tags": [], "description": "Summary", "educationalContext": "Topic" }\n\n${textSample}` }
+        ],
+        response_format: { type: "json_object" }
+    });
+    const aiData = JSON.parse(response.choices[0].message.content || '{}');
+    aiData.assetType = 'document';
     await saveAiData(assetId, aiData);
-    console.log(`✅ PDF Analysis complete for ${assetId}`);
-  } catch (e) {
-    console.error(`PDF Analysis failed for ${assetId}`, e);
-  }
+    console.log(`✅ PDF Analysis complete`);
+  } catch (e) { console.error(e); }
 };
 
+// C. VIDEO / GIF (With Slider Logic)
 export const analyzeAudioVideo = async (assetId: string, filePath: string, options?: AiOptions) => {
   try {
     const absolutePath = path.resolve(filePath);
     const stats = await fs.stat(absolutePath);
+    const ext = path.extname(absolutePath).toLowerCase();
     
-    const isVideo = ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(path.extname(absolutePath).toLowerCase());
+    const isVideo = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.gif'].includes(ext);
 
     if (isVideo) {
-      console.log(`🎥 Starting Deep Video Analysis for: ${assetId} (Size: ${stats.size})`);
+      console.log(`🎥 Starting Motion Analysis for: ${assetId}`);
       
       let transcript = "";
-      // Only transcribe if under 25MB (OpenAI Limit)
-      if (stats.size < 25 * 1024 * 1024) {
+      const isGif = ext === '.gif';
+
+      if (!isGif && stats.size < 25 * 1024 * 1024) {
          try {
            const transcription = await openai.audio.transcriptions.create({
              file: fs.createReadStream(absolutePath),
              model: "whisper-1",
            });
-           transcript = transcription.text.slice(0, 2000); 
-           console.log("🎤 Audio Transcribed");
-         } catch (e) { console.warn("🎤 Audio extraction skipped/failed (Silent video?)"); }
-      } else {
-          console.log("⚠️ Video too large for Whisper (>25MB). Skipping audio, using Visuals only.");
+           transcript = transcription.text;
+         } catch (e) { /* ignore */ }
+      } else if (isGif) {
+          transcript = "[Animated GIF - Visuals Only]";
       }
 
-      // Frames
       const framePaths = await extractKeyFrames(absolutePath);
       const imageContents = await Promise.all(framePaths.map(async (p) => ({
         type: "image_url",
@@ -241,46 +242,27 @@ export const analyzeAudioVideo = async (assetId: string, filePath: string, optio
       })));
 
       const isSpecific = options?.specificity === 'high';
-      
+      const userPrompt = isSpecific
+        ? `Analyze these frames + transcript in DEPTH.
+           Return JSON:
+           1. 'tags': 20+ keywords (Action, Software, Instructional method).
+           2. 'description': Detailed step-by-step or narrative summary.
+           3. 'colors': 3 standard names.
+           4. 'instructionalApproach': (e.g. "Demo", "Scenario").`
+        : `Analyze these frames + transcript GENERALLY.
+           Return JSON:
+           1. 'tags': 8-10 broad topics.
+           2. 'description': Brief summary.
+           3. 'colors': 3 names.`;
+
       const response = await openai.chat.completions.create({
         model: "gpt-4o-mini",
-        temperature: 0.3, // Lower temperature slightly for more factual/coherent writing
+        // SLIDER CONNECTED HERE
+        temperature: options?.creativity || 0.3,
         messages: [
-          { 
-            role: "system", 
-            content: `You are an expert Content Archivist and Technical Writer. 
-            Your goal is to understand the **user's intent** and the **workflow** shown in the video.
-            
-            IMPORTANT RULES:
-            1. Do NOT describe frames individually (e.g., never say "The first frame shows...").
-            2. Synthesize the visual timeline and audio into a single, coherent narrative.
-            3. If software is visible, read the text on screen (OCR) to identify the specific tool name, menu items clicked, and code snippets.
-            4. Identify the "Goal" of the video (e.g., "A tutorial on...", "A demo of...", "A review of...").` 
-          },
-          { 
-            role: "user", 
-            content: [
-              { 
-                type: "text", 
-                text: `CONTEXT DATA:
-                - Audio Transcript: "${transcript || "No speech detected"}"
-                - Domain Hint: E-Learning, Software Development, Tutorials.
-
-                TASK:
-                Analyze the 3 key frames (Start, Middle, End) and the Audio to generate metadata.
-                
-                RETURN JSON:
-                1. 'tags': array of ${isSpecific ? '15-20' : '8-10'} keywords. Include:
-                   - Software Names (e.g., Storyline, Moodle, VS Code).
-                   - Technical Terms (e.g., API, Sync, Variables).
-                   - Action Verbs (e.g., Configuring, Debugging, coding).
-                
-                2. 'description': A professional summary (2-3 sentences).
-                   - Structure: "[Main Goal]. [Key Actions Taken]. [Final Outcome/State]."
-                   - Example: "A technical walkthrough demonstrating how to create a survey variable in Articulate Storyline. The user configures a JavaScript trigger to sync data with a Moodle backend, using the developer console to verify the connection."
-                
-                3. 'colors': Array of 3 dominant color names.` 
-              },
+          { role: "system", content: VIDEO_SYSTEM_PROMPT },
+          { role: "user", content: [
+              { type: "text", text: `Context: Transcript: "${transcript.slice(0, 2000)}"\n${userPrompt}` },
               ...imageContents as any
             ]
           }
@@ -288,57 +270,22 @@ export const analyzeAudioVideo = async (assetId: string, filePath: string, optio
         response_format: { type: "json_object" },
       });
 
-      const content = response.choices[0].message.content || '{}';
-      let aiData = JSON.parse(content);
+      let aiData = JSON.parse(response.choices[0].message.content || '{}');
       
-      console.log("🔍 RAW AI RESPONSE:", JSON.stringify(aiData, null, 2));
-
-      // FIX: Handle "Frames" Array structure
-      if (aiData.frames && Array.isArray(aiData.frames)) {
-          console.log("⚠️ Detected multi-frame response. Merging tags...");
-          
-          // 1. Merge all tags from all frames
-          const allTags = aiData.frames.flatMap((f: any) => f.tags || []);
-          // Deduplicate tags
-          const uniqueTags = Array.from(new Set(allTags));
-
-          // 2. Merge colors
-          const allColors = aiData.frames.flatMap((f: any) => f.colors || []);
-          const uniqueColors = Array.from(new Set(allColors)).slice(0, 5); // Keep top 5
-
-          // 3. Create a master description (Join them or pick the longest)
-          const fullDescription = aiData.frames.map((f: any) => f.description).join(' -> ');
-
-          // Overwrite aiData with the flat structure needed by Frontend
-          aiData = {
-              tags: uniqueTags,
-              description: fullDescription,
-              colors: uniqueColors,
-              frames: aiData.frames // Keep original frames if we want to debug later
-          };
+      // Flatten frames if AI gets confused
+      if (aiData.frames) {
+          aiData.tags = aiData.frames.flatMap((f:any) => f.tags);
+          aiData.description = aiData.frames.map((f:any) => f.description).join(' ');
+          delete aiData.frames;
       }
 
       aiData.isVideoAnalysis = true;
       aiData.transcript = transcript; 
 
       await saveAiData(assetId, aiData);
-      
       await Promise.all(framePaths.map(p => fs.remove(p)));
-      console.log(`✅ Deep Video Analysis complete for ${assetId}`);
+      console.log(`✅ Motion Analysis complete`);
 
-    } else {
-       // Audio Only
-       if (stats.size > 25 * 1024 * 1024) return;
-       const transcription = await openai.audio.transcriptions.create({
-         file: fs.createReadStream(absolutePath),
-         model: "whisper-1",
-       });
-       const aiData = await getTagsFromText(transcription.text, options);
-       await saveAiData(assetId, aiData);
-       console.log(`✅ Audio Analysis complete for ${assetId}`);
     }
-
-  } catch (e) {
-    console.error(`AV Analysis failed for ${assetId}`, e);
-  }
+  } catch (e) { console.error(`AV Analysis failed`, e); }
 };
