@@ -41,7 +41,7 @@ interface CategoryData {
 
 // Helper
 const cleanFilename = (name: string) => name.replace(/\.[^/.]+$/, "");
-const formatBytes = (bytes?: number) => bytes ? (bytes/1024/1024).toFixed(2) + ' MB' : '0B';
+// const formatBytes = (bytes?: number) => bytes ? (bytes/1024/1024).toFixed(2) + ' MB' : '0B';
 
 const CategoryDetail = () => {
   const { id } = useParams();

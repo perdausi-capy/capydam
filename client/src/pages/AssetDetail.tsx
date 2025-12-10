@@ -13,8 +13,7 @@ import {
     Cpu,
     HardDrive,
     Calendar,
-    User,
-    Layout, // <--- Icon for Topics
+    User, // <--- Icon for Topics
     Tag     // <--- Icon for Category Dropdown
 } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -71,7 +70,7 @@ const AssetDetail = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState(''); // <--- NEW: Category Selection
 
   // Permissions
-  const isViewer = user?.role === 'viewer';
+  // const isViewer = user?.role === 'viewer';
   const isAdmin = user?.role === 'admin';
   const isEditor = user?.role === 'editor';
   const isOwner = asset?.userId === user?.id;

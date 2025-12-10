@@ -10,7 +10,6 @@ import {
     X, 
     Trash2, 
     Image as ImageIcon,
-    MoreVertical,
     Edit2, // <--- New Icon
     UploadCloud
 } from 'lucide-react';
