@@ -100,8 +100,25 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
              </button>
           </div>
+          
+          <NavItem 
+            to="/" 
+            icon={<Compass size={20} />} 
+            label="Explore" 
+            isCollapsed={isCollapsed} 
+            active={location.pathname === '/' || location.pathname.startsWith('/categories')} 
+            onClick={handleNavClick}
+          />
 
-          <NavItem to="/" icon={<LayoutDashboard size={20} />} label="Assets" isCollapsed={isCollapsed} active={isActive('/')} onClick={handleNavClick} />
+          
+          <NavItem 
+            to="/library" 
+            icon={<LayoutDashboard size={20} />} 
+            label="All Assets" 
+            isCollapsed={isCollapsed} 
+            active={location.pathname.startsWith('/library')} 
+            onClick={handleNavClick}
+          />
           
           {/* Hide Upload for Viewers */}
           {user?.role !== 'viewer' && (
@@ -110,14 +127,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
           <NavItem to="/collections" icon={<Folder size={20} />} label="Collections" isCollapsed={isCollapsed} active={isActive('/collections')} onClick={handleNavClick} />
 
-          <NavItem 
-            to="/categories" 
-            icon={<Compass size={20} />} 
-            label="Explore" 
-            isCollapsed={isCollapsed} 
-            active={isActive('/categories')} 
-            onClick={handleNavClick}
-          />
 
           {user?.role === 'admin' && (
             <>

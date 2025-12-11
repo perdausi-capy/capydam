@@ -182,7 +182,7 @@ const CategoryDetail = () => {
                     Add assets here from the Asset Detail page to curate this topic.
                 </p>
                 <Link 
-                    to="/" 
+                    to="/library" 
                     className="mt-6 rounded-lg bg-purple-600 px-6 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-purple-700 transition-all"
                 >
                     Browse Library
