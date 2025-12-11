@@ -133,7 +133,7 @@ const Dashboard = () => {
 
   const handleDownload = async (asset: Asset) => {
     try {
-      toast.info('Download started...', { autoClose: 2000 });
+      toast.info('Downloading...', { autoClose: 1000 });
       const response = await fetch(asset.path);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -152,20 +152,44 @@ const Dashboard = () => {
     setActiveDropdownId(activeDropdownId === assetId ? null : assetId);
   };
 
+  // ✅ FIX: Instant UI Feedback + Toast Promise
   const addToCollection = async (e: React.MouseEvent, collectionId: string, collectionName: string) => {
     e.preventDefault(); e.stopPropagation();
     if (!activeDropdownId) return;
+    
+    // 1. Capture ID before clearing state
+    const assetId = activeDropdownId;
+    
+    // 2. CLOSE DROPDOWN IMMEDIATELY (Makes UI feel instant)
+    setActiveDropdownId(null);
+
+    // 3. Perform Request with "Loading..." Toast
+    const promise = client.post(`/collections/${collectionId}/assets`, { assetId });
+    
+    toast.promise(
+        promise,
+        {
+            pending: 'Adding to collection...',
+            success: `Added to ${collectionName}!`,
+            error: {
+                render({ data }: any) {
+                    // Check for duplicate status
+                    if (data?.response?.status === 409 || data?.response?.status === 200) { 
+                        // Sometimes APIs return 200 for "Already exists"
+                        return 'Asset already in collection';
+                    }
+                    return 'Failed to add asset';
+                }
+            }
+        },
+        { autoClose: 2000 }
+    );
+
+    // 4. Update Cache (Background)
     try {
-      await client.post(`/collections/${collectionId}/assets`, { assetId: activeDropdownId });
-      await queryClient.invalidateQueries({ queryKey: ['collections'] });
-      toast.success(`Added to ${collectionName}`);
-      setActiveDropdownId(null);
-    } catch (error: any) {
-      if (error.response?.status === 403) toast.error("Permission denied.");
-      else if (error.response?.status === 404) toast.error("Collection not found.");
-      else toast.info('Asset is likely already in this collection.');
-      setActiveDropdownId(null);
-    }
+        await promise;
+        queryClient.invalidateQueries({ queryKey: ['collections'] });
+    } catch (e) { /* Error handled by toast */ }
   };
 
   const breakpointColumnsObj = { default: 5, 1536: 4, 1280: 3, 1024: 3, 768: 2, 640: 1 };
@@ -206,17 +230,12 @@ const Dashboard = () => {
             {assets.map((asset, index) => (
                 <div 
                     key={asset.id} 
-                    // 1. LIGHTWEIGHT CONTAINER (No border/bg)
                     className={`group relative mb-8 block transition-all duration-300 
                         ${activeDropdownId === asset.id ? 'z-50' : 'z-0'}
                     `}
-                    // 2. PERFORMANCE: Stop rendering off-screen items
                     style={{ contentVisibility: 'auto', containIntrinsicSize: '300px' }} 
                 >
-                    {/* --- IMAGE AREA (The "Card" is now just the image) --- */}
                     <div className="relative">
-                        
-                        {/* Image Wrapper */}
                         <div className={`
                             relative w-full rounded-2xl overflow-hidden transition-all duration-300
                             bg-gray-100 dark:bg-[#1A1D21] 
@@ -230,7 +249,6 @@ const Dashboard = () => {
                             </Link>
                         </div>
 
-                        {/* Buttons (Floating - No Clipping) */}
                         <div className={`absolute top-3 right-3 flex gap-2 transition-opacity duration-200 ${activeDropdownId === asset.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                             <div className="relative">
                                 {canAddToCollection && (
@@ -264,7 +282,6 @@ const Dashboard = () => {
                         </div>
                     </div>
                     
-                    {/* --- TEXT INFO (Clean, outside the image) --- */}
                     <div className="mt-3 px-1">
                         <Link to={`/assets/${asset.id}`} onClick={() => handleAssetClick(asset.id, index)} className="group/link">
                             <p className="truncate font-bold text-sm text-gray-800 dark:text-gray-100 group-hover/link:underline decoration-gray-400 underline-offset-2 transition-all" title={asset.originalName}>{cleanFilename(asset.originalName)}</p>

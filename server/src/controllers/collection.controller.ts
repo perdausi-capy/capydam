@@ -20,7 +20,9 @@ export const getCollections = async (req: Request, res: Response): Promise<void>
     const userRole = (req as any).user?.role;
 
     // RBAC Logic
-    const whereClause: any = {};
+    const whereClause: any = {
+      parentId: null
+    };
     if (userRole !== 'admin') {
         // Editors/Viewers only see their OWN collections
         whereClause.userId = userId;
@@ -70,6 +72,11 @@ export const getCollectionById = async (req: Request, res: Response): Promise<vo
       const collection = await prisma.collection.findUnique({
         where: { id },
         include: {
+            // ✅ Include Sub-folders
+            children: {
+                include: { _count: { select: { assets: true } } }
+            },
+            // Include Assets
             assets: {
                 include: {
                     asset: {
@@ -105,6 +112,8 @@ export const getCollectionById = async (req: Request, res: Response): Promise<vo
 
 // 3. CREATE
 export const createCollection = async (req: Request, res: Response): Promise<void> => {
+  const { name, parentId } = req.body;
+  const userId = (req as any).user?.id;
   try {
     const { name } = req.body;
     const userId = (req as any).user?.id;
@@ -120,7 +129,8 @@ export const createCollection = async (req: Request, res: Response): Promise<voi
       data: {
         name,
         slug,
-        userId // <--- Associate with creator
+        userId,
+        parentId: parentId || null // <--- Save it
       }
     });
 

@@ -101,8 +101,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         border-b border-white/50 dark:border-white/5 
         shadow-sm transition-all duration-500 ease-in-out
         px-4 lg:px-8 py-4
-        will-change-transform
-        ${/* ✅ FIX: Removed -mx-4 and lg:-mx-8 */ ''}
+        ${/* ✅ FIX: Removed will-change-transform from here */ ''}
     `}>
       <div className="max-w-[2000px] mx-auto flex flex-col transition-all duration-500 gap-0 relative">
         
@@ -132,7 +131,6 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         {/* ROW 2: Filters, Center Search, Colors */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 overflow-visible relative">
             
-            {/* Left: Tabs */}
             <div className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0 px-1 -mx-1 no-scrollbar mask-gradient-right snap-x z-20">
                 <FilterTab label="Images" type="image" icon={ImageIcon} />
                 <FilterTab label="Videos" type="video" icon={Film} />
@@ -151,14 +149,13 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                 `}
             >
                  <SearchInput 
-                    className=""
+                    className="shadow-md"
                     value={searchQuery} 
                     onChange={(e) => setSearchQuery(e.target.value)} 
                     onClear={() => setSearchQuery('')}
                   />
             </div>
 
-            {/* Right: Colors */}
             <div className="pt-2 lg:pt-0 border-t lg:border-t-0 border-gray-200 dark:border-white/10 w-full lg:w-auto overflow-hidden z-20">
                 <ColorFilterBar 
                     selectedColor={selectedColor} 

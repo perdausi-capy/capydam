@@ -92,6 +92,11 @@ model Collection {
   userId    String   // <--- Required: The Owner
   owner     User     @relation(fields: [userId], references: [id])
 
+  // NEW: Self-Relation for Sub-folders
+  parentId  String?
+  parent    Collection?   @relation("SubCollections", fields: [parentId], references: [id], onDelete: Cascade) // Delete parent -> delete children
+  children  Collection[]  @relation("SubCollections")
+
   createdAt DateTime @default(now()) // Good practice to have this
   updatedAt DateTime @updatedAt
 

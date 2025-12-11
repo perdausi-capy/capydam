@@ -2,6 +2,52 @@
 @tailwind components;
 @tailwind utilities;
 
+
+/* --- CIRCULAR REVEAL ANIMATION FIXES --- */
+
+/* 1. Disable default fade */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* 2. Ensure the NEW theme sits on TOP during the wipe */
+::view-transition-new(root) {
+  z-index: 9999;
+  /* Optimization: Prevents layout thrashing during animation */
+  will-change: clip-path;
+}
+
+/* 3. Ensure the OLD theme stays visible underneath until covered */
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+/* 4. Disable scrolling during transition to prevent jumps */
+html::view-transition-group(root) {
+  animation-duration: 0.75s;
+  overflow: hidden;
+}
+
+@layer utilities {
+  @keyframes wing-flutter-left {
+    0%, 100% { transform: scaleX(1) rotate(10deg); }
+    50% { transform: scaleX(0.6) rotate(0deg); }
+  }
+  @keyframes wing-flutter-right {
+    0%, 100% { transform: scaleX(1) rotate(-10deg); }
+    50% { transform: scaleX(0.6) rotate(0deg); }
+  }
+  
+  .animate-wing-flutter-left {
+    animation: wing-flutter-left 0.15s infinite ease-in-out alternate;
+  }
+  .animate-wing-flutter-right {
+    animation: wing-flutter-right 0.15s infinite ease-in-out alternate;
+  }
+}
+
 @layer utilities {
   .glass {
     @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-glass;
@@ -15,6 +61,34 @@
     text-shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
 }
+
+
+@layer base {
+  body {
+    /* 1. Main Background & Text Color Transition */
+    @apply bg-[#F3F4F6] text-gray-900 dark:bg-[#0B0D0F] dark:text-white transition-colors duration-500 ease-in-out;
+  }
+}
+
+/* 2. Global Theme Transition Helper */
+/* This forces every element to transition its colors smoothly */
+html.transitioning * {
+  transition: background-color 0.5s ease, border-color 0.5s ease, color 0.5s ease, fill 0.5s ease, stroke 0.5s ease;
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .mask-gradient-right {
+    mask-image: linear-gradient(to right, black 85%, transparent 100%);
+  }
+}
+
 
 @layer utilities {
   .perspective-1000 {
