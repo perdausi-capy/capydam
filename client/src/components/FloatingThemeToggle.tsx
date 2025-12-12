@@ -6,7 +6,7 @@ import Lottie from "lottie-react";
 import WitchAnimation from '../assets/witch.json';
 
 const FAIRY_SIZE = 80;
-const WANDER_SPEED = 1.5; // Calm speed
+const WANDER_SPEED = 1.5; 
 const FLUTTER_SPEED = 0.15; 
 
 const FloatingThemeToggle = () => {
@@ -17,7 +17,7 @@ const FloatingThemeToggle = () => {
   const [showTooltip, setShowTooltip] = useState(true);
   const [displayedText, setDisplayedText] = useState("");
   
-  // Reaction State (The "Sheesh" message)
+  // Reaction State
   const [reaction, setReaction] = useState<string | null>(null);
   const isFirstRender = useRef(true); 
 
@@ -29,37 +29,29 @@ const FloatingThemeToggle = () => {
   const animationFrame = useRef<number>(0);
   const timeOffset = useRef(Math.random() * 100);
 
-  // --- 1. REACTION LOGIC (Restored!) ---
+  // ✅ CLICK VS DRAG DETECTION
+  const startDragPos = useRef({ x: 0, y: 0 });
+  const isClick = useRef(true); 
+
+  // --- 1. REACTION LOGIC ---
   useEffect(() => {
-    // Skip the first render (don't react on page load)
     if (isFirstRender.current) {
         isFirstRender.current = false;
         return;
     }
-
-    // Determine Reaction Text
-    const reactionText = theme === 'dark' 
-        ? "Sheesh! 🥶" 
-        : "Eyy, it's bright now! 😎";
-
-    // Show Reaction
+    const reactionText = theme === 'dark' ? "Sheesh! 🥶" : "Eyy, it's bright now! 😎";
     setReaction(reactionText);
     setShowTooltip(true);
-
-    // Clear after 3 seconds
-    const timer = setTimeout(() => {
-        setReaction(null);
-    }, 3000);
-
+    const timer = setTimeout(() => setReaction(null), 3000);
     return () => clearTimeout(timer);
   }, [theme]);
 
-  // --- 2. INFINITE TYPEWRITER LOOP ---
+  // --- 2. TYPEWRITER LOOP ---
   useEffect(() => {
-    // Priority: Reaction > Default Help Text
+    // ✅ CHANGED TEXT: Removed "Hold & Release"
     const defaultText = theme === 'light' 
-        ? "Too bright? Hold & release me! ✨" 
-        : "Too dark? Hold & release me! 🌙";
+        ? "Too bright? Click me! ✨" 
+        : "Too dark? Click me! 🌙";
     
     const targetText = reaction || defaultText;
 
@@ -78,12 +70,7 @@ const FloatingThemeToggle = () => {
         if (charIndex <= targetText.length) {
             timeout = setTimeout(typeLoop, 50); 
         } else {
-            // Finished typing one sentence
-            
-            // If it's a reaction, just hold it (don't loop/delete)
             if (reaction) return;
-
-            // If it's default text, wait 3s then restart
             timeout = setTimeout(() => {
                 charIndex = 0;
                 setDisplayedText(""); 
@@ -93,7 +80,6 @@ const FloatingThemeToggle = () => {
     };
 
     typeLoop();
-
     return () => clearTimeout(timeout);
   }, [showTooltip, theme, reaction]); 
 
@@ -117,7 +103,6 @@ const FloatingThemeToggle = () => {
         vel.current.x += flutterX;
         vel.current.y += flutterY;
         
-        // Clamp speed
         const speed = Math.sqrt(vel.current.x**2 + vel.current.y**2);
         if (speed > 2) {
             vel.current.x = (vel.current.x / speed) * 2;
@@ -148,12 +133,16 @@ const FloatingThemeToggle = () => {
   }, [update]);
 
   // --- INTERACTION ---
+  
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
     isDragging.current = true;
-    setShowTooltip(false);
     
-    // ✅ Fix: Capture pointer so fast movements don't break drag
+    // ✅ Reset Click Detection
+    isClick.current = true;
+    startDragPos.current = { x: e.clientX, y: e.clientY };
+
+    setShowTooltip(false);
     (e.target as Element).setPointerCapture(e.pointerId);
 
     dragOffset.current = { x: e.clientX - pos.current.x, y: e.clientY - pos.current.y };
@@ -166,11 +155,19 @@ const FloatingThemeToggle = () => {
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDragging.current) return;
+
+    // ✅ CHECK MOVEMENT
+    // If user moved mouse more than 5 pixels, consider it a drag, not a click
+    const moveX = Math.abs(e.clientX - startDragPos.current.x);
+    const moveY = Math.abs(e.clientY - startDragPos.current.y);
+    if (moveX > 5 || moveY > 5) {
+        isClick.current = false;
+    }
+
     pos.current.x = e.clientX - dragOffset.current.x;
     pos.current.y = e.clientY - dragOffset.current.y;
     
     if (buttonRef.current) {
-       // Keep updating transform during drag
        buttonRef.current.style.transform = `translate3d(${pos.current.x}px, ${pos.current.y}px, 0) scale(1.1)`;
     }
   };
@@ -178,8 +175,6 @@ const FloatingThemeToggle = () => {
   const handlePointerUp = (e: React.MouseEvent) => {
     if (!isDragging.current) return;
     isDragging.current = false;
-    
-    // ✅ Release pointer
     (e.target as Element).releasePointerCapture((e as any).pointerId);
 
     setShowTooltip(true);
@@ -188,9 +183,14 @@ const FloatingThemeToggle = () => {
         buttonRef.current.style.transition = 'transform 0.2s ease-out';
     }
     vel.current = { x: (Math.random() - 0.5) * 4, y: (Math.random() - 0.5) * 4 };
+
+    // ✅ TRIGGER THEME ONLY IF IT WAS A PURE CLICK (NO DRAG)
+    if (isClick.current) {
+        toggleTheme(e);
+    }
   };
 
-  const handleClick = (e: React.MouseEvent) => { toggleTheme(e); };
+  // Note: We removed onClick to avoid double triggers. Everything is handled in handlePointerUp.
 
   return (
     <button
@@ -200,7 +200,6 @@ const FloatingThemeToggle = () => {
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
       onMouseEnter={() => setShowTooltip(true)}
-      onClick={handleClick}
       className="fixed top-0 left-0 z-[100] group cursor-grab touch-none select-none outline-none"
       style={{ willChange: 'transform', width: FAIRY_SIZE, height: FAIRY_SIZE }}
       aria-label="Theme Toggle"

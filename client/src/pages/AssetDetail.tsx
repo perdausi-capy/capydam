@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
     ArrowLeft, Download, Trash2, Loader2, 
@@ -92,7 +92,12 @@ const AssetDetail = () => {
   // Parsed AI Data
   const [parsedAi, setParsedAi] = useState<any>({});
 
-  const canManage = user?.role === 'admin' || user?.role === 'editor' || user?.id === asset?.userId;
+  // ✅ PERMISSIONS
+  // 1. Manage Asset: Edit/Delete/Tags (Owner or Admin)
+  const canManageAsset = user?.role === 'admin' || user?.role === 'editor' || user?.id === asset?.userId;
+  
+  // 2. Manage Topics: Add to Global Topics (Admin or Editor ONLY)
+  const canAddToTopic = user?.role === 'admin' || user?.role === 'editor';
 
   // --- FETCH DATA ---
   const fetchData = async () => {
@@ -111,7 +116,6 @@ const AssetDetail = () => {
       try {
           const ai = JSON.parse(assetRes.data.aiData || '{}');
           setParsedAi(ai);
-          // ✅ Load the link saved during upload
           setDriveLink(ai.externalLink || ''); 
       } catch (e) { setParsedAi({}); }
 
@@ -162,7 +166,6 @@ const AssetDetail = () => {
     }
   };
 
-  // --- RENAME ASSET ---
   const handleRename = async () => {
       if (!asset || !newName.trim()) return;
       try {
@@ -175,7 +178,6 @@ const AssetDetail = () => {
       }
   };
 
-  // --- LINK SAVING ---
   const saveDriveLink = async () => {
       if (!asset) return;
       setIsSavingLink(true);
@@ -189,7 +191,6 @@ const AssetDetail = () => {
       finally { setIsSavingLink(false); }
   };
 
-  // --- TAG MANAGEMENT ---
   const handleAddTag = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!asset || !newTag.trim()) return;
@@ -217,7 +218,6 @@ const AssetDetail = () => {
       } catch (error) { toast.error("Failed to update tags"); }
   };
 
-  // --- MODAL ACTIONS ---
   const openSelectionModal = (type: 'collection' | 'topic') => {
       setModalSearch(''); 
       setActiveModal(type);
@@ -263,7 +263,7 @@ const AssetDetail = () => {
                   <button onClick={handleDownload} className="flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-black px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:scale-105 transition-transform">
                       <Download size={16} /> Download
                   </button>
-                  {canManage && (
+                  {canManageAsset && (
                       <button onClick={() => setShowDeleteConfirm(true)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
                           <Trash2 size={20} />
                       </button>
@@ -295,11 +295,11 @@ const AssetDetail = () => {
                       <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">More Like This</h3>
                       <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-4" columnClassName="pl-4 bg-clip-padding">
                           {relatedAssets.map(item => (
-                              <Link to={`/assets/${item.id}`} key={item.id} className="block mb-4 group">
+                              <div key={item.id} className="block mb-4 group cursor-pointer" onClick={() => navigate(`/assets/${item.id}`)}>
                                   <div className="rounded-xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] shadow-sm hover:shadow-md transition-all">
                                       <AssetThumbnail mimeType={item.mimeType} thumbnailPath={item.thumbnailPath || item.path} className="w-full h-auto object-cover group-hover:opacity-90 transition-opacity" />
                                   </div>
-                              </Link>
+                              </div>
                           ))}
                       </Masonry>
                   </div>
@@ -328,7 +328,7 @@ const AssetDetail = () => {
                           <h1 className="text-2xl font-bold text-gray-900 dark:text-white break-words leading-tight">
                               {asset.originalName}
                           </h1>
-                          {canManage && (
+                          {canManageAsset && (
                               <button onClick={() => setIsRenaming(true)} className="ml-2 p-1.5 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Rename Asset">
                                   <Edit2 size={16} />
                               </button>
@@ -342,7 +342,7 @@ const AssetDetail = () => {
                       <span className="uppercase bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded text-[10px] tracking-wide">{asset.mimeType.split('/')[1]}</span>
                   </div>
 
-                  {/* ✅ ASSET OWNER */}
+                  {/* ASSET OWNER */}
                   <div className="flex items-center gap-2 mt-4 text-sm font-medium text-gray-700 dark:text-gray-300">
                       <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center text-[10px] text-white font-bold shadow-sm">
                           {asset.uploadedBy?.name?.charAt(0).toUpperCase() || 'U'}
@@ -355,14 +355,26 @@ const AssetDetail = () => {
 
               <hr className="border-gray-200 dark:border-white/10" />
 
-              {/* 2. ACTION BUTTONS (Modals) */}
-              <div className="grid grid-cols-2 gap-3 relative z-20">
-                  <button onClick={() => openSelectionModal('collection')} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 hover:border-blue-500 dark:hover:border-blue-400 bg-white dark:bg-[#1A1D21] text-gray-700 dark:text-gray-200 font-bold text-sm transition-all shadow-sm active:scale-95">
+              {/* ✅ 2. ACTION BUTTONS (Conditional Layout) */}
+              <div className={`grid gap-3 relative z-20 ${canAddToTopic ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  
+                  {/* COLLECTION (Everyone) */}
+                  <button 
+                      onClick={() => openSelectionModal('collection')}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 hover:border-blue-500 dark:hover:border-blue-400 bg-white dark:bg-[#1A1D21] text-gray-700 dark:text-gray-200 font-bold text-sm transition-all shadow-sm active:scale-95"
+                  >
                       <FolderPlus size={18} className="text-blue-500" /> Collection
                   </button>
-                  <button onClick={() => openSelectionModal('topic')} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 hover:border-purple-500 dark:hover:border-purple-400 bg-white dark:bg-[#1A1D21] text-gray-700 dark:text-gray-200 font-bold text-sm transition-all shadow-sm active:scale-95">
-                      <Layout size={18} className="text-purple-500" /> Topic
-                  </button>
+
+                  {/* TOPIC (Admin/Editor Only) */}
+                  {canAddToTopic && (
+                      <button 
+                          onClick={() => openSelectionModal('topic')}
+                          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 hover:border-purple-500 dark:hover:border-purple-400 bg-white dark:bg-[#1A1D21] text-gray-700 dark:text-gray-200 font-bold text-sm transition-all shadow-sm active:scale-95"
+                      >
+                          <Layout size={18} className="text-purple-500" /> Topic
+                      </button>
+                  )}
               </div>
 
               {/* 3. GOOGLE DRIVE LINK */}
@@ -371,7 +383,7 @@ const AssetDetail = () => {
                       <h3 className="text-sm font-bold text-gray-800 dark:text-blue-100 flex items-center gap-2">
                           <ExternalLink size={16} /> Source Link
                       </h3>
-                      {canManage && (
+                      {canManageAsset && (
                           <button onClick={() => setIsEditingLink(!isEditingLink)} className="text-xs font-bold text-blue-600 hover:underline">
                               {isEditingLink ? 'Cancel' : 'Edit'}
                           </button>
@@ -380,43 +392,71 @@ const AssetDetail = () => {
 
                   {isEditingLink ? (
                       <div className="flex gap-2">
-                          <input type="url" value={driveLink} onChange={e => setDriveLink(e.target.value)} placeholder="Paste link..." className="flex-1 text-sm bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" />
-                          <button onClick={saveDriveLink} disabled={isSavingLink} className="bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-50"><Check size={16} /></button>
+                          <input 
+                              type="url" 
+                              value={driveLink} 
+                              onChange={e => setDriveLink(e.target.value)} 
+                              placeholder="Paste link..." 
+                              className="flex-1 text-sm bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <button onClick={saveDriveLink} disabled={isSavingLink} className="bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-50">
+                              <Check size={16} />
+                          </button>
                       </div>
                   ) : parsedAi.externalLink ? (
-                      <a href={parsedAi.externalLink} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500 text-gray-700 dark:text-gray-200 font-semibold py-3 rounded-xl shadow-sm transition-all hover:shadow-md group">
-                          <LinkIcon size={16} className="text-blue-500 group-hover:rotate-45 transition-transform" /> Open in Drive
+                      <a 
+                          href={parsedAi.externalLink} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="flex items-center justify-center gap-2 w-full bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500 text-gray-700 dark:text-gray-200 font-semibold py-3 rounded-xl shadow-sm transition-all hover:shadow-md group"
+                      >
+                          <LinkIcon size={16} className="text-blue-500 group-hover:rotate-45 transition-transform" />
+                          Open in Drive
                       </a>
                   ) : (
                       <p className="text-xs text-gray-400 italic">No external link added.</p>
                   )}
               </div>
 
-              {/* 4. DESCRIPTION & TAGS */}
+              {/* 4. DESCRIPTION */}
               <div>
                   <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</h3>
                   <CollapsibleText text={parsedAi.description || parsedAi.summary || ""} />
               </div>
 
+              {/* 5. TAGS */}
               <div>
                   <div className="flex items-center justify-between mb-2">
                       <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tags</h3>
-                      {canManage && !isAddingTag && (
-                          <button onClick={() => setIsAddingTag(true)} className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-white/5 p-1 rounded transition-colors"><Plus size={14} /></button>
+                      {canManageAsset && !isAddingTag && (
+                          <button onClick={() => setIsAddingTag(true)} className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-white/5 p-1 rounded transition-colors">
+                              <Plus size={14} />
+                          </button>
                       )}
                   </div>
+                  
                   <div className="flex flex-wrap gap-2">
                       {parsedAi.tags && parsedAi.tags.map((tag: string) => (
                           <span key={tag} className="group flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-full border border-gray-200 dark:border-white/5">
                               <Hash size={10} className="opacity-50" /> {tag}
-                              {canManage && (
-                                  <button onClick={() => handleRemoveTag(tag)} className="ml-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
+                              {canManageAsset && (
+                                  <button onClick={() => handleRemoveTag(tag)} className="ml-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <X size={10} />
+                                  </button>
                               )}
                           </span>
                       ))}
                       {isAddingTag && (
                           <form onSubmit={handleAddTag} className="flex items-center">
-                              <input autoFocus type="text" value={newTag} onChange={e => setNewTag(e.target.value)} onBlur={() => setIsAddingTag(false)} className="text-xs bg-white dark:bg-black/20 border border-blue-500 rounded-full px-2 py-1 outline-none w-24" placeholder="New tag..." />
+                              <input 
+                                  autoFocus 
+                                  type="text" 
+                                  value={newTag} 
+                                  onChange={e => setNewTag(e.target.value)} 
+                                  onBlur={() => setIsAddingTag(false)} 
+                                  className="text-xs bg-white dark:bg-black/20 border border-blue-500 rounded-full px-2 py-1 outline-none w-24" 
+                                  placeholder="New tag..." 
+                              />
                           </form>
                       )}
                   </div>
@@ -431,30 +471,59 @@ const AssetDetail = () => {
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setActiveModal(null)} />
               <div className="relative bg-white dark:bg-[#1A1D21] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] animate-in zoom-in-95">
                   <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-white/5">
-                      <h3 className="font-bold text-gray-900 dark:text-white">Select {activeModal === 'collection' ? 'Collection' : 'Topic'}</h3>
-                      <button onClick={() => setActiveModal(null)} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={20} /></button>
+                      <h3 className="font-bold text-gray-900 dark:text-white">
+                          Select {activeModal === 'collection' ? 'Collection' : 'Topic'}
+                      </h3>
+                      <button onClick={() => setActiveModal(null)} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                          <X size={20} />
+                      </button>
                   </div>
+
                   <div className="px-6 py-2">
                       <div className="flex items-center gap-2 bg-gray-50 dark:bg-black/20 rounded-xl px-3 py-2 border border-gray-100 dark:border-white/5">
                           <Search size={16} className="text-gray-400" />
-                          <input type="text" placeholder="Search..." value={modalSearch} onChange={(e) => setModalSearch(e.target.value)} autoFocus className="bg-transparent border-none outline-none text-sm w-full text-gray-800 dark:text-gray-200 placeholder-gray-400" />
+                          <input 
+                              type="text" 
+                              placeholder="Search..." 
+                              value={modalSearch}
+                              onChange={(e) => setModalSearch(e.target.value)}
+                              autoFocus
+                              className="bg-transparent border-none outline-none text-sm w-full text-gray-800 dark:text-gray-200 placeholder-gray-400"
+                          />
                       </div>
                   </div>
+
                   <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
                       {activeModal === 'collection' ? (
-                          filteredCollections.length > 0 ? filteredCollections.map(c => (
-                              <button key={c.id} onClick={() => addToCollection(c.id, c.name)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 text-left transition-colors group">
-                                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg"><FolderPlus size={18} /></div>
-                                  <span className="font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-700 dark:group-hover:text-blue-300">{c.name}</span>
-                              </button>
-                          )) : <div className="p-6 text-center text-gray-400 text-sm">No collections found</div>
+                          filteredCollections.length > 0 ? (
+                              filteredCollections.map(c => (
+                                  <button 
+                                      key={c.id} 
+                                      onClick={() => addToCollection(c.id, c.name)}
+                                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 text-left transition-colors group"
+                                  >
+                                      <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
+                                          <FolderPlus size={18} />
+                                      </div>
+                                      <span className="font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-700 dark:group-hover:text-blue-300">{c.name}</span>
+                                  </button>
+                              ))
+                          ) : <div className="p-6 text-center text-gray-400 text-sm">No collections found</div>
                       ) : (
-                          filteredCategories.length > 0 ? filteredCategories.map(c => (
-                              <button key={c.id} onClick={() => addToTopic(c.id, c.name)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/20 text-left transition-colors group">
-                                  <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg"><Layout size={18} /></div>
-                                  <span className="font-medium text-gray-700 dark:text-gray-200 group-hover:text-purple-700 dark:group-hover:text-purple-300">{c.name}</span>
-                              </button>
-                          )) : <div className="p-6 text-center text-gray-400 text-sm">No topics found</div>
+                          filteredCategories.length > 0 ? (
+                              filteredCategories.map(c => (
+                                  <button 
+                                      key={c.id} 
+                                      onClick={() => addToTopic(c.id, c.name)}
+                                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/20 text-left transition-colors group"
+                                  >
+                                      <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
+                                          <Layout size={18} />
+                                      </div>
+                                      <span className="font-medium text-gray-700 dark:text-gray-200 group-hover:text-purple-700 dark:group-hover:text-purple-300">{c.name}</span>
+                                  </button>
+                              ))
+                          ) : <div className="p-6 text-center text-gray-400 text-sm">No topics found</div>
                       )}
                   </div>
               </div>

@@ -1,20 +1,13 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { 
-    Check, 
-    X, 
-    Loader2, 
-    ShieldAlert, 
-    Users as UsersIcon, 
-    UserPlus, 
-    Shield, 
-    Plus,
-    Mail,
-    Lock,
-    User
+    Check, X, Loader2, ShieldAlert, Users as UsersIcon, 
+    UserPlus, Shield, Plus, Mail, Lock, User, Eye, Trash2
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { Link } from 'react-router-dom';
+import ConfirmModal from '../components/ConfirmModal'; // ✅ Import Modal
 
 interface UserData {
   id: string;
@@ -22,6 +15,7 @@ interface UserData {
   email: string;
   role: string;
   status: string;
+  avatar?: string;
   createdAt?: string;
 }
 
@@ -30,29 +24,28 @@ const Users = () => {
   const [loading, setLoading] = useState(true);
   const { user: currentUser } = useAuth();
   
-  // State for role selection in pending cards
   const [selectedRoles, setSelectedRoles] = useState<Record<string, string>>({});
 
-  // State for "Add Member" Modal
+  // Add Member Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'viewer' });
   const [isCreating, setIsCreating] = useState(false);
+
+  // ✅ DELETE CONFIRMATION STATE
+  const [userToDelete, setUserToDelete] = useState<UserData | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchUsers = async () => {
     try {
       const { data } = await client.get('/users');
       setUsers(data);
-    } catch (error) {
-      toast.error('Failed to load user list');
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { toast.error('Failed to load user list'); } 
+    finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  useEffect(() => { fetchUsers(); }, []);
 
+  // ... (handleRoleChange, handleApprove, handleReject, handleCreateUser - KEEP AS IS) ...
   const handleRoleChange = (userId: string, role: string) => {
     setSelectedRoles(prev => ({ ...prev, [userId]: role }));
   };
@@ -63,23 +56,18 @@ const Users = () => {
       await client.patch(`/users/${user.id}/approve`, { role: roleToAssign });
       toast.success(`${user.name} approved as ${roleToAssign}`);
       fetchUsers(); 
-    } catch (error) {
-      toast.error('Failed to approve user');
-    }
+    } catch (error) { toast.error('Failed to approve user'); }
   };
 
   const handleReject = async (userId: string) => {
-    if (!confirm('Reject and delete this user request?')) return;
+    if (!confirm('Reject request?')) return; // Keeping simple confirm for request rejection
     try {
-      await client.delete(`/users/${userId}/reject`); // Check your route path! might be /users/:id/reject depending on previous setup
+      await client.delete(`/users/${userId}/reject`); 
       toast.info('User request rejected');
       fetchUsers();
-    } catch (error) {
-      toast.error('Failed to reject user');
-    }
+    } catch (error) { toast.error('Failed to reject user'); }
   };
 
-  // --- HANDLE ADD MEMBER ---
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsCreating(true);
@@ -87,13 +75,32 @@ const Users = () => {
         await client.post('/users', newUser);
         toast.success(`User ${newUser.name} created successfully`);
         setIsAddModalOpen(false);
-        setNewUser({ name: '', email: '', password: '', role: 'viewer' }); // Reset
+        setNewUser({ name: '', email: '', password: '', role: 'viewer' }); 
         fetchUsers();
     } catch (error: any) {
         toast.error(error.response?.data?.message || 'Failed to create user');
-    } finally {
-        setIsCreating(false);
-    }
+    } finally { setIsCreating(false); }
+  };
+
+  // ✅ 1. TRIGGER DELETE MODAL
+  const confirmDeleteUser = (user: UserData) => {
+      setUserToDelete(user);
+  };
+
+  // ✅ 2. EXECUTE DELETE API
+  const handleExecuteDelete = async () => {
+      if (!userToDelete) return;
+      setIsDeleting(true);
+      try {
+          await client.delete(`/users/${userToDelete.id}`);
+          toast.success('User deleted successfully');
+          fetchUsers();
+          setUserToDelete(null); // Close modal
+      } catch (error: any) {
+          toast.error(error.response?.data?.message || 'Failed to delete user');
+      } finally {
+          setIsDeleting(false);
+      }
   };
 
   const pendingUsers = users.filter(u => u.status === 'PENDING');
@@ -106,10 +113,10 @@ const Users = () => {
   ];
 
   if (loading) return <div className="flex h-screen items-center justify-center dark:bg-[#0B0D0F]"><Loader2 className="animate-spin text-blue-600 dark:text-blue-400" size={32}/></div>;
-  if (currentUser?.role !== 'admin') return <div className="p-10 text-center text-red-500 font-bold dark:bg-[#0B0D0F] h-screen">Access Denied. Admin privileges required.</div>;
+  if (currentUser?.role !== 'admin') return <div className="p-10 text-center text-red-500 font-bold dark:bg-[#0B0D0F] h-screen">Access Denied.</div>;
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6] dark:bg-[#0B0D0F] p-6 md:p-10 transition-colors duration-500">
+    <div className="min-h-screen bg-[#F3F4F6] dark:bg-[#0B0D0F] p-6 md:p-10 transition-colors duration-500 pb-20">
       
       {/* HEADER */}
       <div className="mx-auto max-w-6xl mb-10">
@@ -119,7 +126,6 @@ const Users = () => {
                 <p className="text-gray-500 dark:text-gray-400">Manage access and roles for your organization.</p>
             </div>
             
-            {/* ADD MEMBER BUTTON */}
             <button 
                 onClick={() => setIsAddModalOpen(true)}
                 className="flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-5 py-2.5 rounded-xl font-bold text-sm hover:scale-105 transition-all shadow-lg shadow-gray-200 dark:shadow-none"
@@ -210,6 +216,7 @@ const Users = () => {
                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Role</th>
                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Joined</th>
+                            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-[#1A1D21] divide-y divide-gray-200 dark:divide-white/5">
@@ -217,8 +224,12 @@ const Users = () => {
                         <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
                             <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
-                                    <div className="h-10 w-10 flex-shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-sm border border-white/10">
-                                        {u.name?.charAt(0).toUpperCase() || 'U'}
+                                    <div className="h-10 w-10 flex-shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-sm border border-white/10 overflow-hidden">
+                                        {u.avatar ? (
+                                            <img src={u.avatar} alt={u.name} className="h-full w-full object-cover" />
+                                        ) : (
+                                            u.name?.charAt(0).toUpperCase() || 'U'
+                                        )}
                                     </div>
                                     <div className="ml-4">
                                         <div className="text-sm font-medium text-gray-900 dark:text-white">{u.name}</div>
@@ -244,6 +255,27 @@ const Users = () => {
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                 {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}
                             </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <div className="flex items-center justify-end gap-2">
+                                    <Link 
+                                        to={`/profile/${u.id}`} // ✅ UPDATED LINK to Profile/ID
+                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                        title="View Details"
+                                    >
+                                        <Eye size={18} />
+                                    </Link>
+
+                                    {currentUser?.id !== u.id && (
+                                        <button 
+                                            onClick={() => confirmDeleteUser(u)} // ✅ CLICK OPENS MODAL
+                                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                            title="Delete User"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    )}
+                                </div>
+                            </td>
                         </tr>
                         ))}
                     </tbody>
@@ -255,88 +287,62 @@ const Users = () => {
       {/* --- ADD MEMBER MODAL --- */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* ... (Existing Add User Modal content - kept same as before) ... */}
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsAddModalOpen(false)} />
-            
             <div className="relative w-full max-w-md bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl p-6 border border-gray-200 dark:border-white/10 animate-in zoom-in-95 duration-200">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white">Add New Member</h3>
-                    <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                        <X size={20} />
-                    </button>
+                    <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={20} /></button>
                 </div>
-
                 <form onSubmit={handleCreateUser} className="space-y-4">
                     <div className="space-y-1">
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Full Name</label>
                         <div className="relative">
                             <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                            <input 
-                                type="text" 
-                                required
-                                value={newUser.name}
-                                onChange={e => setNewUser({...newUser, name: e.target.value})}
-                                className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 pl-10 pr-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30"
-                                placeholder="John Doe"
-                            />
+                            <input type="text" required value={newUser.name} onChange={e => setNewUser({...newUser, name: e.target.value})} className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 pl-10 pr-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30" placeholder="John Doe" />
                         </div>
                     </div>
-
                     <div className="space-y-1">
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Email Address</label>
                         <div className="relative">
                             <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                            <input 
-                                type="email" 
-                                required
-                                value={newUser.email}
-                                onChange={e => setNewUser({...newUser, email: e.target.value})}
-                                className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 pl-10 pr-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30"
-                                placeholder="john@company.com"
-                            />
+                            <input type="email" required value={newUser.email} onChange={e => setNewUser({...newUser, email: e.target.value})} className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 pl-10 pr-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30" placeholder="john@company.com" />
                         </div>
                     </div>
-
                     <div className="space-y-1">
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Password</label>
                         <div className="relative">
                             <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                            <input 
-                                type="password" 
-                                required
-                                value={newUser.password}
-                                onChange={e => setNewUser({...newUser, password: e.target.value})}
-                                className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 pl-10 pr-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30"
-                                placeholder="••••••••"
-                            />
+                            <input type="password" required value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 pl-10 pr-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30" placeholder="••••••••" />
                         </div>
                     </div>
-
                     <div className="space-y-1">
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase">Role</label>
-                        <select
-                            value={newUser.role}
-                            onChange={e => setNewUser({...newUser, role: e.target.value})}
-                            className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 cursor-pointer"
-                        >
+                        <select value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})} className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 cursor-pointer">
                             <option value="viewer">Viewer (Read Only)</option>
                             <option value="editor">Editor (Can Upload)</option>
                             <option value="admin">Admin (Full Access)</option>
                         </select>
                     </div>
-
                     <div className="pt-4">
-                        <button 
-                            type="submit" 
-                            disabled={isCreating}
-                            className="w-full rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-bold py-3 hover:shadow-lg hover:scale-[1.02] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
-                        >
-                            {isCreating ? 'Creating...' : 'Create Member'}
-                        </button>
+                        <button type="submit" disabled={isCreating} className="w-full rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-bold py-3 hover:shadow-lg hover:scale-[1.02] transition-all disabled:opacity-70 disabled:cursor-not-allowed">{isCreating ? 'Creating...' : 'Create Member'}</button>
                     </div>
                 </form>
             </div>
         </div>
       )}
+
+      {/* ✅ DELETE CONFIRM MODAL */}
+      <ConfirmModal 
+        isOpen={!!userToDelete}
+        onClose={() => setUserToDelete(null)}
+        onConfirm={handleExecuteDelete}
+        title="Delete User"
+        message={`Are you sure you want to delete ${userToDelete?.name}? This will permanently delete all their assets and collections.`}
+        confirmText="Delete User"
+        isDangerous={true}
+        isLoading={isDeleting}
+      />
 
     </div>
   );

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { verifyJWT } from '../middleware/auth.middleware';
 import { 
   getCollections, 
-  getCollectionById, // <--- Name was changed to this
+  getCollectionById, 
   createCollection, 
   addAssetToCollection, 
   removeAssetFromCollection 
@@ -10,19 +10,23 @@ import {
 
 const router = Router();
 
+// Apply JWT check to all routes
+router.use(verifyJWT);
+
 // 1. Get All (My Collections)
-router.get('/', verifyJWT, getCollections);
+router.get('/', getCollections);
 
 // 2. Get One (Specific Collection)
-router.get('/:id', verifyJWT, getCollectionById); // <--- Use correct function
+router.get('/:id', getCollectionById);
 
-// 3. Create
-router.post('/', verifyJWT, createCollection);
+// 3. Create Collection
+router.post('/', createCollection);
 
-// 4. Add Asset
-router.post('/:id/assets', verifyJWT, addAssetToCollection);
+// 4. Add Asset to Collection
+router.post('/:id/assets', addAssetToCollection);
 
-// 5. Remove Asset
-router.delete('/:id/assets/:assetId', verifyJWT, removeAssetFromCollection);
+// 5. Remove Asset from Collection
+// ✅ Matches controller: const { id, assetId } = req.params;
+router.delete('/:id/assets/:assetId', removeAssetFromCollection);
 
 export default router;

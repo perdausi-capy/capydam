@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useLayoutEffect } from 'react';
 import client from '../api/client';
-import { Loader2, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Image as ImageIcon, Search, X } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import Masonry from 'react-masonry-css';
 import AssetThumbnail from '../components/AssetThumbnail';
@@ -9,6 +9,7 @@ import { toast } from 'react-toastify';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, FolderPlus, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Asset {
   id: string;
@@ -39,12 +40,15 @@ const Dashboard = () => {
   
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<FilterType>('image');
 
+  // --- MODAL STATE ---
+  const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  const [modalSearch, setModalSearch] = useState('');
+
   const navigate = useNavigate();
-  const canAddToCollection = user?.role !== 'viewer'; 
 
   // --- QUERY ASSETS ---
   const { data: assetData, isLoading: assetsLoading, error: assetError } = useQuery({
@@ -68,13 +72,13 @@ const Dashboard = () => {
   });
 
   // --- QUERY COLLECTIONS ---
-  const { data: collections = [] } = useQuery({
+  const { data: collections = [], refetch: refetchCollections } = useQuery({
     queryKey: ['collections'],
     queryFn: async () => {
       const res = await client.get('/collections');
       return (res.data || []) as CollectionSimple[];
     },
-    staleTime: 0, 
+    staleTime: 1000 * 60, // 1 minute
   });
 
   const assets = assetData?.results || [];
@@ -147,60 +151,46 @@ const Dashboard = () => {
     } catch (err) { toast.error('Download failed'); }
   };
 
-  const toggleDropdown = (e: React.MouseEvent, assetId: string) => {
-    e.preventDefault(); e.stopPropagation();
-    setActiveDropdownId(activeDropdownId === assetId ? null : assetId);
+  // --- COLLECTION HANDLERS ---
+
+  const openCollectionModal = (e: React.MouseEvent, assetId: string) => {
+      e.preventDefault(); 
+      e.stopPropagation();
+      setSelectedAssetId(assetId);
+      setModalSearch('');
+      setIsCollectionModalOpen(true);
+      refetchCollections(); // Ensure list is fresh
   };
 
-  // ✅ FIX: Instant UI Feedback + Toast Promise
-  const addToCollection = async (e: React.MouseEvent, collectionId: string, collectionName: string) => {
-    e.preventDefault(); e.stopPropagation();
-    if (!activeDropdownId) return;
+  const addToCollection = async (collectionId: string, collectionName: string) => {
+    if (!selectedAssetId) return;
     
-    // 1. Capture ID before clearing state
-    const assetId = activeDropdownId;
-    
-    // 2. CLOSE DROPDOWN IMMEDIATELY (Makes UI feel instant)
-    setActiveDropdownId(null);
+    // Optimistically close modal
+    setIsCollectionModalOpen(false);
 
-    // 3. Perform Request with "Loading..." Toast
-    const promise = client.post(`/collections/${collectionId}/assets`, { assetId });
+    const promise = client.post(`/collections/${collectionId}/assets`, { assetId: selectedAssetId });
     
     toast.promise(
         promise,
         {
             pending: 'Adding to collection...',
             success: `Added to ${collectionName}!`,
-            error: {
-                render({ data }: any) {
-                    // Check for duplicate status
-                    if (data?.response?.status === 409 || data?.response?.status === 200) { 
-                        // Sometimes APIs return 200 for "Already exists"
-                        return 'Asset already in collection';
-                    }
-                    return 'Failed to add asset';
-                }
-            }
+            error: 'Already in collection'
         },
         { autoClose: 2000 }
     );
-
-    // 4. Update Cache (Background)
-    try {
-        await promise;
-        queryClient.invalidateQueries({ queryKey: ['collections'] });
-    } catch (e) { /* Error handled by toast */ }
   };
+
+  // Filter collections for modal
+  const filteredCollections = collections.filter(c => 
+      c.name.toLowerCase().includes(modalSearch.toLowerCase())
+  );
 
   const breakpointColumnsObj = { default: 5, 1536: 4, 1280: 3, 1024: 3, 768: 2, 640: 1 };
 
   return (
     <div className="min-h-screen pb-20 bg-[#F3F4F6] dark:bg-[#0B0D0F] transition-colors duration-500">
       
-      {activeDropdownId && (
-        <div className="fixed inset-0 z-40 cursor-default" onClick={() => setActiveDropdownId(null)} />
-      )}
-
       <DashboardHeader 
         assetsCount={assets?.length || 0}
         searchQuery={searchQuery}
@@ -230,18 +220,11 @@ const Dashboard = () => {
             {assets.map((asset, index) => (
                 <div 
                     key={asset.id} 
-                    className={`group relative mb-8 block transition-all duration-300 
-                        ${activeDropdownId === asset.id ? 'z-50' : 'z-0'}
-                    `}
+                    className="group relative mb-8 block transition-all duration-300"
                     style={{ contentVisibility: 'auto', containIntrinsicSize: '300px' }} 
                 >
                     <div className="relative">
-                        <div className={`
-                            relative w-full rounded-2xl overflow-hidden transition-all duration-300
-                            bg-gray-100 dark:bg-[#1A1D21] 
-                            shadow-sm hover:shadow-md
-                            ${activeDropdownId === asset.id ? 'ring-4 ring-blue-500/20' : ''}
-                        `}>
+                        <div className="relative w-full rounded-2xl overflow-hidden transition-all duration-300 bg-gray-100 dark:bg-[#1A1D21] shadow-sm hover:shadow-xl hover:-translate-y-1">
                             <Link to={`/assets/${asset.id}`} className="block cursor-pointer" onClick={() => handleAssetClick(asset.id, index)}>
                                 <div className="group-hover:opacity-95 transition-opacity">
                                     <AssetThumbnail mimeType={asset.mimeType} thumbnailPath={asset.thumbnailPath} className="w-full h-auto" />
@@ -249,36 +232,26 @@ const Dashboard = () => {
                             </Link>
                         </div>
 
-                        <div className={`absolute top-3 right-3 flex gap-2 transition-opacity duration-200 ${activeDropdownId === asset.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                            <div className="relative">
-                                {canAddToCollection && (
-                                    <>
-                                        <button onClick={(e) => toggleDropdown(e, asset.id)} className={`rounded-full p-2 shadow-sm backdrop-blur-md transition-colors ${activeDropdownId === asset.id ? 'bg-blue-600 text-white' : 'bg-white/90 dark:bg-black/60 text-gray-700 dark:text-gray-200 hover:bg-blue-600 hover:text-white'}`}><FolderPlus size={16} /></button>
-                                        
-                                        {activeDropdownId === asset.id && (
-                                            <div className="absolute right-0 top-full mt-2 w-56 origin-top-right rounded-xl bg-white dark:bg-[#1F2227] shadow-xl ring-1 ring-black/5 dark:ring-white/10 overflow-hidden animate-in fade-in zoom-in-95 duration-100 cursor-default z-50">
-                                                <div className="max-h-56 overflow-y-auto py-1 custom-scrollbar">
-                                                    <div className="px-3 py-2 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider border-b border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/5">Add to Collection</div>
-                                                    {collections?.length === 0 ? (
-                                                        <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">No collections found.</div>
-                                                    ) : (
-                                                        collections?.map((col: CollectionSimple) => (
-                                                            <button key={col.id} onClick={(e) => addToCollection(e, col.id, col.name)} className="flex w-full items-center px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-white/5 hover:text-blue-700 dark:hover:text-blue-400 transition-colors cursor-pointer border-b border-gray-50 dark:border-white/5 last:border-0">
-                                                                <FolderPlus size={14} className="mr-2 text-gray-400 dark:text-gray-500" />
-                                                                <span className="truncate font-medium">{col.name}</span>
-                                                            </button>
-                                                        ))
-                                                    )}
-                                                </div>
-                                                <div className="border-t bg-gray-50 dark:bg-white/5 dark:border-white/5 p-2">
-                                                    <button onClick={(e) => { e.preventDefault(); navigate('/collections'); }} className="flex w-full items-center justify-center rounded-lg px-2 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"><Plus size={14} className="mr-1" /> Create New</button>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-                            <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDownload(asset); }} className="rounded-full bg-white/90 dark:bg-black/60 p-2 text-gray-700 dark:text-gray-200 shadow-sm backdrop-blur-md transition-colors hover:bg-blue-600 hover:text-white"><Download size={16} /></button>
+                        {/* HOVER ACTIONS (Visible to everyone) */}
+                        <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-2 group-hover:translate-y-0">
+                            
+                            {/* Add to Collection Button */}
+                            <button 
+                                onClick={(e) => openCollectionModal(e, asset.id)}
+                                className="rounded-full bg-white/90 dark:bg-black/60 p-2 text-indigo-600 dark:text-indigo-400 shadow-sm backdrop-blur-md transition-colors hover:bg-indigo-600 hover:text-white"
+                                title="Add to Collection"
+                            >
+                                <FolderPlus size={16} />
+                            </button>
+
+                            {/* Download Button */}
+                            <button 
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDownload(asset); }} 
+                                className="rounded-full bg-white/90 dark:bg-black/60 p-2 text-gray-700 dark:text-gray-200 shadow-sm backdrop-blur-md transition-colors hover:bg-blue-600 hover:text-white"
+                                title="Download"
+                            >
+                                <Download size={16} />
+                            </button>
                         </div>
                     </div>
                     
@@ -297,6 +270,84 @@ const Dashboard = () => {
             </Masonry>
         )}
       </div>
+
+      {/* --- ADD TO COLLECTION MODAL --- */}
+      <AnimatePresence>
+        {isCollectionModalOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                <motion.div 
+                    initial={{ opacity: 0 }} 
+                    animate={{ opacity: 1 }} 
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
+                    onClick={() => setIsCollectionModalOpen(false)} 
+                />
+                
+                <motion.div 
+                    initial={{ scale: 0.9, opacity: 0 }} 
+                    animate={{ scale: 1, opacity: 1 }} 
+                    exit={{ scale: 0.9, opacity: 0 }}
+                    className="relative w-full max-w-md bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
+                >
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-white/5">
+                        <h3 className="font-bold text-gray-900 dark:text-white">Add to Collection</h3>
+                        <button onClick={() => setIsCollectionModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={20} /></button>
+                    </div>
+
+                    {/* Search */}
+                    <div className="px-6 py-3 bg-gray-50 dark:bg-white/5">
+                        <div className="flex items-center gap-2 bg-white dark:bg-black/20 rounded-xl px-3 py-2 border border-gray-200 dark:border-white/10">
+                            <Search size={16} className="text-gray-400" />
+                            <input 
+                                type="text" 
+                                placeholder="Find a folder..." 
+                                autoFocus
+                                value={modalSearch}
+                                onChange={(e) => setModalSearch(e.target.value)}
+                                className="bg-transparent border-none outline-none text-sm w-full text-gray-800 dark:text-gray-200 placeholder-gray-400"
+                            />
+                        </div>
+                    </div>
+
+                    {/* List */}
+                    <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                        {filteredCollections.length > 0 ? (
+                            filteredCollections.map(c => (
+                                <button 
+                                    key={c.id} 
+                                    onClick={() => addToCollection(c.id, c.name)}
+                                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-left transition-colors group"
+                                >
+                                    <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg group-hover:scale-110 transition-transform">
+                                        <FolderPlus size={18} />
+                                    </div>
+                                    <span className="font-medium text-gray-700 dark:text-gray-200 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">
+                                        {c.name}
+                                    </span>
+                                </button>
+                            ))
+                        ) : (
+                            <div className="p-8 text-center text-gray-400 text-sm">
+                                {collections.length === 0 ? "You haven't created any collections yet." : "No matching folders found."}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Footer: Create New */}
+                    <div className="p-4 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/5">
+                        <button 
+                            onClick={() => navigate('/collections')}
+                            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-bold py-3 hover:scale-[1.02] transition-transform"
+                        >
+                            <Plus size={16} /> Create New Collection
+                        </button>
+                    </div>
+                </motion.div>
+            </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 };

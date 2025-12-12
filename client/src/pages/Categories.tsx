@@ -18,6 +18,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import ConfirmModal from '../components/ConfirmModal';
+import { motion } from 'framer-motion'; // ✅ Import Framer Motion
 
 interface Category {
   id: string;
@@ -33,7 +34,7 @@ const Categories = () => {
   const { user } = useAuth();
   
   // Modals
-  const [isModalOpen, setIsModalOpen] = useState(false); // Used for Create AND Edit
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
   // Form State
@@ -60,7 +61,6 @@ const Categories = () => {
   useEffect(() => { fetchCategories(); }, []);
 
   // --- HANDLERS ---
-
   const openCreate = () => {
       setEditingId(null);
       setFormName('');
@@ -100,16 +100,11 @@ const Categories = () => {
         if (formFile) formData.append('cover', formFile);
 
         if (editingId) {
-            // UPDATE
             await client.patch(`/categories/${editingId}`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             toast.success("Topic updated!");
         } else {
-            // CREATE
-            // Note: If your backend create endpoint doesn't support FormData yet, 
-            // you might need to update it or stick to JSON for create. 
-            // Assuming we updated it or it handles it:
             await client.post('/categories', formData, {
                  headers: { 'Content-Type': 'multipart/form-data' }
             });
@@ -140,27 +135,18 @@ const Categories = () => {
   const features = categories.filter(c => c.group === 'Features');
   const inspiration = categories.filter(c => c.group === 'Inspiration');
 
-  // --- CARD COMPONENT ---
-// --- CARD COMPONENT ---
-const CategoryCard = ({ cat, icon: Icon, colorClass }: { cat: Category, icon: any, colorClass: string }) => (
+  // --- CARD COMPONENT (With Glitch Fix) ---
+  const CategoryCard = ({ cat, icon: Icon, colorClass }: { cat: Category, icon: any, colorClass: string }) => (
     <div className="group relative flex flex-col rounded-3xl border border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] shadow-sm hover:shadow-xl hover:shadow-blue-500/10 hover:-translate-y-1 transition-all duration-300 overflow-hidden h-64">
-        
         <Link to={`/categories/${cat.id}`} className="flex-1 flex flex-col">
-            {/* Cover Area */}
-            {/* ✅ FIX 1: Add 'isolation-isolate' and the WebkitMaskImage style */}
+            {/* Cover Area - Optimized to prevent glitching */}
             <div 
                 className={`relative flex-1 w-full overflow-hidden ${colorClass} flex items-center justify-center isolation-isolate`}
-                style={{ WebkitMaskImage: '-webkit-radial-gradient(white, black)' }} 
+                style={{ WebkitMaskImage: '-webkit-radial-gradient(white, black)' }}
             >
-                
                 {cat.coverImage ? (
                     <>
-                        {/* ✅ FIX 2: Add 'transform-gpu' and 'will-change-transform' for smooth scaling */}
-                        <img 
-                            src={cat.coverImage} 
-                            alt={cat.name} 
-                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 transform-gpu will-change-transform" 
-                        />
+                        <img src={cat.coverImage} alt={cat.name} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 transform-gpu will-change-transform" />
                         <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
                     </>
                 ) : (
@@ -169,7 +155,6 @@ const CategoryCard = ({ cat, icon: Icon, colorClass }: { cat: Category, icon: an
                     </div>
                 )}
                 
-                {/* Count Badge */}
                 <div className="absolute top-4 right-4 rounded-full bg-white/90 dark:bg-black/60 px-3 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 shadow-sm backdrop-blur-md border border-transparent dark:border-white/10 z-10">
                     {cat._count.assets}
                 </div>
@@ -192,23 +177,11 @@ const CategoryCard = ({ cat, icon: Icon, colorClass }: { cat: Category, icon: an
             </div>
         </Link>
 
-        {/* ACTIONS (Hover Only) */}
+        {/* ACTIONS */}
         {canManage && (
             <>
-                <button
-                    onClick={(e) => openEdit(e, cat)}
-                    className="absolute top-3 left-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 dark:bg-black/80 text-gray-600 dark:text-gray-300 shadow-md backdrop-blur-sm opacity-0 transform scale-90 transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 z-20"
-                    title="Edit Topic"
-                >
-                    <Edit2 size={14} />
-                </button>
-                <button
-                    onClick={(e) => { e.preventDefault(); setDeleteId(cat.id); }}
-                    className="absolute top-3 left-12 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 dark:bg-black/80 text-gray-400 dark:text-gray-400 shadow-md backdrop-blur-sm opacity-0 transform scale-90 transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-600 z-20 delay-75"
-                    title="Delete Topic"
-                >
-                    <Trash2 size={14} />
-                </button>
+                <button onClick={(e) => openEdit(e, cat)} className="absolute top-3 left-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 dark:bg-black/80 text-gray-600 dark:text-gray-300 shadow-md backdrop-blur-sm opacity-0 transform scale-90 transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 z-20" title="Edit Topic"><Edit2 size={14} /></button>
+                <button onClick={(e) => { e.preventDefault(); setDeleteId(cat.id); }} className="absolute top-3 left-12 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 dark:bg-black/80 text-gray-400 dark:text-gray-400 shadow-md backdrop-blur-sm opacity-0 transform scale-90 transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-600 z-20 delay-75" title="Delete Topic"><Trash2 size={14} /></button>
             </>
         )}
     </div>
@@ -217,10 +190,15 @@ const CategoryCard = ({ cat, icon: Icon, colorClass }: { cat: Category, icon: an
   if (loading) return <div className="flex h-screen items-center justify-center dark:bg-[#0B0D0F]"><Loader2 className="animate-spin text-blue-600 dark:text-blue-400" size={32} /></div>;
 
   return (
-    <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] transition-colors duration-500">
+    <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] transition-colors duration-500 overflow-x-hidden">
       
-      {/* HERO SECTION */}
-      <div className="bg-white dark:bg-[#121417] border-b border-gray-200 dark:border-white/5 pt-12 pb-16 px-8">
+      {/* --- HERO SECTION --- */}
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="bg-white dark:bg-[#121417] border-b border-gray-200 dark:border-white/5 pt-12 pb-16 px-8"
+      >
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-end gap-6">
               <div>
                   <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-bold text-sm tracking-wider uppercase mb-2">
@@ -235,21 +213,22 @@ const CategoryCard = ({ cat, icon: Icon, colorClass }: { cat: Category, icon: an
               </div>
               
               {canManage && (
-                <button 
-                    onClick={openCreate}
-                    className="flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-black px-6 py-3 rounded-2xl font-bold shadow-lg hover:scale-105 transition-transform"
-                >
+                <button onClick={openCreate} className="flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-black px-6 py-3 rounded-2xl font-bold shadow-lg hover:scale-105 transition-transform">
                     <Plus size={20} /> New Topic
                 </button>
               )}
           </div>
-      </div>
+      </motion.div>
 
-      {/* CONTENT AREA */}
+      {/* --- CONTENT AREA --- */}
       <div className="max-w-7xl mx-auto px-8 py-12 space-y-16">
         
         {/* SECTION 1: FEATURES */}
-        <div className="animate-in slide-in-from-bottom-4 duration-700">
+        <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+        >
             <div className="flex items-center gap-3 mb-8">
                 <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
                     <Layout size={24} />
@@ -258,18 +237,17 @@ const CategoryCard = ({ cat, icon: Icon, colorClass }: { cat: Category, icon: an
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {features.map(c => (
-                    <CategoryCard 
-                        key={c.id} 
-                        cat={c} 
-                        icon={Folder} 
-                        colorClass="bg-gradient-to-br from-cyan-500 to-blue-600" 
-                    />
+                    <CategoryCard key={c.id} cat={c} icon={Folder} colorClass="bg-gradient-to-br from-cyan-500 to-blue-600" />
                 ))}
             </div>
-        </div>
+        </motion.div>
 
         {/* SECTION 2: INSPIRATION */}
-        <div className="animate-in slide-in-from-bottom-4 duration-700 delay-100">
+        <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+        >
             <div className="flex items-center gap-3 mb-8">
                 <div className="p-2 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
                     <Lightbulb size={24} />
@@ -278,15 +256,10 @@ const CategoryCard = ({ cat, icon: Icon, colorClass }: { cat: Category, icon: an
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {inspiration.map(c => (
-                    <CategoryCard 
-                        key={c.id} 
-                        cat={c} 
-                        icon={Lightbulb} 
-                        colorClass="bg-gradient-to-br from-purple-500 to-pink-600" 
-                    />
+                    <CategoryCard key={c.id} cat={c} icon={Lightbulb} colorClass="bg-gradient-to-br from-purple-500 to-pink-600" />
                 ))}
             </div>
-        </div>
+        </motion.div>
 
       </div>
 
@@ -294,7 +267,12 @@ const CategoryCard = ({ cat, icon: Icon, colorClass }: { cat: Category, icon: an
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-            <div className="relative w-full max-w-md bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl p-6 border border-gray-200 dark:border-white/10 animate-in zoom-in-95 duration-200">
+            <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="relative w-full max-w-md bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl p-6 border border-gray-200 dark:border-white/10"
+            >
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white">{editingId ? 'Edit Topic' : 'Add New Topic'}</h3>
                     <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={20}/></button>
@@ -304,15 +282,7 @@ const CategoryCard = ({ cat, icon: Icon, colorClass }: { cat: Category, icon: an
                     {/* Name */}
                     <div>
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Topic Name</label>
-                        <input 
-                            autoFocus
-                            type="text"
-                            required
-                            value={formName}
-                            onChange={e => setFormName(e.target.value)}
-                            className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30"
-                            placeholder="e.g. 3D Icons"
-                        />
+                        <input autoFocus type="text" required value={formName} onChange={e => setFormName(e.target.value)} className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30" placeholder="e.g. 3D Icons" />
                     </div>
 
                     {/* Group */}
@@ -320,18 +290,7 @@ const CategoryCard = ({ cat, icon: Icon, colorClass }: { cat: Category, icon: an
                         <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Group</label>
                         <div className="grid grid-cols-2 gap-2">
                             {['Features', 'Inspiration'].map(g => (
-                                <button
-                                    key={g}
-                                    type="button"
-                                    onClick={() => setFormGroup(g)}
-                                    className={`py-2.5 rounded-xl text-sm font-semibold border transition-all ${
-                                        formGroup === g 
-                                        ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400' 
-                                        : 'bg-white dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-500 hover:bg-gray-50 dark:hover:bg-white/10'
-                                    }`}
-                                >
-                                    {g}
-                                </button>
+                                <button key={g} type="button" onClick={() => setFormGroup(g)} className={`py-2.5 rounded-xl text-sm font-semibold border transition-all ${formGroup === g ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400' : 'bg-white dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-500 hover:bg-gray-50 dark:hover:bg-white/10'}`}>{g}</button>
                             ))}
                         </div>
                     </div>
@@ -352,29 +311,16 @@ const CategoryCard = ({ cat, icon: Icon, colorClass }: { cat: Category, icon: an
                         </div>
                     </div>
 
-                    <button 
-                        type="submit" 
-                        disabled={isSubmitting}
-                        className="w-full mt-4 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-bold py-3 hover:shadow-lg hover:scale-[1.02] transition-all disabled:opacity-70"
-                    >
+                    <button type="submit" disabled={isSubmitting} className="w-full mt-4 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-bold py-3 hover:shadow-lg hover:scale-[1.02] transition-all disabled:opacity-70">
                         {isSubmitting ? 'Saving...' : (editingId ? 'Update Topic' : 'Create Topic')}
                     </button>
                 </form>
-            </div>
+            </motion.div>
         </div>
       )}
 
       {/* --- DELETE CONFIRM --- */}
-      <ConfirmModal 
-        isOpen={!!deleteId}
-        onClose={() => setDeleteId(null)}
-        onConfirm={handleDelete}
-        title="Delete Topic"
-        message="Are you sure? This will delete the folder but keep the assets."
-        confirmText="Delete"
-        isDangerous={true}
-        isLoading={isDeleting}
-      />
+      <ConfirmModal isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} title="Delete Topic" message="Are you sure? This will delete the folder but keep the assets." confirmText="Delete" isDangerous={true} isLoading={isDeleting} />
     </div>
   );
 };

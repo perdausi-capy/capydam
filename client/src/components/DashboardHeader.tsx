@@ -1,9 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Search, X, Image as ImageIcon, Film, FileText } from 'lucide-react';
-import ColorFilterBar from './ColorFilterBar';
+import React, { useEffect, useState } from 'react';
+import { Search, Image as ImageIcon, Film, Music, Grid, Sparkles } from 'lucide-react';
 
-// Types
-export type FilterType = 'image' | 'video' | 'document';
+export type FilterType = 'all' | 'image' | 'video' | 'audio';
 
 interface DashboardHeaderProps {
   assetsCount: number;
@@ -15,40 +13,6 @@ interface DashboardHeaderProps {
   setSelectedColor: (color: string | null) => void;
 }
 
-// Extracted Search Input
-const SearchInput = ({ 
-  value, 
-  onChange, 
-  onClear, 
-  className = "" 
-}: { 
-  className?: string, 
-  value: string, 
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void, 
-  onClear: () => void 
-}) => (
-  <div className={`relative w-full ${className}`}>
-    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-      <Search className="h-4 w-4 text-gray-400 dark:text-gray-500" />
-    </div>
-    <input
-      type="text"
-      className="block w-full rounded-full border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 py-2.5 pl-11 pr-10 text-sm text-gray-900 dark:text-white shadow-sm transition-all focus:border-blue-500 dark:focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 dark:focus:ring-blue-900/30 outline-none placeholder-gray-400 dark:placeholder-gray-500"
-      placeholder="Search assets..."
-      value={value}
-      onChange={onChange}
-    />
-    {value && (
-      <button 
-        onClick={onClear} 
-        className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-      >
-        <X className="h-4 w-4" />
-      </button>
-    )}
-  </div>
-);
-
 const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   assetsCount,
   searchQuery,
@@ -58,110 +22,124 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   selectedColor,
   setSelectedColor
 }) => {
+  
   const [isScrolled, setIsScrolled] = useState(false);
 
+  // --- SCROLL LISTENER ---
   useEffect(() => {
-    let ticking = false;
     const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          const offset = window.scrollY;
-          setIsScrolled((prev) => {
-            if (offset < 10) return false; 
-            if (offset > 100) return true;
-            return prev;
-          });
-          ticking = false;
-        });
-        ticking = true;
-      }
+      setIsScrolled(window.scrollY > 10);
     };
-    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const FilterTab = ({ label, type, icon: Icon }: { label: string, type: FilterType, icon: any }) => (
-    <button
-      onClick={() => setFilterType(type)}
-      className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-all duration-300 whitespace-nowrap shrink-0 snap-start
-        ${filterType === type 
-          ? 'bg-gray-900 text-white shadow-md transform scale-105 dark:bg-white dark:text-gray-900' 
-          : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200 hover:border-gray-300 dark:bg-white/5 dark:text-gray-400 dark:border-white/10 dark:hover:bg-white/10 dark:hover:text-white'}
-      `}
-    >
-      <Icon size={16} />
-      {label}
-    </button>
-  );
+  const colors = [
+    { name: 'Red', class: 'bg-red-500' },
+    { name: 'Orange', class: 'bg-orange-500' },
+    { name: 'Yellow', class: 'bg-yellow-400' },
+    { name: 'Green', class: 'bg-green-500' },
+    { name: 'Blue', class: 'bg-blue-500' },
+    { name: 'Purple', class: 'bg-purple-500' },
+    { name: 'Pink', class: 'bg-pink-500' },
+    { name: 'Black', class: 'bg-black' },
+    { name: 'White', class: 'bg-white border border-gray-200' },
+  ];
 
   return (
-    <div className={`
-        sticky top-16 lg:top-0 z-10 w-full 
-        bg-[#F2F4F7]/95 dark:bg-[#0B0D0F]/90 backdrop-blur-md 
-        border-b border-white/50 dark:border-white/5 
-        shadow-sm transition-all duration-500 ease-in-out
-        px-4 lg:px-8 py-4
-        ${/* ✅ FIX: Removed will-change-transform from here */ ''}
-    `}>
-      <div className="max-w-[2000px] mx-auto flex flex-col transition-all duration-500 gap-0 relative">
+    <div 
+        className={`sticky top-0 z-30 transition-all duration-500 ease-in-out border-b border-gray-200 dark:border-white/5
+        ${isScrolled 
+            ? 'bg-white/95 dark:bg-[#1A1D21]/95 backdrop-blur-xl py-2 shadow-sm' 
+            : 'bg-white/80 dark:bg-[#1A1D21]/80 backdrop-blur-md py-6'
+        }`}
+    >
+      <div className="px-4 lg:px-8 max-w-[2000px] mx-auto relative">
         
-        {/* ROW 1: Title & Initial Search */}
+        {/* --- TOP ROW: Title & Stats --- */}
+        {/* ✅ FIX: Used max-h-24 (96px) to ensure text isn't cut off */}
         <div 
-            className={`
-                flex flex-col md:flex-row md:items-center justify-between gap-4 overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]
-                ${isScrolled ? 'max-h-0 opacity-0 mb-0 -translate-y-2' : 'max-h-40 opacity-100 mb-5 translate-y-0'}
-            `}
+            className={`flex flex-col justify-center transition-all duration-500 ease-in-out overflow-hidden ${
+                isScrolled ? 'max-h-0 opacity-0 mb-0' : 'max-h-24 opacity-100 mb-6'
+            }`}
         >
             <div>
-              <h1 className="text-2xl font-bold text-gray-800 dark:text-white tracking-tight transition-colors">Asset Library</h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-1 ml-0.5 transition-colors">
-                {assetsCount} {assetsCount === 1 ? 'item' : 'items'} found
-              </p>
-            </div>
-
-            <div className="w-full md:max-w-md">
-                <SearchInput 
-                  value={searchQuery} 
-                  onChange={(e) => setSearchQuery(e.target.value)} 
-                  onClear={() => setSearchQuery('')}
-                />
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight flex items-center gap-2 whitespace-nowrap">
+                    Asset Library <Sparkles size={16} className="text-yellow-500" />
+                </h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 whitespace-nowrap">
+                    {assetsCount} {assetsCount === 1 ? 'item' : 'items'} found
+                </p>
             </div>
         </div>
 
-        {/* ROW 2: Filters, Center Search, Colors */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 overflow-visible relative">
-            
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0 px-1 -mx-1 no-scrollbar mask-gradient-right snap-x z-20">
-                <FilterTab label="Images" type="image" icon={ImageIcon} />
-                <FilterTab label="Videos" type="video" icon={Film} />
-                <FilterTab label="Documents" type="document" icon={FileText} />
-            </div>
+        {/* --- BOTTOM ROW: Filters + Search --- */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 w-full">
+          
+          {/* 1. LEFT: Type Filters */}
+          <div className={`transition-all duration-500 ${isScrolled ? 'scale-90 origin-left' : 'scale-100'}`}>
+              <div className="flex items-center gap-1 p-1 bg-gray-100 dark:bg-white/5 rounded-xl overflow-x-auto max-w-full no-scrollbar">
+                <button onClick={() => setFilterType('all')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${filterType === 'all' ? 'bg-white dark:bg-[#2C3035] text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+                  <Grid size={14} /> All
+                </button>
+                <button onClick={() => setFilterType('image')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${filterType === 'image' ? 'bg-white dark:bg-[#2C3035] text-purple-600 dark:text-purple-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-purple-500'}`}>
+                  <ImageIcon size={14} /> Images
+                </button>
+                <button onClick={() => setFilterType('video')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${filterType === 'video' ? 'bg-white dark:bg-[#2C3035] text-pink-600 dark:text-pink-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-pink-500'}`}>
+                  <Film size={14} /> Videos
+                </button>
+                <button onClick={() => setFilterType('audio')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${filterType === 'audio' ? 'bg-white dark:bg-[#2C3035] text-yellow-600 dark:text-yellow-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-yellow-500'}`}>
+                  <Music size={14} /> Audio
+                </button>
+              </div>
+          </div>
 
-            {/* Center: Search Bar */}
-            <div 
-                className={`
-                    absolute left-0 right-0 mx-auto transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] z-10 flex justify-center
-                    ${isScrolled 
-                        ? 'opacity-100 translate-y-0 pointer-events-auto w-full lg:max-w-md' 
-                        : 'opacity-0 -translate-y-4 pointer-events-none w-1/2'
-                    }
-                    hidden lg:flex
-                `}
-            >
-                 <SearchInput 
-                    className="shadow-md"
-                    value={searchQuery} 
-                    onChange={(e) => setSearchQuery(e.target.value)} 
-                    onClear={() => setSearchQuery('')}
-                  />
-            </div>
-
-            <div className="pt-2 lg:pt-0 border-t lg:border-t-0 border-gray-200 dark:border-white/10 w-full lg:w-auto overflow-hidden z-20">
-                <ColorFilterBar 
-                    selectedColor={selectedColor} 
-                    onSelectColor={setSelectedColor} 
+          {/* 2. MIDDLE: Search Bar (Morphing Position) */}
+          <div 
+            className={`
+                transition-all duration-500 ease-in-out z-20
+                ${isScrolled 
+                    // SCROLLED: Relative position, flows between filters
+                    ? 'relative w-full max-w-xl mx-4 order-last md:order-none' 
+                    // DEFAULT: Absolute position, top right corner
+                    : 'w-full md:absolute md:top-6 md:right-4 lg:md:right-8 md:w-96'
+                }
+            `}
+          >
+            <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search size={18} className="text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                </div>
+                <input
+                  type="text"
+                  className={`
+                    block w-full pl-10 pr-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all shadow-sm
+                    ${isScrolled ? 'py-2 bg-white dark:bg-black/40' : 'py-2.5'}
+                  `}
+                  placeholder="Search assets..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
             </div>
+          </div>
+
+          {/* 3. RIGHT: Color Filter */}
+          <div className={`transition-all duration-500 ${isScrolled ? 'scale-90 origin-right' : 'scale-100'}`}>
+              <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 md:pb-0 no-scrollbar">
+                {selectedColor && (
+                    <button onClick={() => setSelectedColor(null)} className="h-6 px-2 text-[10px] font-bold uppercase tracking-wider bg-gray-200 dark:bg-white/10 rounded-full hover:bg-gray-300 dark:hover:bg-white/20 transition-colors">Clear</button>
+                )}
+                {colors.map((color) => (
+                  <button
+                    key={color.name}
+                    onClick={() => setSelectedColor(selectedColor === color.name ? null : color.name)}
+                    className={`h-6 w-6 rounded-full transition-all duration-300 ${color.class} ${selectedColor === color.name ? 'ring-2 ring-offset-2 ring-blue-500 scale-110 dark:ring-offset-[#1A1D21]' : 'hover:scale-110 opacity-70 hover:opacity-100'}`}
+                    title={color.name}
+                  />
+                ))}
+              </div>
+          </div>
+
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { 
   UploadCloud, 
@@ -7,6 +7,7 @@ import {
   Image as ImageIcon, 
   Film, 
   Music,
+  Trash2,
   Sparkles,
   Link as LinkIcon,
   Edit2,
@@ -22,7 +23,6 @@ import { toast } from 'react-toastify';
 import { useQueryClient } from '@tanstack/react-query';
 
 // --- STYLES FOR ANIMATION ---
-// This adds the "Flowing" animation to the progress bar
 const customStyles = `
   @keyframes shimmer {
     0% { background-position: 200% 0; }
@@ -98,7 +98,12 @@ const Upload = () => {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     multiple: true,
-    accept: { 'image/*': [], 'video/*': [], 'application/pdf': [], 'audio/*': [] }
+    // ✅ REMOVED 'application/pdf'
+    accept: { 
+        'image/*': [], 
+        'video/*': [], 
+        'audio/*': [] 
+    }
   });
 
   useEffect(() => {
@@ -271,7 +276,8 @@ const Upload = () => {
                           <UploadCloud size={24} />
                       </div>
                       <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">Click to upload</h3>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">or drag and drop files here</p>
+                      {/* ✅ UPDATED TEXT */}
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Images, Video & Audio</p>
                   </div>
               </div>
 
@@ -331,7 +337,7 @@ const Upload = () => {
           {/* RIGHT COLUMN */}
           <div className="lg:col-span-4 space-y-6">
 
-              {/* ✅ ANIMATED BUTTON */}
+              {/* ACTION BUTTON */}
               <button
                   onClick={startUpload}
                   disabled={isProcessing || isRedirecting || queue.length === 0}
