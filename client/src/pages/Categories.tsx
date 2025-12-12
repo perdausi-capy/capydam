@@ -141,16 +141,26 @@ const Categories = () => {
   const inspiration = categories.filter(c => c.group === 'Inspiration');
 
   // --- CARD COMPONENT ---
-  const CategoryCard = ({ cat, icon: Icon, colorClass }: { cat: Category, icon: any, colorClass: string }) => (
+// --- CARD COMPONENT ---
+const CategoryCard = ({ cat, icon: Icon, colorClass }: { cat: Category, icon: any, colorClass: string }) => (
     <div className="group relative flex flex-col rounded-3xl border border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] shadow-sm hover:shadow-xl hover:shadow-blue-500/10 hover:-translate-y-1 transition-all duration-300 overflow-hidden h-64">
         
         <Link to={`/categories/${cat.id}`} className="flex-1 flex flex-col">
             {/* Cover Area */}
-            <div className={`relative flex-1 w-full overflow-hidden ${colorClass} flex items-center justify-center`}>
+            {/* ✅ FIX 1: Add 'isolation-isolate' and the WebkitMaskImage style */}
+            <div 
+                className={`relative flex-1 w-full overflow-hidden ${colorClass} flex items-center justify-center isolation-isolate`}
+                style={{ WebkitMaskImage: '-webkit-radial-gradient(white, black)' }} 
+            >
                 
                 {cat.coverImage ? (
                     <>
-                        <img src={cat.coverImage} alt={cat.name} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                        {/* ✅ FIX 2: Add 'transform-gpu' and 'will-change-transform' for smooth scaling */}
+                        <img 
+                            src={cat.coverImage} 
+                            alt={cat.name} 
+                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 transform-gpu will-change-transform" 
+                        />
                         <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
                     </>
                 ) : (
