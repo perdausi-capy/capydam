@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { 
   UploadCloud, 
@@ -7,7 +7,6 @@ import {
   Image as ImageIcon, 
   Film, 
   Music,
-  Trash2,
   Sparkles,
   Link as LinkIcon,
   Edit2,

@@ -68,7 +68,7 @@ const FloatingThemeToggle = () => {
         return;
     }
 
-    let timeout: NodeJS.Timeout;
+    let timeout: ReturnType<typeof setTimeout>;
     let charIndex = 0;
 
     const typeLoop = () => {
