@@ -35,9 +35,9 @@ const SCROLL_KEY = 'capydam_dashboard_scroll_y';
 const MAIN_SCROLL_KEY = 'capydam_dashboard_main_scroll_y';
 
 const Dashboard = () => {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  
+  // ❌ DELETE these lines if they are red:
+  // const { user } = useAuth(); 
+  // const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedColor, setSelectedColor] = useState<string | null>(null);

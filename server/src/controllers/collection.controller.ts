@@ -18,13 +18,21 @@ export const getCollections = async (req: Request, res: Response): Promise<void>
   try {
     const userId = (req as any).user?.id;
     const userRole = (req as any).user?.role;
+    
+    // Check for optional query param if Admin wants to see specific user's folders
+    // e.g. /api/collections?targetUserId=123
+    const targetUserId = req.query.targetUserId as string;
 
-    // RBAC Logic
     const whereClause: any = {
       parentId: null
     };
-    if (userRole !== 'admin') {
-        // Editors/Viewers only see their OWN collections
+
+    // ✅ LOGIC:
+    // 1. If Admin provides 'targetUserId', show that user's collections.
+    // 2. Otherwise, ALWAYS filter by the logged-in userId (Admin sees their own, Viewer sees theirs).
+    if (userRole === 'admin' && targetUserId) {
+        whereClause.userId = targetUserId;
+    } else {
         whereClause.userId = userId;
     }
 
@@ -34,7 +42,6 @@ export const getCollections = async (req: Request, res: Response): Promise<void>
         _count: {
           select: { assets: true }
         },
-        // Optional: Get the first asset for the cover image
         assets: {
             take: 1,
             include: {
@@ -45,13 +52,11 @@ export const getCollections = async (req: Request, res: Response): Promise<void>
       orderBy: { createdAt: 'desc' }
     });
 
-    // Format for frontend
     const formatted = collections.map(c => ({
         id: c.id,
         name: c.name,
         createdAt: c.createdAt,
         _count: c._count,
-        // Grab the first asset thumbnail as cover image (prefer thumbnail, fall back to path)
         coverImage: c.assets[0]?.asset.thumbnailPath || c.assets[0]?.asset.path || null
     }));
 
@@ -108,14 +113,12 @@ export const getCollectionById = async (req: Request, res: Response): Promise<vo
     } catch (error) {
       res.status(500).json({ message: 'Server error' });
     }
-  };
+};
 
 // 3. CREATE
 export const createCollection = async (req: Request, res: Response): Promise<void> => {
-  const { name, parentId } = req.body;
-  const userId = (req as any).user?.id;
   try {
-    const { name } = req.body;
+    const { name, parentId } = req.body;
     const userId = (req as any).user?.id;
     let slug = slugify(name);
 
@@ -130,7 +133,7 @@ export const createCollection = async (req: Request, res: Response): Promise<voi
         name,
         slug,
         userId,
-        parentId: parentId || null // <--- Save it
+        parentId: parentId || null
       }
     });
 
@@ -196,4 +199,71 @@ export const removeAssetFromCollection = async (req: Request, res: Response): Pr
     } catch (error) {
         res.status(500).json({ message: 'Error removing asset' });
     }
+};
+
+// 6. UPDATE COLLECTION (Rename)
+export const updateCollection = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { name } = req.body;
+    const userId = (req as any).user?.id;
+    const userRole = (req as any).user?.role;
+
+    const collection = await prisma.collection.findUnique({ where: { id } });
+    if (!collection) {
+        res.status(404).json({ message: 'Collection not found' });
+        return;
+    }
+
+    if (userRole !== 'admin' && collection.userId !== userId) {
+        res.status(403).json({ message: 'Access denied' });
+        return;
+    }
+
+    const updated = await prisma.collection.update({
+        where: { id },
+        data: { name }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating collection' });
+  }
+};
+
+// 7. DELETE COLLECTION (Transactional)
+export const deleteCollection = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id;
+    const userRole = (req as any).user?.role;
+
+    const collection = await prisma.collection.findUnique({ where: { id } });
+    if (!collection) {
+        res.status(404).json({ message: 'Collection not found' });
+        return;
+    }
+
+    if (userRole !== 'admin' && collection.userId !== userId) {
+        res.status(403).json({ message: 'Access denied' });
+        return;
+    }
+
+    // Transaction: Empty the folder, then delete the folder
+    await prisma.$transaction([
+        // Remove links to assets inside this collection
+        prisma.assetOnCollection.deleteMany({
+            where: { collectionId: id }
+        }),
+        // Delete the collection itself
+        prisma.collection.delete({
+            where: { id }
+        })
+    ]);
+
+    res.json({ message: 'Collection deleted successfully' });
+  } catch (error) {
+    console.error("Delete Collection Error:", error);
+    res.status(500).json({ message: 'Error deleting collection' });
+  }
 };

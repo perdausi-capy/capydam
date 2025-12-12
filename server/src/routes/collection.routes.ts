@@ -5,7 +5,9 @@ import {
   getCollectionById, 
   createCollection, 
   addAssetToCollection, 
-  removeAssetFromCollection 
+  removeAssetFromCollection,
+  updateCollection, 
+  deleteCollection 
 } from '../controllers/collection.controller';
 
 const router = Router();
@@ -28,5 +30,8 @@ router.post('/:id/assets', addAssetToCollection);
 // 5. Remove Asset from Collection
 // ✅ Matches controller: const { id, assetId } = req.params;
 router.delete('/:id/assets/:assetId', removeAssetFromCollection);
+
+router.patch('/:id', updateCollection);
+router.delete('/:id', deleteCollection);
 
 export default router;
