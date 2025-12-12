@@ -6,7 +6,7 @@ import {
     Calendar, HardDrive, FileText, 
     FolderPlus, Hash, ExternalLink, Check, 
     Layout, Link as LinkIcon, Plus, X,
-    Image as ImageIcon, Edit2, Search
+    Edit2, Search
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
