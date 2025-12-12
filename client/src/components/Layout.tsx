@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-// import { useTheme } from '../context/ThemeContext'; // <--- Can comment this out if not used elsewhere in Layout
+import { useTheme } from '../context/ThemeContext';
 import logo from '../assets/capytech-fav.png';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useQueryClient } from '@tanstack/react-query';
-import FloatingThemeToggle from './FloatingThemeToggle';
 import { 
   LayoutDashboard, 
   UploadCloud, 
@@ -17,14 +16,14 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  Sun,
-  Moon,
   Compass
+  // Removed Sun, Moon from here
 } from 'lucide-react';
+import FloatingThemeToggle from './FloatingThemeToggle';
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const { logout, user } = useAuth();
-  // const { theme, toggleTheme } = useTheme(); // <--- Commented out
+  const { theme } = useTheme(); // Removed toggleTheme since we use FloatingToggle
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -53,9 +52,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       <ToastContainer 
         position="top-right"
         autoClose={3000}
-        // theme={theme === 'dark' ? 'dark' : 'light'} // Optional: Hardcode or keep hook if you want toast themes
+        theme={theme === 'dark' ? 'dark' : 'light'}
       />
-
+      
       <FloatingThemeToggle />
       
       {/* MOBILE HEADER */} 
@@ -91,28 +90,10 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         
         <nav className="flex-1 flex flex-col space-y-1 p-3 mt-2 overflow-y-auto custom-scrollbar">
           
-          {/* --- TOP CONTROLS --- */}
           <div className={`flex gap-2 mb-6 p-1.5 rounded-xl bg-gray-50 dark:bg-black/20 border border-gray-100 dark:border-white/5 transition-colors ${isCollapsed ? 'flex-col' : 'flex-row'}`}>
-             
-             {/* Collapse Toggle */}
-             <button 
-                onClick={() => setIsCollapsed(!isCollapsed)}
-                className="flex-1 flex items-center justify-center p-2 text-gray-500 dark:text-gray-400 bg-white dark:bg-white/5 hover:text-blue-600 hover:bg-white dark:hover:bg-white/10 dark:hover:text-white rounded-lg transition-all shadow-sm border border-gray-100 dark:border-white/5 hover:border-blue-200"
-                title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-             >
+             <button onClick={() => setIsCollapsed(!isCollapsed)} className="flex-1 flex items-center justify-center p-2 text-gray-500 dark:text-gray-400 bg-white dark:bg-white/5 hover:text-blue-600 hover:bg-white dark:hover:bg-white/10 dark:hover:text-white rounded-lg transition-all shadow-sm border border-gray-100 dark:border-white/5 hover:border-blue-200" title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}>
                 {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
              </button>
-
-             {/* ⬇️ COMMENTED OUT: OLD THEME TOGGLE (Replaced by Fairy) ⬇️ */}
-             {/* <button 
-                onClick={toggleTheme}
-                className="relative flex-1 flex items-center justify-center p-2 ..."
-                title="Toggle Theme"
-             >
-                <Sun size={18} className="..." />
-                <Moon size={18} className="..." />
-             </button> 
-             */}
           </div>
 
           <NavItem to="/" icon={<Compass size={20} />} label="Explore" isCollapsed={isCollapsed} active={isActive('/')} onClick={handleNavClick} />
@@ -127,7 +108,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           )}
         </nav>
 
-        {/* FOOTER */}
         <div className="border-t border-gray-100 dark:border-white/10 bg-gray-50/50 dark:bg-black/20 p-3 mt-auto shrink-0 transition-colors">
           <div className={`flex items-center rounded-xl border border-transparent p-2 transition-all duration-200 ${!isCollapsed ? 'bg-white dark:bg-white/5 shadow-sm border-gray-100 dark:border-white/5' : 'justify-center'}`}>
              <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm shadow-sm">{user?.name?.charAt(0) || 'U'}</div>
@@ -141,18 +121,15 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         </div>
       </aside>
 
-      {/* OVERLAY */}
       {isMobileMenuOpen && <div className="fixed inset-0 z-10 bg-gray-900/50 backdrop-blur-sm lg:hidden" onClick={() => setIsMobileMenuOpen(false)} />}
 
-      {/* MAIN CONTENT */}
-      <main className={`min-h-screen w-full pt-20 lg:pt-0 transition-all duration-300 ease-in-out dark:text-white ${isCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
+      <main className={`min-h-screen w-full pt-20 lg:pt-0 transition-all duration-300 ease-in-out dark:text-white overflow-x-hidden ${isCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
         {children}
       </main>
     </div>
   );
 };
 
-// ... NavItem ...
 const NavItem = ({ to, icon, label, isCollapsed, active, onClick }: any) => {
   return (
     <Link to={to} onClick={onClick} title={isCollapsed ? label : ''} className={`group relative flex items-center rounded-lg px-3 py-2.5 transition-all duration-200 ${active ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'} ${isCollapsed ? 'justify-center' : ''}`}>

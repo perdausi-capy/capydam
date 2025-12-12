@@ -164,7 +164,7 @@ const FloatingThemeToggle = () => {
     pos.current.y = e.clientY - dragOffset.current.y;
   };
 
-  const handlePointerUp = (e: React.MouseEvent) => {
+  const handlePointerUp = (_e: React.MouseEvent) => {
     if (!isDragging.current) return;
     isDragging.current = false;
     setShowTooltip(true);

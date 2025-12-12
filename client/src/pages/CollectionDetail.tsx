@@ -13,15 +13,14 @@ import {
     Plus,
     X,
     FolderPlus, 
-    Download,
-    MoreHorizontal
+    Download
+    // Removed unused icons (MoreHorizontal)
 } from 'lucide-react';
 import Masonry from 'react-masonry-css';
 import ConfirmModal from '../components/ConfirmModal';
 import { toast } from 'react-toastify';
 import AssetThumbnail from '../components/AssetThumbnail'; 
 import { useAuth } from '../context/AuthContext';
-import { useQueryClient } from '@tanstack/react-query';
 
 interface Asset {
   id: string;
@@ -51,13 +50,12 @@ interface CollectionData {
 }
 
 const cleanFilename = (name: string) => name.replace(/\.[^/.]+$/, "");
-const formatBytes = (bytes?: number) => bytes ? (bytes/1024/1024).toFixed(2) + ' MB' : '0B';
+// Removed unused formatBytes
 
 const CollectionDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const queryClient = useQueryClient(); 
   
   const [collection, setCollection] = useState<CollectionData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,10 +70,7 @@ const CollectionDetail = () => {
   const canManage = user?.role === 'admin' || user?.role === 'editor'; 
 
   const fetchCollection = async () => {
-    // ✅ FIX: Force loading state immediately when fetching starts
-    // This ensures when you click a sub-folder, the spinner appears instantly.
     setLoading(true);
-    
     try {
       const { data } = await client.get(`/collections/${id}`);
       setCollection(data);
@@ -156,7 +151,7 @@ const CollectionDetail = () => {
       await client.post(`/collections/${targetId}/assets`, { assetId: activeDropdownId });
       toast.success(`Moved to ${targetName}`);
       setActiveDropdownId(null);
-      fetchCollection(); // Refresh data
+      fetchCollection(); 
     } catch (error) {
       toast.info('Asset is likely already in this folder');
       setActiveDropdownId(null);
@@ -165,21 +160,9 @@ const CollectionDetail = () => {
 
   const breakpointColumnsObj = { default: 5, 1536: 4, 1280: 3, 1024: 3, 768: 2, 640: 1 };
 
-  // Loading State
-  if (loading) return (
-      <div className="flex h-screen items-center justify-center dark:bg-[#0B0D0F]">
-          <Loader2 className="animate-spin text-blue-600 dark:text-blue-400" size={40} />
-      </div>
-  );
+  if (loading) return <div className="flex h-screen items-center justify-center dark:bg-[#0B0D0F]"><Loader2 className="animate-spin text-blue-600 dark:text-blue-400" size={40} /></div>;
 
-  // 404 State
-  if (!collection) return (
-      <div className="flex h-screen flex-col items-center justify-center text-center dark:bg-[#0B0D0F] dark:text-white">
-          <div className="rounded-full bg-red-50 dark:bg-red-900/20 p-4 text-red-500 mb-4"><FolderOpen size={32}/></div>
-          <h2 className="text-xl font-bold">Collection Not Found</h2>
-          <button onClick={() => navigate('/collections')} className="mt-4 text-blue-600 dark:text-blue-400 font-medium hover:underline">Back to Collections</button>
-      </div>
-  );
+  if (!collection) return <div className="p-10 text-center dark:text-white">Collection Not Found</div>;
 
   return (
     <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] pb-20 transition-colors duration-500">
@@ -267,7 +250,8 @@ const CollectionDetail = () => {
              <>
                  {collection.assets.length > 0 && <h3 className="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">Assets</h3>}
                  <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-6" columnClassName="pl-6 bg-clip-padding">
-                    {collection.assets.map((asset, index) => (
+                    {/* ✅ Removed 'index' from map since it was unused */}
+                    {collection.assets.map((asset) => (
                         <div 
                             key={asset.id} 
                             // LAYOUT: Frameless Canvas Style
@@ -344,6 +328,23 @@ const CollectionDetail = () => {
              </>
         )}
       </div>
+
+      {/* CREATE FOLDER MODAL */}
+      {isCreateFolderOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsCreateFolderOpen(false)} />
+            <div className="relative w-full max-w-sm bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl p-6 border border-gray-200 dark:border-white/10 animate-in zoom-in-95">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">New Folder</h3>
+                    <button onClick={() => setIsCreateFolderOpen(false)}><X size={20} className="text-gray-400 hover:text-gray-600" /></button>
+                </div>
+                <form onSubmit={handleCreateSubFolder}>
+                    <input autoFocus type="text" value={newFolderName} onChange={e => setNewFolderName(e.target.value)} className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 mb-4" placeholder="Folder Name" />
+                    <button type="submit" disabled={creatingFolder} className="w-full rounded-xl bg-blue-600 text-white font-bold py-3 hover:bg-blue-700 transition-colors disabled:opacity-70">{creatingFolder ? 'Creating...' : 'Create Folder'}</button>
+                </form>
+            </div>
+        </div>
+      )}
 
       <ConfirmModal isOpen={!!assetToRemove} onClose={() => setAssetToRemove(null)} onConfirm={confirmRemove} title="Remove Asset" message="Remove from this collection?" confirmText="Remove" isDangerous={true} />
     </div>
