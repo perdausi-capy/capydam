@@ -123,7 +123,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
       {isMobileMenuOpen && <div className="fixed inset-0 z-10 bg-gray-900/50 backdrop-blur-sm lg:hidden" onClick={() => setIsMobileMenuOpen(false)} />}
 
-      <main className={`min-h-screen w-full pt-20 lg:pt-0 transition-all duration-300 ease-in-out dark:text-white overflow-x-hidden ${isCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
+      <main className={`min-h-screen w-full pt-20 lg:pt-0 transition-all duration-300 ease-in-out dark:text-white ${isCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
         {children}
       </main>
     </div>

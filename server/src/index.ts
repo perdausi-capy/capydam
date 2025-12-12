@@ -1,6 +1,8 @@
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+dotenv.config();
+
 import path from 'path';
 
 // Import Routes
@@ -12,7 +14,7 @@ import collectionRoutes from './routes/collection.routes';
 // ✅ 1. MAKE SURE THIS IMPORT IS HERE
 import categoryRoutes from './routes/category.routes'; 
 
-dotenv.config();
+
 
 const app: Express = express();
 const PORT = process.env.PORT || 5000;

@@ -1,199 +1,142 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import client from '../api/client';
 import { 
-    ArrowLeft, 
-    Download, 
-    Trash2, 
-    Save, 
-    FolderPlus,
-    FileText,
-    Sparkles, 
-    ExternalLink,
-    Cpu,
-    HardDrive,
-    Calendar,
-    User, // <--- Icon for Topics
-    Tag     // <--- Icon for Category Dropdown
+    ArrowLeft, Download, Trash2, Loader2, 
+    Calendar, HardDrive, FileText, 
+    FolderPlus, Hash, ExternalLink, Check, 
+    Layout, Link as LinkIcon, Plus, X,
+    Image as ImageIcon, Edit2, Search
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import ConfirmModal from '../components/ConfirmModal';
+import Masonry from 'react-masonry-css';
 import AssetThumbnail from '../components/AssetThumbnail';
-import Masonry from 'react-masonry-css'; 
-import { useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '../context/AuthContext'; 
 
-interface AssetData {
+// --- TYPES ---
+interface Asset {
   id: string;
-  filename: string; 
-  mimeType: string;
+  filename: string;
   originalName: string;
-  path: string; 
-  thumbnailPath?: string; 
-  aiData: string; 
+  mimeType: string;
+  size: number;
+  path: string;
+  thumbnailPath: string | null;
   createdAt: string;
-  size?: number; 
-  uploadedBy: { name: string };
   userId: string;
+  uploadedBy: { name: string };
+  aiData: string;
 }
 
-interface Category {
-  id: string;
-  name: string;
-  group: string;
-}
+interface CollectionSimple { id: string; name: string; }
+interface CategorySimple { id: string; name: string; }
+
+// --- COMPONENT: Collapsible Text ---
+const CollapsibleText = ({ text }: { text: string }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const limit = 150;
+
+    if (!text) return <span className="text-gray-400 italic">No description available.</span>;
+    if (text.length <= limit) return <p className="text-gray-600 dark:text-gray-300 leading-relaxed">{text}</p>;
+
+    return (
+        <div>
+            <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                {isExpanded ? text : `${text.substring(0, limit)}...`}
+            </p>
+            <button 
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="mt-1 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline uppercase tracking-wide"
+            >
+                {isExpanded ? 'See Less' : 'See More'}
+            </button>
+        </div>
+    );
+};
 
 const AssetDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const queryClient = useQueryClient();
-  
+
+  const [asset, setAsset] = useState<Asset | null>(null);
+  const [relatedAssets, setRelatedAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-
-  // Data
-  const [asset, setAsset] = useState<AssetData | null>(null);
-  const [related, setRelated] = useState<any[]>([]); 
-  const [collections, setCollections] = useState<{id: string, name: string}[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]); // <--- NEW: Categories State
   
-  // Form State
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [tags, setTags] = useState<string[]>([]); 
-  const [newTag, setNewTag] = useState(''); 
-  
-  const [selectedCollectionId, setSelectedCollectionId] = useState('');
-  const [selectedCategoryId, setSelectedCategoryId] = useState(''); // <--- NEW: Category Selection
+  // Data for Selection
+  const [collections, setCollections] = useState<CollectionSimple[]>([]);
+  const [categories, setCategories] = useState<CategorySimple[]>([]); 
 
-  // Permissions
-  // const isViewer = user?.role === 'viewer';
-  const isAdmin = user?.role === 'admin';
-  const isEditor = user?.role === 'editor';
-  const isOwner = asset?.userId === user?.id;
+  // MODAL STATES
+  const [activeModal, setActiveModal] = useState<'collection' | 'topic' | null>(null);
+  const [modalSearch, setModalSearch] = useState(''); 
 
-  const canEdit = isAdmin || isEditor; 
-  const canDelete = isAdmin || (isEditor && isOwner); 
-  const canAddToCollection = isAdmin || isEditor;
-  const canCurateTopic = isAdmin || isEditor; // Only Admins/Editors can organize global topics
+  // Edit States
+  const [isEditingLink, setIsEditingLink] = useState(false);
+  const [driveLink, setDriveLink] = useState('');
+  const [isSavingLink, setIsSavingLink] = useState(false);
+
+  // Rename State
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [newName, setNewName] = useState('');
+
+  // Tag State
+  const [newTag, setNewTag] = useState('');
+  const [isAddingTag, setIsAddingTag] = useState(false);
+
+  // Delete State
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Parsed AI Data
+  const [parsedAi, setParsedAi] = useState<any>({});
+
+  const canManage = user?.role === 'admin' || user?.role === 'editor' || user?.id === asset?.userId;
+
+  // --- FETCH DATA ---
+  const fetchData = async () => {
+    try {
+      const [assetRes, colRes, catRes] = await Promise.all([
+          client.get(`/assets/${id}`),
+          client.get('/collections'),
+          client.get('/categories')
+      ]);
+      
+      setAsset(assetRes.data);
+      setNewName(assetRes.data.originalName); 
+      setCollections(colRes.data || []);
+      setCategories(catRes.data || []);
+
+      try {
+          const ai = JSON.parse(assetRes.data.aiData || '{}');
+          setParsedAi(ai);
+          // ✅ Load the link saved during upload
+          setDriveLink(ai.externalLink || ''); 
+      } catch (e) { setParsedAi({}); }
+
+      const relatedRes = await client.get(`/assets/${id}/related`);
+      setRelatedAssets(relatedRes.data || []);
+
+    } catch (error) {
+      toast.error("Failed to load asset details");
+      navigate('/');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadData = async () => {
-      if (!id) return;
-      setLoading(true); 
-      try {
-        // 1. Asset
-        const { data } = await client.get(`/assets/${id}`);
-        setAsset(data);
-        setTitle(data.originalName || data.filename); 
-
-        if (data.aiData) {
-          try {
-            const parsed = JSON.parse(data.aiData);
-            setDescription(parsed.description || '');
-            const loadedTags = parsed.tags 
-                ? (Array.isArray(parsed.tags) ? parsed.tags : parsed.tags.split(',')) 
-                : [];
-            setTags(loadedTags.map((t: string) => t.trim()).filter(Boolean));
-          } catch (e) { console.error(e); }
-        }
-
-        // 2. Related
-        const relatedRes = await client.get(`/assets/${id}/related`);
-        setRelated(relatedRes.data);
-
-        // 3. Collections
-        const colRes = await client.get('/collections'); 
-        setCollections(colRes.data || []);
-
-        // 4. Categories (Topics) <--- NEW
-        const catRes = await client.get('/categories');
-        setCategories(catRes.data || []);
-
-      } catch (error) {
-        toast.error("Asset not found");
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
+    fetchData();
   }, [id]);
 
   // --- ACTIONS ---
 
-  const handleSave = async () => {
-    if (!asset || !canEdit) return;
-    setSaving(true);
-    try {
-      const existingColors = asset.aiData ? JSON.parse(asset.aiData).colors : [];
-      const updatedAiData = {
-        description,
-        tags: tags,
-        colors: existingColors
-      };
-
-      await client.patch(`/assets/${asset.id}`, {
-        originalName: title, 
-        aiData: updatedAiData
-      });
-      
-      await queryClient.invalidateQueries({ queryKey: ['assets'] });
-      toast.success('Changes saved successfully!');
-    } catch (error) {
-      toast.error('Failed to save changes');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const confirmDelete = async () => {
-    if (!asset || !canDelete) return;
-    setDeleting(true);
-    try {
-      await client.delete(`/assets/${asset.id}`);
-      await queryClient.invalidateQueries({ queryKey: ['assets'] });
-      toast.success('Asset deleted permanently');
-      navigate('/'); 
-    } catch (error: any) {
-      toast.error('Failed to delete asset');
-      setDeleting(false);
-      setIsDeleteModalOpen(false);
-    }
-  };
-
-  const addToCollection = async () => {
-    if (!selectedCollectionId || !canAddToCollection) return;
-    try {
-      await client.post(`/collections/${selectedCollectionId}/assets`, { assetId: id });
-      await queryClient.invalidateQueries({ queryKey: ['collections'] });
-      toast.success('Added to collection!');
-      setSelectedCollectionId('');
-    } catch (error) {
-      toast.info('Asset is likely already in this collection');
-    }
-  };
-
-  // NEW: Add to Topic (Category)
-  const addToCategory = async () => {
-    if (!selectedCategoryId || !canCurateTopic) return;
-    try {
-      await client.post(`/categories/${selectedCategoryId}/assets`, { assetId: id });
-      toast.success('Added to Topic!');
-      setSelectedCategoryId('');
-    } catch (error) {
-      toast.info('Asset is likely already in this topic');
-    }
-  };
-
   const handleDownload = async () => {
     if (!asset) return;
     try {
-      toast.info('Starting download...', { autoClose: 2000 });
+      toast.info('Downloading...');
       const response = await fetch(asset.path);
-      if (!response.ok) throw new Error('Network response was not ok');
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -203,248 +146,322 @@ const AssetDetail = () => {
       link.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(link);
-    } catch (error) { toast.error('Download failed'); }
+    } catch (e) { toast.error("Download failed"); }
   };
 
-  const addTag = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && newTag.trim() && canEdit) {
-        e.preventDefault();
-        if (!tags.includes(newTag.trim())) setTags([...tags, newTag.trim()]);
-        setNewTag('');
+  const handleDelete = async () => {
+    if (!asset) return;
+    setIsDeleting(true);
+    try {
+      await client.delete(`/assets/${asset.id}`);
+      toast.success("Asset deleted");
+      navigate(-1);
+    } catch (error) {
+      toast.error("Failed to delete asset");
+      setIsDeleting(false);
     }
   };
-  const removeTag = (tagToRemove: string) => {
-      if (canEdit) setTags(tags.filter(t => t !== tagToRemove));
-  };
-  
-  const formatBytes = (bytes?: number) => bytes ? (bytes/1024/1024).toFixed(2) + ' MB' : '0B';
-  const breakpointColumnsObj = { default: 5, 1536: 4, 1280: 4, 1024: 3, 768: 2, 640: 2 };
 
-  if (loading || !asset) return <div className="h-screen flex items-center justify-center dark:bg-[#0B0D0F] dark:text-white"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>;
+  // --- RENAME ASSET ---
+  const handleRename = async () => {
+      if (!asset || !newName.trim()) return;
+      try {
+          await client.patch(`/assets/${asset.id}`, { originalName: newName });
+          setAsset({ ...asset, originalName: newName });
+          setIsRenaming(false);
+          toast.success("Renamed successfully");
+      } catch (error) {
+          toast.error("Failed to rename");
+      }
+  };
+
+  // --- LINK SAVING ---
+  const saveDriveLink = async () => {
+      if (!asset) return;
+      setIsSavingLink(true);
+      try {
+          const newAiData = { ...parsedAi, externalLink: driveLink };
+          await client.patch(`/assets/${asset.id}`, { aiData: JSON.stringify(newAiData) });
+          setParsedAi(newAiData);
+          setIsEditingLink(false);
+          toast.success("Link saved!");
+      } catch (error) { toast.error("Failed to save link"); } 
+      finally { setIsSavingLink(false); }
+  };
+
+  // --- TAG MANAGEMENT ---
+  const handleAddTag = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!asset || !newTag.trim()) return;
+      const currentTags = parsedAi.tags || [];
+      if (currentTags.includes(newTag.trim())) { setNewTag(''); return; }
+      const updatedTags = [...currentTags, newTag.trim()];
+      await updateTags(updatedTags);
+      setNewTag('');
+      setIsAddingTag(false);
+  };
+
+  const handleRemoveTag = async (tagToRemove: string) => {
+      if (!asset) return;
+      const currentTags = parsedAi.tags || [];
+      const updatedTags = currentTags.filter((t: string) => t !== tagToRemove);
+      await updateTags(updatedTags);
+  };
+
+  const updateTags = async (newTags: string[]) => {
+      if (!asset) return;
+      const newAiData = { ...parsedAi, tags: newTags };
+      try {
+          await client.patch(`/assets/${asset.id}`, { aiData: JSON.stringify(newAiData) });
+          setParsedAi(newAiData);
+      } catch (error) { toast.error("Failed to update tags"); }
+  };
+
+  // --- MODAL ACTIONS ---
+  const openSelectionModal = (type: 'collection' | 'topic') => {
+      setModalSearch(''); 
+      setActiveModal(type);
+  };
+
+  const addToCollection = async (collectionId: string, name: string) => {
+      if (!asset) return;
+      try {
+          await client.post(`/collections/${collectionId}/assets`, { assetId: asset.id });
+          toast.success(`Added to ${name}`);
+          setActiveModal(null);
+      } catch (e) { toast.info("Already in this collection"); }
+  };
+
+  const addToTopic = async (categoryId: string, name: string) => {
+      if (!asset) return;
+      try {
+          await client.post(`/categories/${categoryId}/assets`, { assetId: asset.id });
+          toast.success(`Added to ${name}`);
+          setActiveModal(null);
+      } catch (e) { toast.info("Already in this topic"); }
+  };
+
+  const filteredCollections = collections.filter(c => c.name.toLowerCase().includes(modalSearch.toLowerCase()));
+  const filteredCategories = categories.filter(c => c.name.toLowerCase().includes(modalSearch.toLowerCase()));
+
+  const breakpointColumnsObj = { default: 4, 1100: 3, 700: 2, 500: 1 };
+
+  if (loading) return <div className="flex h-screen items-center justify-center dark:bg-[#0B0D0F]"><Loader2 className="animate-spin text-blue-600" size={40} /></div>;
+  if (!asset) return null;
 
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-[#0B0D0F] overflow-hidden transition-colors duration-300">
+    <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] pb-20 transition-colors duration-500">
       
       {/* HEADER */}
-      <div className="flex h-16 items-center justify-between border-b border-gray-200 dark:border-white/10 px-6 bg-white/80 dark:bg-[#1A1D21]/80 backdrop-blur-md shrink-0 z-20 shadow-sm sticky top-0 transition-colors">
-         <div className="flex items-center gap-4 flex-1 min-w-0">
-             <button onClick={() => navigate('/')} className="rounded-full p-2 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-gray-300 transition-colors" title="Back">
-                 <ArrowLeft size={20} />
-             </button>
-             
-             <div className="flex flex-col flex-1 max-w-2xl">
-                 <input 
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    disabled={!canEdit}
-                    className={`text-lg font-bold text-gray-900 dark:text-white bg-transparent rounded px-2 -ml-2 truncate border-transparent border transition-colors outline-none
-                        ${canEdit ? 'focus:bg-gray-50 dark:focus:bg-white/5 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30 hover:border-gray-200 dark:hover:border-white/10' : 'cursor-default opacity-90'}
-                    `}
-                    placeholder="Asset Name"
-                 />
-             </div>
-         </div>
-
-         <div className="flex items-center gap-2">
-             <button onClick={handleDownload} className="hidden md:flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-full hover:bg-gray-50 dark:hover:bg-white/10 transition-colors shadow-sm">
-                 <Download size={16} /> <span className="hidden lg:inline">Download</span>
-             </button>
-             
-             {canEdit && (
-                 <button 
-                    onClick={handleSave} 
-                    disabled={saving} 
-                    className="flex items-center gap-2 px-6 py-2 text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full hover:shadow-lg hover:shadow-blue-500/30 disabled:opacity-50 transition-all shadow-md"
-                 >
-                     {saving ? <><div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full"/> Saving...</> : <><Save size={16}/> Save Changes</>}
-                 </button>
-             )}
-         </div>
-      </div>
-
-      {/* CONTENT */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar bg-white dark:bg-[#0B0D0F]">
-          <div className="mx-auto max-w-[1600px]">
-            <div className="flex flex-col lg:flex-row min-h-[600px]">
-                
-                {/* LEFT: IMAGE STAGE */}
-                <div className="flex-1 bg-gray-50/50 dark:bg-[#121417] p-8 lg:p-12 flex items-start justify-center transition-colors">
-                    <div className="relative rounded-[32px] overflow-hidden shadow-2xl ring-1 ring-black/5 dark:ring-white/10 bg-checkerboard max-w-full">
-                        {asset.mimeType.startsWith('image/') ? <img src={asset.path} alt={asset.originalName} className="max-h-[70vh] w-auto object-contain" /> 
-                        : asset.mimeType.startsWith('video/') ? <video controls src={asset.path} className="max-h-[70vh] w-auto" /> 
-                        : <div className="h-96 w-96 flex flex-col items-center justify-center bg-gray-50 dark:bg-white/5"><FileText size={64} className="text-gray-300 dark:text-gray-600 mb-4"/><span className="text-gray-500 dark:text-gray-400 font-medium">Preview Unavailable</span></div>}
-                        <a href={asset.path} target="_blank" rel="noreferrer" className="absolute bottom-4 right-4 bg-white/90 dark:bg-black/80 p-2.5 rounded-full shadow-lg hover:scale-110 text-gray-700 dark:text-gray-200 backdrop-blur-sm transition-transform"><ExternalLink size={18}/></a>
-                    </div>
-                </div>
-
-                {/* RIGHT: METADATA SIDEBAR */}
-                <div className="w-full lg:w-[450px] border-l border-gray-100 dark:border-white/5 bg-white dark:bg-[#1A1D21] p-8 space-y-8 h-auto lg:min-h-screen transition-colors">
-                    
-                    {/* Description */}
-                    <div>
-                        <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Description</h3>
-                        <textarea
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            disabled={!canEdit}
-                            rows={4}
-                            className={`w-full rounded-2xl border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 p-4 text-sm text-gray-700 dark:text-gray-200 outline-none resize-none transition-all
-                                ${canEdit ? 'focus:border-blue-500 dark:focus:border-blue-500 focus:ring-blue-500' : 'cursor-default opacity-80'}
-                            `}
-                            placeholder={canEdit ? "Add a detailed description..." : "No description provided."}
-                        />
-                    </div>
-
-                    {/* Tags */}
-                    <div>
-                        <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Tags</h3>
-                        <div className="flex flex-wrap gap-2">
-                            {tags.map((tag, idx) => (
-                                <span key={idx} className="group inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 text-xs font-medium hover:bg-gray-200 dark:hover:bg-white/10 transition-colors cursor-default border border-transparent dark:border-white/5">
-                                    #{tag}
-                                    {canEdit && (
-                                        <button onClick={() => removeTag(tag)} className="ml-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">×</button>
-                                    )}
-                                </span>
-                            ))}
-                            {canEdit && (
-                                <input 
-                                    type="text" 
-                                    value={newTag}
-                                    onChange={e => setNewTag(e.target.value)}
-                                    onKeyDown={addTag}
-                                    placeholder="+ Add tag"
-                                    className="inline-flex px-3 py-1 text-xs bg-transparent border-b border-transparent focus:border-blue-500 focus:outline-none placeholder-gray-400 dark:placeholder-gray-600 text-gray-700 dark:text-gray-200 min-w-[60px]"
-                                />
-                            )}
-                        </div>
-                    </div>
-
-                    {/* File Details */}
-                    <div className="bg-gray-50/50 dark:bg-white/5 rounded-2xl p-5 border border-gray-100 dark:border-white/5">
-                        <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">File Details</h3>
-                        <div className="space-y-3">
-                            <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
-                                <span className="flex items-center gap-2"><Cpu size={14}/> File Type</span>
-                                <span className="font-medium uppercase text-gray-900 dark:text-gray-200">{asset.mimeType.split('/')[1]}</span>
-                            </div>
-                            <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
-                                <span className="flex items-center gap-2"><HardDrive size={14}/> Size</span>
-                                <span className="font-medium text-gray-900 dark:text-gray-200">{formatBytes(asset.size)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
-                                <span className="flex items-center gap-2"><Calendar size={14}/> Created</span>
-                                <span className="font-medium text-gray-900 dark:text-gray-200">{new Date(asset.createdAt).toLocaleDateString()}</span>
-                            </div>
-                            <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-white/10 mt-2">
-                                <span className="flex items-center gap-2"><User size={14}/> Uploaded By</span>
-                                <span className="font-medium text-gray-900 dark:text-gray-200">{asset.uploadedBy.name}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* SAVE TO COLLECTION */}
-                    {canAddToCollection && (
-                        <div className="pt-6 border-t border-gray-100 dark:border-white/10">
-                            <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Save to Collection</h3>
-                            <div className="flex gap-2">
-                                <div className="relative flex-1">
-                                    <select 
-                                        className="w-full appearance-none rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-black/20 py-2.5 pl-4 pr-10 text-sm text-gray-700 dark:text-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30 outline-none transition-all"
-                                        value={selectedCollectionId}
-                                        onChange={(e) => setSelectedCollectionId(e.target.value)}
-                                    >
-                                        <option value="" className="text-gray-400">Select collection...</option>
-                                        {collections.map(c => <option key={c.id} value={c.id} className="text-gray-900 dark:text-gray-200">{c.name}</option>)}
-                                    </select>
-                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400">
-                                        <FolderPlus size={16} />
-                                    </div>
-                                </div>
-                                <button onClick={addToCollection} className="bg-gray-900 dark:bg-white dark:text-black text-white px-5 rounded-xl font-bold text-sm hover:bg-black dark:hover:bg-gray-200 transition-colors shadow-sm">
-                                    Add
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* NEW: ADD TO TOPIC (For Admins/Editors) */}
-                    {canCurateTopic && (
-                        <div className="pt-4">
-                            <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Categorize Topic</h3>
-                            <div className="flex gap-2">
-                                <div className="relative flex-1">
-                                    <select 
-                                        className="w-full appearance-none rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-black/20 py-2.5 pl-4 pr-10 text-sm text-gray-700 dark:text-gray-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 dark:focus:ring-purple-900/30 outline-none transition-all"
-                                        value={selectedCategoryId}
-                                        onChange={(e) => setSelectedCategoryId(e.target.value)}
-                                    >
-                                        <option value="" className="text-gray-400">Select Topic...</option>
-                                        <optgroup label="Feature Modules">
-                                            {categories.filter(c => c.group === 'Features').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                        </optgroup>
-                                        <optgroup label="Design Inspiration">
-                                            {categories.filter(c => c.group === 'Inspiration').map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                        </optgroup>
-                                    </select>
-                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400">
-                                        <Tag size={16} />
-                                    </div>
-                                </div>
-                                <button onClick={addToCategory} className="bg-purple-600 text-white px-5 rounded-xl font-bold text-sm hover:bg-purple-700 transition-colors shadow-sm">
-                                    Save
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Delete */}
-                    {canDelete && (
-                        <div className="pt-6 border-t border-gray-100 dark:border-white/10">
-                            <button onClick={() => setIsDeleteModalOpen(true)} className="w-full py-3 rounded-xl border border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 font-medium text-sm hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 hover:border-red-200 dark:hover:border-red-800 transition-all flex items-center justify-center gap-2">
-                                <Trash2 size={16} /> Delete Asset
-                            </button>
-                        </div>
-                    )}
-
-                </div>
-            </div>
-
-            {/* RELATED */}
-            {related.length > 0 && (
-                <div className="border-t border-gray-100 dark:border-white/10 bg-white dark:bg-[#1A1D21] px-6 py-12 md:px-12 transition-colors">
-                    <h2 className="text-center text-xl font-bold text-gray-900 dark:text-white mb-8 flex items-center justify-center gap-2">
-                        <Sparkles size={20} className="text-yellow-400 fill-yellow-400" /> More like this
-                    </h2>
-                    <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-6" columnClassName="pl-6 bg-clip-padding">
-                        {related.map((item) => (
-                            <div key={item.id} className="mb-6 break-inside-avoid rounded-2xl overflow-hidden cursor-pointer group relative shadow-sm border border-gray-100 dark:border-white/5 hover:shadow-xl hover:shadow-blue-500/10 hover:-translate-y-1 transition-all duration-300" onClick={() => { navigate(`/assets/${item.id}`); window.scrollTo(0, 0); }}>
-                                <div className="relative bg-gray-50 dark:bg-white/5 overflow-hidden">
-                                    <AssetThumbnail mimeType={item.mimeType} thumbnailPath={item.thumbnailPath || item.path} className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-105" />
-                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
-                                </div>
-                                <div className="p-3 bg-white dark:bg-[#1A1D21]">
-                                   <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{item.originalName}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </Masonry>
-                </div>
-            )}
+      <div className="bg-white/80 dark:bg-[#1A1D21]/80 backdrop-blur-md border-b border-gray-200 dark:border-white/5 px-6 py-6 sticky top-0 z-30">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+              <button onClick={() => navigate(-1)} className="flex items-center text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors font-medium text-sm">
+                  <ArrowLeft size={18} className="mr-2" /> Back
+              </button>
+              
+              <div className="flex items-center gap-3">
+                  <button onClick={handleDownload} className="flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-black px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:scale-105 transition-transform">
+                      <Download size={16} /> Download
+                  </button>
+                  {canManage && (
+                      <button onClick={() => setShowDeleteConfirm(true)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                          <Trash2 size={20} />
+                      </button>
+                  )}
+              </div>
           </div>
       </div>
 
-      <ConfirmModal 
-        isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
-        onConfirm={confirmDelete}
-        title="Delete Asset"
-        message="Are you sure? This action cannot be undone."
-        confirmText="Yes, Delete"
-        isDangerous={true}
-        isLoading={deleting}
-      />
+      <div className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* LEFT: PREVIEW */}
+          <div className="lg:col-span-2 space-y-12">
+              <div className="rounded-3xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] border border-gray-200 dark:border-white/5 shadow-sm">
+                  {asset.mimeType.startsWith('image/') ? (
+                      <img src={asset.path} alt={asset.originalName} className="w-full h-auto object-contain max-h-[80vh]" />
+                  ) : asset.mimeType.startsWith('video/') ? (
+                      <video src={asset.path} controls className="w-full h-auto max-h-[80vh]" />
+                  ) : (
+                      <div className="h-96 flex flex-col items-center justify-center text-gray-400">
+                          <FileText size={64} />
+                          <p className="mt-4 font-medium">Preview not available</p>
+                      </div>
+                  )}
+              </div>
+
+              {/* Related Assets */}
+              {relatedAssets.length > 0 && (
+                  <div>
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">More Like This</h3>
+                      <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-4" columnClassName="pl-4 bg-clip-padding">
+                          {relatedAssets.map(item => (
+                              <Link to={`/assets/${item.id}`} key={item.id} className="block mb-4 group">
+                                  <div className="rounded-xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] shadow-sm hover:shadow-md transition-all">
+                                      <AssetThumbnail mimeType={item.mimeType} thumbnailPath={item.thumbnailPath || item.path} className="w-full h-auto object-cover group-hover:opacity-90 transition-opacity" />
+                                  </div>
+                              </Link>
+                          ))}
+                      </Masonry>
+                  </div>
+              )}
+          </div>
+
+          {/* RIGHT: INFO PANEL */}
+          <div className="space-y-6">
+              
+              {/* 1. TITLE & RENAME */}
+              <div className="group">
+                  {isRenaming ? (
+                      <div className="flex items-center gap-2">
+                          <input 
+                              type="text" 
+                              value={newName} 
+                              onChange={(e) => setNewName(e.target.value)} 
+                              autoFocus 
+                              className="w-full text-2xl font-bold bg-white dark:bg-[#1A1D21] border-b-2 border-blue-500 outline-none text-gray-900 dark:text-white pb-1"
+                          />
+                          <button onClick={handleRename} className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200"><Check size={18} /></button>
+                          <button onClick={() => setIsRenaming(false)} className="p-2 bg-gray-100 dark:bg-white/10 text-gray-500 rounded-lg hover:bg-gray-200"><X size={18} /></button>
+                      </div>
+                  ) : (
+                      <div className="flex items-start justify-between">
+                          <h1 className="text-2xl font-bold text-gray-900 dark:text-white break-words leading-tight">
+                              {asset.originalName}
+                          </h1>
+                          {canManage && (
+                              <button onClick={() => setIsRenaming(true)} className="ml-2 p-1.5 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Rename Asset">
+                                  <Edit2 size={16} />
+                              </button>
+                          )}
+                      </div>
+                  )}
+                  
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-gray-400 font-medium mt-2">
+                      <span className="flex items-center gap-1.5"><Calendar size={14}/> {new Date(asset.createdAt).toLocaleDateString()}</span>
+                      <span className="flex items-center gap-1.5"><HardDrive size={14}/> {(asset.size / 1024 / 1024).toFixed(2)} MB</span>
+                      <span className="uppercase bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded text-[10px] tracking-wide">{asset.mimeType.split('/')[1]}</span>
+                  </div>
+
+                  {/* ✅ ASSET OWNER */}
+                  <div className="flex items-center gap-2 mt-4 text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center text-[10px] text-white font-bold shadow-sm">
+                          {asset.uploadedBy?.name?.charAt(0).toUpperCase() || 'U'}
+                      </div>
+                      <span>
+                          Uploaded by <span className="text-gray-900 dark:text-white font-bold">{asset.uploadedBy?.name || 'Unknown'}</span>
+                      </span>
+                  </div>
+              </div>
+
+              <hr className="border-gray-200 dark:border-white/10" />
+
+              {/* 2. ACTION BUTTONS (Modals) */}
+              <div className="grid grid-cols-2 gap-3 relative z-20">
+                  <button onClick={() => openSelectionModal('collection')} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 hover:border-blue-500 dark:hover:border-blue-400 bg-white dark:bg-[#1A1D21] text-gray-700 dark:text-gray-200 font-bold text-sm transition-all shadow-sm active:scale-95">
+                      <FolderPlus size={18} className="text-blue-500" /> Collection
+                  </button>
+                  <button onClick={() => openSelectionModal('topic')} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 hover:border-purple-500 dark:hover:border-purple-400 bg-white dark:bg-[#1A1D21] text-gray-700 dark:text-gray-200 font-bold text-sm transition-all shadow-sm active:scale-95">
+                      <Layout size={18} className="text-purple-500" /> Topic
+                  </button>
+              </div>
+
+              {/* 3. GOOGLE DRIVE LINK */}
+              <div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl p-5 border border-blue-100 dark:border-blue-800/30">
+                  <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-bold text-gray-800 dark:text-blue-100 flex items-center gap-2">
+                          <ExternalLink size={16} /> Source Link
+                      </h3>
+                      {canManage && (
+                          <button onClick={() => setIsEditingLink(!isEditingLink)} className="text-xs font-bold text-blue-600 hover:underline">
+                              {isEditingLink ? 'Cancel' : 'Edit'}
+                          </button>
+                      )}
+                  </div>
+
+                  {isEditingLink ? (
+                      <div className="flex gap-2">
+                          <input type="url" value={driveLink} onChange={e => setDriveLink(e.target.value)} placeholder="Paste link..." className="flex-1 text-sm bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" />
+                          <button onClick={saveDriveLink} disabled={isSavingLink} className="bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-50"><Check size={16} /></button>
+                      </div>
+                  ) : parsedAi.externalLink ? (
+                      <a href={parsedAi.externalLink} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500 text-gray-700 dark:text-gray-200 font-semibold py-3 rounded-xl shadow-sm transition-all hover:shadow-md group">
+                          <LinkIcon size={16} className="text-blue-500 group-hover:rotate-45 transition-transform" /> Open in Drive
+                      </a>
+                  ) : (
+                      <p className="text-xs text-gray-400 italic">No external link added.</p>
+                  )}
+              </div>
+
+              {/* 4. DESCRIPTION & TAGS */}
+              <div>
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</h3>
+                  <CollapsibleText text={parsedAi.description || parsedAi.summary || ""} />
+              </div>
+
+              <div>
+                  <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tags</h3>
+                      {canManage && !isAddingTag && (
+                          <button onClick={() => setIsAddingTag(true)} className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-white/5 p-1 rounded transition-colors"><Plus size={14} /></button>
+                      )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                      {parsedAi.tags && parsedAi.tags.map((tag: string) => (
+                          <span key={tag} className="group flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-full border border-gray-200 dark:border-white/5">
+                              <Hash size={10} className="opacity-50" /> {tag}
+                              {canManage && (
+                                  <button onClick={() => handleRemoveTag(tag)} className="ml-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
+                              )}
+                          </span>
+                      ))}
+                      {isAddingTag && (
+                          <form onSubmit={handleAddTag} className="flex items-center">
+                              <input autoFocus type="text" value={newTag} onChange={e => setNewTag(e.target.value)} onBlur={() => setIsAddingTag(false)} className="text-xs bg-white dark:bg-black/20 border border-blue-500 rounded-full px-2 py-1 outline-none w-24" placeholder="New tag..." />
+                          </form>
+                      )}
+                  </div>
+              </div>
+
+          </div>
+      </div>
+
+      {/* SELECTION MODAL */}
+      {activeModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setActiveModal(null)} />
+              <div className="relative bg-white dark:bg-[#1A1D21] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] animate-in zoom-in-95">
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-white/5">
+                      <h3 className="font-bold text-gray-900 dark:text-white">Select {activeModal === 'collection' ? 'Collection' : 'Topic'}</h3>
+                      <button onClick={() => setActiveModal(null)} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={20} /></button>
+                  </div>
+                  <div className="px-6 py-2">
+                      <div className="flex items-center gap-2 bg-gray-50 dark:bg-black/20 rounded-xl px-3 py-2 border border-gray-100 dark:border-white/5">
+                          <Search size={16} className="text-gray-400" />
+                          <input type="text" placeholder="Search..." value={modalSearch} onChange={(e) => setModalSearch(e.target.value)} autoFocus className="bg-transparent border-none outline-none text-sm w-full text-gray-800 dark:text-gray-200 placeholder-gray-400" />
+                      </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                      {activeModal === 'collection' ? (
+                          filteredCollections.length > 0 ? filteredCollections.map(c => (
+                              <button key={c.id} onClick={() => addToCollection(c.id, c.name)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 text-left transition-colors group">
+                                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg"><FolderPlus size={18} /></div>
+                                  <span className="font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-700 dark:group-hover:text-blue-300">{c.name}</span>
+                              </button>
+                          )) : <div className="p-6 text-center text-gray-400 text-sm">No collections found</div>
+                      ) : (
+                          filteredCategories.length > 0 ? filteredCategories.map(c => (
+                              <button key={c.id} onClick={() => addToTopic(c.id, c.name)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/20 text-left transition-colors group">
+                                  <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg"><Layout size={18} /></div>
+                                  <span className="font-medium text-gray-700 dark:text-gray-200 group-hover:text-purple-700 dark:group-hover:text-purple-300">{c.name}</span>
+                              </button>
+                          )) : <div className="p-6 text-center text-gray-400 text-sm">No topics found</div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
+
+      <ConfirmModal isOpen={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} onConfirm={handleDelete} title="Delete Asset" message="This action cannot be undone." confirmText="Delete Forever" isDangerous={true} isLoading={isDeleting} />
     </div>
   );
 };

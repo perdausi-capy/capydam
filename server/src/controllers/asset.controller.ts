@@ -38,14 +38,27 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
     return;
   }
 
-  const { filename, path: tempPath, originalname, mimetype, size } = multerReq.file;
+  const { filename, path: tempPath, originalname: multerOriginalName, mimetype, size } = multerReq.file;
   
   try {
     const userId = multerReq.user?.id;
     const creativity = parseFloat(req.body.creativity || '0.2'); 
     const specificity = req.body.specificity || 'general';
 
-    // 1. Generate Thumbnails (Locally)
+    // 1. Capture User Inputs (Name & Link)
+    const finalOriginalName = req.body.originalName || multerOriginalName;
+    
+    let initialAiData = {};
+    if (req.body.aiData) {
+        try {
+            // This contains { "externalLink": "..." } from the frontend
+            initialAiData = JSON.parse(req.body.aiData); 
+        } catch (e) {
+            console.warn("Could not parse frontend aiData");
+        }
+    }
+
+    // 2. Generate Thumbnails (Locally)
     const thumbnailDir = path.join(__dirname, '../../uploads/thumbnails');
     await fs.ensureDir(thumbnailDir);
     
@@ -66,19 +79,19 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
       thumbnailRelativePath = null;
     }
 
-    // 2. Upload ORIGINAL to Supabase
+    // 3. Upload ORIGINAL to Supabase
     const cloudOriginalPath = await uploadToSupabase(
       tempPath, 
       `originals/${filename}`, 
       mimetype
     );
 
-    // 3. Upload THUMBNAIL to Supabase
+    // 4. Upload THUMBNAIL to Supabase
     let cloudThumbnailPath = null;
     if (thumbnailRelativePath) {
        const localThumbPath = path.join(__dirname, '../../uploads/', thumbnailRelativePath);
        
-       // Handle WebP thumbnails (created for GIFs)
+       // Detect if it's WebP (for GIFs) or JPEG
        const isWebP = thumbnailRelativePath.endsWith('.webp');
        
        cloudThumbnailPath = await uploadToSupabase(
@@ -88,29 +101,28 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
        );
        await fs.remove(localThumbPath);
     }
-
-    // 4. Save to Database
+    
+    // 5. Initial Save to Database
+    // We save the user's link here immediately.
     const asset = await prisma.asset.create({
       data: {
         filename,
-        originalName: originalname,
+        originalName: finalOriginalName,
         mimeType: mimetype,
         size,
         path: cloudOriginalPath,
         thumbnailPath: cloudThumbnailPath,
-        userId: userId,
-        aiData: JSON.stringify({}), 
+        userId: userId!, 
+        aiData: JSON.stringify(initialAiData), // ✅ Stores { externalLink: ... }
       },
     });
 
-    // 5. Trigger AI (SYNCHRONOUS WAIT)
-    // We wait here so the user doesn't get redirected until tags are ready.
+    // 6. Trigger AI Analysis (Synchronous Wait)
     const aiOptions = { creativity, specificity };
     
     try {
         console.log(`🤖 Starting AI Analysis for ${asset.id} (${mimetype})...`);
         
-        // GIF Routing Logic
         if (mimetype === 'image/gif') {
             await analyzeAudioVideo(asset.id, tempPath, aiOptions);
         } 
@@ -127,21 +139,45 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
         
     } catch (err) {
         console.error("AI Analysis Warning (continuing):", err);
-        // We catch here so the upload still succeeds even if AI fails
     } finally {
-        // Safe Cleanup: Add slight delay for FFmpeg file locks on Windows
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Cleanup temp file
+        await new Promise(resolve => setTimeout(resolve, 500)); // Delay for file locks
         console.log(`🧹 Cleaning up temp file: ${tempPath}`);
         await fs.remove(tempPath).catch(e => console.error("Cleanup error:", e));
     }
 
-    // 6. Return Success (Only AFTER AI is done)
+    // 7. SAFETY RESTORE: Ensure the Link persists
+    // The AI process above might have done `prisma.asset.update` with new tags,
+    // potentially overwriting our `aiData` JSON. We must check and merge.
+    
+    let finalAsset = await prisma.asset.findUnique({ where: { id: asset.id } });
+
+    // Only run this merge logic if the user actually provided a link
+    if (req.body.aiData && finalAsset) {
+        const currentAiData = finalAsset.aiData ? JSON.parse(finalAsset.aiData) : {};
+        
+        // Merge: Keep the new AI tags + Force the User Link back in
+        const mergedAiData = {
+            ...currentAiData,
+            ...initialAiData // This ensures { externalLink: "..." } wins
+        };
+
+        // Write the merged data back to DB
+        finalAsset = await prisma.asset.update({
+            where: { id: asset.id },
+            data: { aiData: JSON.stringify(mergedAiData) }
+        });
+        console.log("🔗 User Link restored/merged into AI Data.");
+    }
+
+    // 8. Return Success
     res.status(201).json({
       message: 'Asset uploaded and analyzed successfully',
-      asset,
+      asset: finalAsset || asset,
     });
 
   } catch (error) {
+    // Cleanup if critical error
     if (await fs.pathExists(tempPath)) {
         await fs.remove(tempPath).catch(() => {});
     }
@@ -440,42 +476,3 @@ export const deleteAsset = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// 7. UPDATE CATEGORY (Rename or Change Cover)
-export const updateCategory = async (req: Request, res: Response): Promise<void> => {
-  const multerReq = req as MulterRequest;
-  const { id } = req.params;
-  const { name, group } = req.body;
-
-  try {
-    let coverImagePath = undefined;
-
-    // Handle File Upload if present
-    if (multerReq.file) {
-        const { path: tempPath, filename, mimetype } = multerReq.file;
-        
-        // Upload to Supabase (Categories folder)
-        coverImagePath = await uploadToSupabase(
-            tempPath,
-            `categories/${filename}`,
-            mimetype
-        );
-        
-        // Cleanup local file
-        await fs.remove(tempPath);
-    }
-
-    const category = await prisma.category.update({
-      where: { id },
-      data: {
-        ...(name && { name }),
-        ...(group && { group }),
-        ...(coverImagePath && { coverImage: coverImagePath }) // Only update if new file
-      }
-    });
-
-    res.json(category);
-  } catch (error) {
-    console.error("Update Category Error:", error);
-    res.status(500).json({ message: 'Failed to update category' });
-  }
-};

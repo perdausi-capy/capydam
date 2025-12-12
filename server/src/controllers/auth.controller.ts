@@ -105,3 +105,38 @@ export const rejectUser = async (req: Request, res: Response): Promise<void> => 
     res.status(500).json({ message: 'Error rejecting user' });
   }
 };
+
+// ✅ NEW: SSO Callback Handler
+export const googleCallback = (req: Request, res: Response) => {
+  // Passport puts the user in req.user
+  const user = req.user as any;
+
+  if (!user) {
+    return res.redirect('http://localhost:5173/login?error=Unauthorized');
+  }
+
+  // Generate JWT (Same logic as your normal login)
+  const token = jwt.sign(
+    { id: user.id, email: user.email, role: user.role },
+    process.env.JWT_SECRET || 'secret',
+    { expiresIn: '7d' }
+  );
+
+  // Redirect back to Frontend with Token
+  // Note: In production, consider using HttpOnly cookies for better security
+  res.redirect(`http://localhost:5173/login?token=${token}`);
+};
+
+export const getMe = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    
+    // Exclude password
+    const { password, ...userWithoutPassword } = user;
+    res.json(userWithoutPassword);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
