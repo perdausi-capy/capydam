@@ -31,7 +31,7 @@ interface Collection {
 const Collections = () => {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
+//   const { user } = useAuth();
   
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);

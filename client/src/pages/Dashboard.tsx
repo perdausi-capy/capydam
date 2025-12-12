@@ -6,7 +6,7 @@ import Masonry from 'react-masonry-css';
 import AssetThumbnail from '../components/AssetThumbnail';
 import DashboardHeader, { type FilterType } from '../components/DashboardHeader';
 import { toast } from 'react-toastify';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Download, FolderPlus, Plus } from 'lucide-react';
 // import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
