@@ -153,7 +153,7 @@ const Login = () => {
 
                 </div>
                 
-                <span className="font-semibold text-white/90 group-hover:text-black transition-colors duration-300">Log in with CapyTech</span>
+                <span className="font-semibold text-white/90 group-hover:text-black transition-colors duration-300">Log in with Capytech</span>
             </button>
 
             <div className="relative flex items-center py-6">
