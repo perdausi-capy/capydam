@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173'; // ✅ Defaults to local if missing
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -25,11 +26,11 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         email,
         password: hashedPassword,
         name,
-        role: role || 'viewer', // Default to viewer if not specified
+        role: role || 'viewer', 
+        status: 'PENDING', // Recommended: Default new registrations to PENDING
       },
     });
 
-    // 4. Return success (exclude password)
     res.status(201).json({
       message: 'User created successfully',
       user: { id: user.id, email: user.email, role: user.role },
@@ -49,12 +50,19 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // --- NEW CHECK ---
+    // --- CHECK STATUS ---
     if (user.status === 'PENDING') {
       res.status(403).json({ message: 'Account pending approval by Admin.' });
       return;
     }
-    // -----------------
+
+    // --- 🛡️ SSO SAFETY CHECK ---
+    // If user registered via SSO, they won't have a password. 
+    // This prevents bcrypt from crashing on null.
+    if (!user.password) {
+        res.status(400).json({ message: 'Please login with Google/SSO.' });
+        return;
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
@@ -62,7 +70,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET || 'secret', { expiresIn: '1d' });
+    const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '1d' });
 
     res.json({
       message: 'Login successful',
@@ -78,7 +86,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 export const approveUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { role } = req.body; // Admin selects role here
+    const { role } = req.body; 
 
     await prisma.user.update({
       where: { id },
@@ -98,7 +106,6 @@ export const approveUser = async (req: Request, res: Response): Promise<void> =>
 export const rejectUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    // We simply delete the user request
     await prisma.user.delete({ where: { id } });
     res.json({ message: 'User request rejected and removed' });
   } catch (error) {
@@ -106,25 +113,23 @@ export const rejectUser = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-// ✅ NEW: SSO Callback Handler
+// ✅ SSO Callback Handler (Updated for Prod)
 export const googleCallback = (req: Request, res: Response) => {
-  // Passport puts the user in req.user
   const user = req.user as any;
 
   if (!user) {
-    return res.redirect('http://localhost:5173/login?error=Unauthorized');
+    // Redirect to the Dynamic Client URL
+    return res.redirect(`${CLIENT_URL}/login?error=Unauthorized`);
   }
 
-  // Generate JWT (Same logic as your normal login)
   const token = jwt.sign(
     { id: user.id, email: user.email, role: user.role },
-    process.env.JWT_SECRET || 'secret',
+    JWT_SECRET,
     { expiresIn: '7d' }
   );
 
-  // Redirect back to Frontend with Token
-  // Note: In production, consider using HttpOnly cookies for better security
-  res.redirect(`http://65.109.234.134/login?token=${token}`);
+  // ✅ Redirect to Dynamic Client URL
+  res.redirect(`${CLIENT_URL}/login?token=${token}`);
 };
 
 export const getMe = async (req: Request, res: Response) => {
@@ -133,7 +138,7 @@ export const getMe = async (req: Request, res: Response) => {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return res.status(404).json({ message: 'User not found' });
     
-    // Exclude password
+    // Handle user with no password (SSO) safely
     const { password, ...userWithoutPassword } = user;
     res.json(userWithoutPassword);
   } catch (error) {
