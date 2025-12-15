@@ -137,33 +137,47 @@ const Categories = () => {
 
   // --- CARD COMPONENT (With Glitch Fix) ---
   const CategoryCard = ({ cat, icon: Icon, colorClass }: { cat: Category, icon: any, colorClass: string }) => (
-    <div className="group relative flex flex-col rounded-3xl border border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] shadow-sm hover:shadow-xl hover:shadow-blue-500/10 hover:-translate-y-1 transition-all duration-300 overflow-hidden h-64">
-        <Link to={`/categories/${cat.id}`} className="flex-1 flex flex-col">
-            {/* Cover Area - Optimized to prevent glitching */}
-            <div 
-                className={`relative flex-1 w-full overflow-hidden ${colorClass} flex items-center justify-center isolation-isolate`}
-                style={{ WebkitMaskImage: '-webkit-radial-gradient(white, black)' }}
-            >
+    <div className="group relative flex flex-col rounded-3xl border border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-300 overflow-hidden h-64">
+        
+        {/* Link covers the whole card */}
+        <Link to={`/categories/${cat.id}`} className="flex-1 flex flex-col h-full z-0">
+            
+            {/* COVER AREA */}
+            <div className={`relative flex-1 w-full overflow-hidden ${colorClass} flex items-center justify-center`}>
                 {cat.coverImage ? (
                     <>
-                        <img src={cat.coverImage} alt={cat.name} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 transform-gpu will-change-transform" />
-                        <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
+                        <img 
+                            src={cat.coverImage} 
+                            alt={cat.name} 
+                            // ✅ PERFORMANCE OPTIMIZATION FOR GIFs:
+                            // 1. decoding="async": Decodes frames off the main thread (stops scroll lag)
+                            // 2. translateZ(0): Promotes to GPU layer without the memory cost of 'will-change'
+                            // 3. object-cover: Ensures it fills the box
+                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                            style={{ transform: 'translateZ(0)' }} 
+                            loading="lazy"
+                            decoding="async"
+                        />
+                        {/* Dark Overlay (Static, cheap to render) */}
+                        <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors duration-300" />
                     </>
                 ) : (
+                    // Fallback Icon
                     <div className="p-4 rounded-2xl bg-white/20 dark:bg-black/10 backdrop-blur-sm shadow-inner relative z-10">
                         <Icon size={40} className="text-white drop-shadow-sm" />
                     </div>
                 )}
                 
+                {/* Count Badge */}
                 <div className="absolute top-4 right-4 rounded-full bg-white/90 dark:bg-black/60 px-3 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 shadow-sm backdrop-blur-md border border-transparent dark:border-white/10 z-10">
                     {cat._count.assets}
                 </div>
             </div>
 
-            {/* Footer */}
-            <div className="flex items-center justify-between p-5 bg-white dark:bg-[#1A1D21] border-t border-gray-50 dark:border-white/5 relative z-10">
-                <div>
-                    <h3 className="font-bold text-gray-900 dark:text-white text-lg leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate max-w-[180px]">
+            {/* FOOTER */}
+            <div className="relative z-10 flex items-center justify-between p-5 bg-white dark:bg-[#1A1D21] border-t border-gray-50 dark:border-white/5">
+                <div className="min-w-0 pr-2">
+                    <h3 className="font-bold text-gray-900 dark:text-white text-lg leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
                         {cat.name}
                     </h3>
                     <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-gray-400 font-medium">
@@ -171,18 +185,30 @@ const Categories = () => {
                     </div>
                 </div>
                 
-                <div className="h-8 w-8 rounded-full bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-600 dark:group-hover:bg-blue-900/20 dark:group-hover:text-blue-400 transition-colors">
+                <div className="h-8 w-8 shrink-0 rounded-full bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 dark:group-hover:bg-indigo-900/20 dark:group-hover:text-indigo-400 transition-colors">
                     <MoreVertical size={16} />
                 </div>
             </div>
         </Link>
 
-        {/* ACTIONS */}
+        {/* ACTIONS (Edit/Delete) */}
         {canManage && (
-            <>
-                <button onClick={(e) => openEdit(e, cat)} className="absolute top-3 left-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 dark:bg-black/80 text-gray-600 dark:text-gray-300 shadow-md backdrop-blur-sm opacity-0 transform scale-90 transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 z-20" title="Edit Topic"><Edit2 size={14} /></button>
-                <button onClick={(e) => { e.preventDefault(); setDeleteId(cat.id); }} className="absolute top-3 left-12 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 dark:bg-black/80 text-gray-400 dark:text-gray-400 shadow-md backdrop-blur-sm opacity-0 transform scale-90 transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-600 z-20 delay-75" title="Delete Topic"><Trash2 size={14} /></button>
-            </>
+            <div className="absolute top-3 left-3 flex gap-2 opacity-0 transform scale-90 transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 z-20">
+                <button 
+                    onClick={(e) => openEdit(e, cat)} 
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 dark:bg-black/80 text-gray-600 dark:text-gray-300 shadow-md backdrop-blur-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 transition-colors" 
+                    title="Edit"
+                >
+                    <Edit2 size={14} />
+                </button>
+                <button 
+                    onClick={(e) => { e.preventDefault(); setDeleteId(cat.id); }} 
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 dark:bg-black/80 text-gray-400 dark:text-gray-400 shadow-md backdrop-blur-sm hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-600 transition-colors" 
+                    title="Delete"
+                >
+                    <Trash2 size={14} />
+                </button>
+            </div>
         )}
     </div>
   );

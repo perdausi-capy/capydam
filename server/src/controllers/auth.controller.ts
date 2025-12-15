@@ -124,7 +124,7 @@ export const googleCallback = (req: Request, res: Response) => {
 
   // Redirect back to Frontend with Token
   // Note: In production, consider using HttpOnly cookies for better security
-  res.redirect(`http://localhost:5173/login?token=${token}`);
+  res.redirect(`http://65.109.234.134/login?token=${token}`);
 };
 
 export const getMe = async (req: Request, res: Response) => {
