@@ -4,7 +4,6 @@ import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import logoIcon from '../assets/capytech-fav.png';
 import { Loader2 } from 'lucide-react';
-// ✅ Import the animation and AnimatePresence
 import PortalTransition from '../components/PortalTransition';
 import { AnimatePresence } from 'framer-motion';
 
@@ -16,7 +15,6 @@ const Login = () => {
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   
-  // ✅ New state to trigger the animation
   const [showPortal, setShowPortal] = useState(false);
 
   const { login } = useAuth();
@@ -25,12 +23,10 @@ const Login = () => {
 
   // Helper to handle successful login sequence
   const handleLoginSuccess = (token: string, user: any) => {
-    // Prevent double trigger if already showing portal
     if (showPortal) return; 
-
     login(token, user);
     setShowPortal(true);
-};
+  };
 
   // --- 1. HANDLE SSO REDIRECT ---
   useEffect(() => {
@@ -40,9 +36,9 @@ const Login = () => {
     if (token && !showPortal) {
         const fetchUserAndLogin = async () => {
             try {
+                // Set token for this request
                 client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
                 const { data: user } = await client.get('/auth/me');
-                // ✅ Use the helper
                 handleLoginSuccess(token, user);
             } catch (err) {
                 setError("Failed to verify SSO token");
@@ -54,11 +50,14 @@ const Login = () => {
     if (errorMsg) {
         setError(decodeURIComponent(errorMsg));
     }
-  }, [searchParams, login]); // Removed navigate from dependency
+  }, [searchParams, login]); 
 
-  // --- 2. TRIGGER SSO ---
+  // --- 2. TRIGGER SSO (DYNAMIC URL FIX) ---
   const handleSSOLogin = () => {
-      window.location.href = 'http://localhost:5000/api/auth/google';
+      // ✅ FIX: Use the Environment Variable instead of hardcoded localhost
+      // This ensures it works on Production (https://your-domain.com/api) AND Local
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      window.location.href = `${apiUrl}/auth/google`;
   };
 
   // --- 3. NORMAL LOGIN ---
@@ -73,20 +72,18 @@ const Login = () => {
         password,
         keepLoggedIn,
       });
-      // ✅ Use the helper
       handleLoginSuccess(data.token, data.user);
       
     } catch (err: any) {
       setError(err.response?.data?.message || 'Login failed');
       setIsLoading(false);
     } 
-    // Note: We don't set isLoading(false) on success, so the form stays disabled during animation
   };
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-[#1A1D21] via-[#2A5691] to-[#1A1D21]">
       
-      {/* ✅ The Portal Animation Overlay */}
+      {/* Portal Animation Overlay */}
       <AnimatePresence>
         {showPortal && (
             <PortalTransition onComplete={() => navigate('/')} />
@@ -133,7 +130,6 @@ const Login = () => {
             >
                 {/* Icon Container */}
                 <div className="relative h-6 w-6 flex items-center justify-center">
-                    
                     {/* 1. Google Icon */}
                     <div className="absolute inset-0 flex items-center justify-center transition-all duration-500 ease-out group-hover:opacity-0 group-hover:rotate-180 group-hover:scale-50">
                         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white p-0.5 shadow-sm">
@@ -150,7 +146,6 @@ const Login = () => {
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 scale-50 rotate-[-180deg] transition-all duration-500 ease-out group-hover:opacity-100 group-hover:scale-125 group-hover:rotate-0">
                         <img src={logoIcon} alt="CapyTech" className="h-full w-full object-contain drop-shadow-md" />
                     </div>
-
                 </div>
                 
                 <span className="font-semibold text-white/90 group-hover:text-black transition-colors duration-300">Log in with Capytech</span>
@@ -164,7 +159,6 @@ const Login = () => {
 
             {/* EMAIL FORM */}
             <form className="space-y-5" onSubmit={handleSubmit}>
-              {/* ... (Email and Password fields - no changes here) ... */}
               <div>
                 <label htmlFor="email" className="mb-2 block text-sm font-semibold text-white/90">Email Address</label>
                 <div className={`relative transition-all duration-300 ${focusedField === 'email' ? 'scale-[1.01]' : ''}`}>
