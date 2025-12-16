@@ -537,3 +537,6 @@
 [2025-12-16T03:33:54.081Z] ID 1021: File not found on disk
 [2025-12-16T03:33:54.081Z] ID 1022: File not found on disk
 [2025-12-16T03:33:54.082Z] ID 1026: File not found on disk
+[2025-12-16T05:29:09.883Z] ID -1: No file extension in DB
+[2025-12-16T05:56:48.867Z] ID 1297: The object exceeded the maximum allowed size
+[2025-12-16T06:07:28.454Z] ID 1561: The object exceeded the maximum allowed size

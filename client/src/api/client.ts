@@ -1,23 +1,24 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.PROD 
-  ? '/api' 
-  : 'http://localhost:5000/api';
+// ✅ CORRECT LOGIC:
+// Use the environment variable if it exists.
+// Fallback to localhost only if the variable is missing (dev mode).
+const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const client = axios.create({
   baseURL,
+  withCredentials: true, // Important for CORS cookies if you use them
 });
 
-// ✅ THIS IS THE CRITICAL PART FOR FIXING 401 ERRORS
+// ... keep the rest of your interceptors below ...
 client.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token'); // Grab token from storage
+  const token = localStorage.getItem('token'); 
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`; // Attach to header
+    config.headers.Authorization = `Bearer ${token}`; 
   }
   return config;
 });
 
-// Handle Logout on Error
 client.interceptors.response.use(
   (response) => response,
   (error) => {
