@@ -159,27 +159,58 @@ const trackAssetClick = async (req, res) => {
     }
 };
 exports.trackAssetClick = trackAssetClick;
-// --- GET ASSETS (Search Engine V2.5) ---
+// --- GET ASSETS (Search Engine V3.0 - Fixed) ---
 const getAssets = async (req, res) => {
     try {
         const { search, type, color } = req.query;
         const cleanSearch = String(search || '').trim().toLowerCase();
+        // --- MODE A: BROWSE (No Text Search) ---
+        // This runs when you just load the dashboard. Fast & Accurate.
+        if (!cleanSearch) {
+            const whereClause = {};
+            // 1. Filter by Type
+            if (type && type !== 'all') {
+                if (type === 'image')
+                    whereClause.mimeType = { startsWith: 'image/' };
+                else if (type === 'video')
+                    whereClause.mimeType = { startsWith: 'video/' };
+                else if (type === 'document')
+                    whereClause.mimeType = 'application/pdf';
+            }
+            // 2. Filter by Color
+            if (color) {
+                whereClause.aiData = { contains: String(color), mode: 'insensitive' };
+            }
+            const assets = await prisma_1.prisma.asset.findMany({
+                where: whereClause,
+                orderBy: { createdAt: 'desc' },
+                take: 2000, // ✅ LIMIT INCREASED to 2000 (effectively "all")
+                include: { uploadedBy: { select: { name: true } } }
+            });
+            // 3. SERVER-SIDE THUMBNAIL FIX
+            // If thumbnail is missing, use the original path
+            const fixedAssets = assets.map(asset => ({
+                ...asset,
+                thumbnailPath: asset.thumbnailPath || asset.path
+            }));
+            res.json(fixedAssets);
+            return;
+        }
+        // --- MODE B: SEARCH (Text Query Active) ---
         const scoredMap = new Map();
         // 1. SMART EXPANSION
         let searchTerms = [];
-        if (cleanSearch) {
-            const stemmer = natural_1.default.PorterStemmer;
-            const stem = stemmer.stem(cleanSearch);
-            const shouldExpand = cleanSearch.length > 2 && cleanSearch.length < 6 && !cleanSearch.includes(' ');
-            if (shouldExpand) {
-                const expanded = await (0, ai_service_1.expandQuery)(cleanSearch);
-                searchTerms = [...new Set([cleanSearch, stem, ...expanded])];
-            }
-            else {
-                searchTerms = [cleanSearch, stem];
-            }
+        const stemmer = natural_1.default.PorterStemmer;
+        const stem = stemmer.stem(cleanSearch);
+        const shouldExpand = cleanSearch.length > 2 && cleanSearch.length < 6 && !cleanSearch.includes(' ');
+        if (shouldExpand) {
+            const expanded = await (0, ai_service_1.expandQuery)(cleanSearch);
+            searchTerms = [...new Set([cleanSearch, stem, ...expanded])];
         }
-        // 2. VECTOR SEARCH
+        else {
+            searchTerms = [cleanSearch, stem];
+        }
+        // 2. VECTOR SEARCH (Semantic)
         if (cleanSearch.length > 2) {
             try {
                 const embedding = await (0, ai_service_1.generateEmbedding)(cleanSearch);
@@ -193,7 +224,7 @@ const getAssets = async (req, res) => {
             ${color ? client_1.Prisma.sql `AND "aiData" ILIKE ${'%' + color + '%'}` : client_1.Prisma.empty}
             AND embedding IS NOT NULL
             ORDER BY distance ASC
-            LIMIT 50;
+            LIMIT 100; -- Vector search can keep a limit as it's sorted by relevance
           `;
                     if (rawVectorAssets.length > 0) {
                         const ids = rawVectorAssets.map(a => a.id);
@@ -204,7 +235,7 @@ const getAssets = async (req, res) => {
                         vectorAssets.forEach(asset => {
                             const match = rawVectorAssets.find(r => r.id === asset.id);
                             const distance = match?.distance || 1;
-                            if (distance < 0.40) {
+                            if (distance < 0.45) { // Slightly looser threshold
                                 const semanticScore = 50 * Math.exp(-5 * distance);
                                 scoredMap.set(asset.id, { asset, score: semanticScore, debug: `Vector (${distance.toFixed(3)})` });
                             }
@@ -216,7 +247,7 @@ const getAssets = async (req, res) => {
                 console.warn("Vector search failed", err);
             }
         }
-        // 3. KEYWORD SEARCH
+        // 3. KEYWORD SEARCH (Exact Match)
         const keywordWhere = { AND: [] };
         if (type && type !== 'all') {
             if (type === 'image')
@@ -240,9 +271,9 @@ const getAssets = async (req, res) => {
         const keywordAssets = await prisma_1.prisma.asset.findMany({
             where: keywordWhere,
             include: { uploadedBy: { select: { name: true } } },
-            take: 100,
+            take: 500, // ✅ INCREASED LIMIT for keyword matches
         });
-        // 4. SCORING
+        // 4. SCORING MERGE
         keywordAssets.forEach(asset => {
             let score = 0;
             const lowerName = asset.originalName.toLowerCase();
@@ -286,10 +317,11 @@ const getAssets = async (req, res) => {
                 }
             });
         }
-        // 6. SORT & RETURN
+        // 6. SORT, FALLBACK & RETURN
         let finalResults = Array.from(scoredMap.values())
             .sort((a, b) => b.score - a.score)
             .map(item => item.asset);
+        // Logging
         if (cleanSearch) {
             await prisma_1.prisma.searchLog.create({
                 data: {
@@ -299,16 +331,27 @@ const getAssets = async (req, res) => {
                 }
             }).catch(e => { });
         }
-        if (finalResults.length === 0 && cleanSearch) {
+        // Fallback if no results found for search
+        if (finalResults.length === 0) {
             const fallbackAssets = await prisma_1.prisma.asset.findMany({
                 orderBy: { createdAt: 'desc' },
                 take: 20,
                 include: { uploadedBy: { select: { name: true } } }
             });
-            res.json({ results: fallbackAssets, isFallback: true });
+            // Patch Fallback Thumbnails too
+            const fixedFallback = fallbackAssets.map(asset => ({
+                ...asset,
+                thumbnailPath: asset.thumbnailPath || asset.path
+            }));
+            res.json({ results: fixedFallback, isFallback: true });
             return;
         }
-        res.json(finalResults);
+        // ✅ FINAL THUMBNAIL PATCH (Search Mode)
+        const fixedResults = finalResults.map(asset => ({
+            ...asset,
+            thumbnailPath: asset.thumbnailPath || asset.path
+        }));
+        res.json(fixedResults);
     }
     catch (error) {
         console.error(error);
