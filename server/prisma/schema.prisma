@@ -18,16 +18,20 @@ datasource db {
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
-  password  String   // Hashed
+  // ⚠️ CHANGE: Make password optional for SSO
+  password  String?  
+  // ✅ NEW: Track how they signed in ('google', 'email', 'legacy_import')
+  provider  String   @default("email") 
+  
   name      String?
-  role      String   @default("viewer") // admin, editor, viewer
-  status    String   @default("PENDING") // PENDING, ACTIVE
+  role      String   @default("viewer") 
+  status    String   @default("PENDING") 
   avatar    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
   collections Collection[]
-  assets    Asset[]  // Relation: User uploaded these
+  assets      Asset[] 
 }
 
 
@@ -59,26 +63,23 @@ model Asset {
   size          Int
   
   categories AssetOnCategory[]
-  // Storage Paths (Abstracted so they work for Local or S3)
-  path          String   
+  path          String    
   thumbnailPath String?
 
-  // AI Metadata
-  // We store tags/colors/descriptions as JSON so we can evolve the AI structure easily
-  aiData        String?  // Stored as JSON string in SQLite (Native JSON in Postgres)
+  // ✅ NEW: Add fields for ResourceSpace Metadata
+  description   String?   // ResourceSpace "Caption"
+  keywords      String[]  // ResourceSpace "Keywords" (Postgres supports arrays!)
+  legacyId      Int?      // To track which ResourceSpace ID this came from (crucial for migration debugging)
 
-  // NEW: Store the OpenAI embedding (1536 dimensions for text-embedding-3-small)
+  aiData        String?   // JSON string
   embedding     Unsupported("vector(1536)")?
   
-  // Relations
   uploadedBy    User     @relation(fields: [userId], references: [id])
   userId        String
 
-  // Timestamps
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   
-  // Placeholder for Collections (Phase 5)
   collections   AssetOnCollection[]
 }
 
