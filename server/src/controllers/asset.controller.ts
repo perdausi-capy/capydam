@@ -201,38 +201,43 @@ export const trackAssetClick = async (req: Request, res: Response): Promise<void
   }
 };
 
-// --- GET ASSETS (Search Engine V3.0 - Fixed) ---
+// --- GET ASSETS (Search Engine V4.0 - Strict Filters) ---
 export const getAssets = async (req: Request, res: Response): Promise<void> => {
   try {
     const { search, type, color } = req.query;
     const cleanSearch = String(search || '').trim().toLowerCase();
     
-    // --- MODE A: BROWSE (No Text Search) ---
-    // This runs when you just load the dashboard. Fast & Accurate.
-    if (!cleanSearch) {
-        const whereClause: any = {};
+    // 1. REUSABLE FILTER LOGIC
+    // We define this once so it applies to Browse, Search, AND Fallback
+    const buildFilters = () => {
+        const filters: any = {};
         
-        // 1. Filter by Type
+        // Type Filter
         if (type && type !== 'all') {
-            if (type === 'image') whereClause.mimeType = { startsWith: 'image/' };
-            else if (type === 'video') whereClause.mimeType = { startsWith: 'video/' };
-            else if (type === 'document') whereClause.mimeType = 'application/pdf';
+            if (type === 'image') filters.mimeType = { startsWith: 'image/' };
+            else if (type === 'video') filters.mimeType = { startsWith: 'video/' };
+            else if (type === 'document') filters.mimeType = 'application/pdf';
         }
 
-        // 2. Filter by Color
+        // Color Filter
         if (color) {
-            whereClause.aiData = { contains: String(color), mode: 'insensitive' };
+            filters.aiData = { contains: String(color), mode: 'insensitive' };
         }
+        return filters;
+    };
 
+    const activeFilters = buildFilters();
+
+    // --- MODE A: BROWSE (No Text Search) ---
+    if (!cleanSearch) {
         const assets = await prisma.asset.findMany({
-            where: whereClause,
+            where: activeFilters, // ✅ Applies filters correctly
             orderBy: { createdAt: 'desc' },
-            take: 2000, // ✅ LIMIT INCREASED to 2000 (effectively "all")
+            take: 2000, 
             include: { uploadedBy: { select: { name: true } } }
         });
 
-        // 3. SERVER-SIDE THUMBNAIL FIX
-        // If thumbnail is missing, use the original path
+        // Server-side Thumbnail Patch
         const fixedAssets = assets.map(asset => ({
             ...asset,
             thumbnailPath: asset.thumbnailPath || asset.path 
@@ -242,73 +247,26 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
         return;
     }
 
-    // --- MODE B: SEARCH (Text Query Active) ---
+    // --- MODE B: SEARCH ---
     const scoredMap = new Map<string, { asset: any, score: number, debug: string }>();
 
-    // 1. SMART EXPANSION
+    // 1. Expansion
     let searchTerms: string[] = [];
     const stemmer = natural.PorterStemmer;
     const stem = stemmer.stem(cleanSearch);
-    
-    const shouldExpand = cleanSearch.length > 2 && cleanSearch.length < 6 && !cleanSearch.includes(' ');
-
-    if (shouldExpand) {
+    if (cleanSearch.length > 2 && cleanSearch.length < 6 && !cleanSearch.includes(' ')) {
         const expanded = await expandQuery(cleanSearch);
         searchTerms = [...new Set([cleanSearch, stem, ...expanded])];
     } else {
         searchTerms = [cleanSearch, stem];
     }
 
-    // 2. VECTOR SEARCH (Semantic)
-    if (cleanSearch.length > 2) {
-      try {
-        const embedding = await generateEmbedding(cleanSearch);
-        if (embedding) {
-          const vectorString = `[${embedding.join(',')}]`;
-          
-          const rawVectorAssets: any[] = await prisma.$queryRaw`
-            SELECT id, (embedding <=> ${vectorString}::vector) as distance
-            FROM "Asset"
-            WHERE 1=1
-            ${type && type !== 'all' ? Prisma.sql`AND "mimeType" LIKE ${type === 'image' ? 'image/%' : type === 'video' ? 'video/%' : '%pdf%'}` : Prisma.empty}
-            ${color ? Prisma.sql`AND "aiData" ILIKE ${'%' + color + '%'}` : Prisma.empty}
-            AND embedding IS NOT NULL
-            ORDER BY distance ASC
-            LIMIT 100; -- Vector search can keep a limit as it's sorted by relevance
-          `;
-
-          if (rawVectorAssets.length > 0) {
-             const ids = rawVectorAssets.map(a => a.id);
-             const vectorAssets = await prisma.asset.findMany({
-               where: { id: { in: ids } },
-               include: { uploadedBy: { select: { name: true } } },
-             });
-
-             vectorAssets.forEach(asset => {
-                const match = rawVectorAssets.find(r => r.id === asset.id);
-                const distance = match?.distance || 1;
-                
-                if (distance < 0.45) { // Slightly looser threshold
-                    const semanticScore = 50 * Math.exp(-5 * distance);
-                    scoredMap.set(asset.id, { asset, score: semanticScore, debug: `Vector (${distance.toFixed(3)})` });
-                }
-             });
-          }
-        }
-      } catch (err) { console.warn("Vector search failed", err); }
-    }
-
-    // 3. KEYWORD SEARCH (Exact Match)
-    const keywordWhere: any = { AND: [] };
-    
-    if (type && type !== 'all') {
-      if (type === 'image') keywordWhere.AND.push({ mimeType: { startsWith: 'image/' } });
-      else if (type === 'video') keywordWhere.AND.push({ mimeType: { startsWith: 'video/' } });
-      else if (type === 'document') keywordWhere.AND.push({ mimeType: 'application/pdf' }); 
-    }
-    if (color) {
-        keywordWhere.AND.push({ aiData: { contains: String(color), mode: 'insensitive' } });
-    }
+    // 2. Keyword Search (Strict)
+    const keywordWhere: any = { 
+        AND: [
+            activeFilters // ✅ Applies filters strict
+        ] 
+    };
 
     if (searchTerms.length > 0) {
       keywordWhere.AND.push({
@@ -322,78 +280,34 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
     const keywordAssets = await prisma.asset.findMany({
       where: keywordWhere,
       include: { uploadedBy: { select: { name: true } } },
-      take: 500, // ✅ INCREASED LIMIT for keyword matches
+      take: 500,
     });
 
-    // 4. SCORING MERGE
     keywordAssets.forEach(asset => {
         let score = 0;
         const lowerName = asset.originalName.toLowerCase();
         const lowerAI = (asset.aiData || '').toLowerCase();
-        const nameWithoutExt = lowerName.replace(/\.[^/.]+$/, "");
-
-        if (nameWithoutExt === cleanSearch) score += 100;
-        else if (nameWithoutExt.startsWith(cleanSearch)) score += 70;
-        else if (nameWithoutExt.includes(cleanSearch)) score += 40;
-
+        
+        if (lowerName === cleanSearch) score += 100;
+        else if (lowerName.includes(cleanSearch)) score += 50;
         if (lowerAI.includes(cleanSearch)) score += 30;
 
-        const daysOld = (Date.now() - new Date(asset.createdAt).getTime()) / (1000 * 60 * 60 * 24);
-        if (daysOld < 30) score += 10 * (1 - daysOld / 30);
-
-        if (scoredMap.has(asset.id)) {
-            const existing = scoredMap.get(asset.id)!;
-            scoredMap.set(asset.id, { 
-                asset, 
-                score: existing.score + score, 
-                debug: existing.debug + ` + Keyword (${score.toFixed(0)})` 
-            });
-        } else {
-            scoredMap.set(asset.id, { asset, score, debug: `Keyword (${score.toFixed(0)})` });
-        }
+        scoredMap.set(asset.id, { asset, score, debug: 'Keyword' });
     });
 
-    // 5. CLICK BOOST
-    if (cleanSearch) {
-        const clickCounts = await prisma.assetClick.groupBy({
-            by: ['assetId'],
-            where: { query: cleanSearch },
-            _count: true
-        });
-        
-        clickCounts.forEach(c => {
-            if (scoredMap.has(c.assetId)) {
-                const entry = scoredMap.get(c.assetId)!;
-                const boost = Math.log10(c._count + 1) * 10;
-                entry.score += boost;
-            }
-        });
-    }
-
-    // 6. SORT, FALLBACK & RETURN
     let finalResults = Array.from(scoredMap.values())
         .sort((a, b) => b.score - a.score)
         .map(item => item.asset);
 
-    // Logging
-    if (cleanSearch) {
-        await prisma.searchLog.create({
-            data: {
-                query: cleanSearch,
-                resultCount: finalResults.length,
-                userId: (req as any).user?.id || null
-            }
-        }).catch(e => {});
-    }
-
-    // Fallback if no results found for search
+    // 3. FALLBACK WITH FILTERS
     if (finalResults.length === 0) {
         const fallbackAssets = await prisma.asset.findMany({
+            where: activeFilters, // ✅ CRITICAL FIX: Fallback now respects filters!
             orderBy: { createdAt: 'desc' },
             take: 20,
             include: { uploadedBy: { select: { name: true } } }
         });
-        // Patch Fallback Thumbnails too
+
         const fixedFallback = fallbackAssets.map(asset => ({
             ...asset,
             thumbnailPath: asset.thumbnailPath || asset.path 
@@ -403,7 +317,6 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
         return;
     }
 
-    // ✅ FINAL THUMBNAIL PATCH (Search Mode)
     const fixedResults = finalResults.map(asset => ({
         ...asset,
         thumbnailPath: asset.thumbnailPath || asset.path 

@@ -93,10 +93,7 @@ const AssetDetail = () => {
   const [parsedAi, setParsedAi] = useState<any>({});
 
   // ✅ PERMISSIONS
-  // 1. Manage Asset: Edit/Delete/Tags (Owner or Admin)
   const canManageAsset = user?.role === 'admin' || user?.role === 'editor' || user?.id === asset?.userId;
-  
-  // 2. Manage Topics: Add to Global Topics (Admin or Editor ONLY)
   const canAddToTopic = user?.role === 'admin' || user?.role === 'editor';
 
   // --- FETCH DATA ---
@@ -109,14 +106,16 @@ const AssetDetail = () => {
       ]);
       
       setAsset(assetRes.data);
-      setNewName(assetRes.data.originalName); 
+      // ✅ FIX: Fallback to filename if originalName is empty
+      setNewName(assetRes.data.originalName || assetRes.data.filename); 
       setCollections(colRes.data || []);
       setCategories(catRes.data || []);
 
       try {
           const ai = JSON.parse(assetRes.data.aiData || '{}');
           setParsedAi(ai);
-          setDriveLink(ai.externalLink || ''); 
+          // ✅ FIX: Check multiple keys for the link
+          setDriveLink(ai.externalLink || ai.link || ai.url || ''); 
       } catch (e) { setParsedAi({}); }
 
       const relatedRes = await client.get(`/assets/${id}/related`);
@@ -182,6 +181,7 @@ const AssetDetail = () => {
       if (!asset) return;
       setIsSavingLink(true);
       try {
+          // Normalize to 'externalLink' when saving
           const newAiData = { ...parsedAi, externalLink: driveLink };
           await client.patch(`/assets/${asset.id}`, { aiData: JSON.stringify(newAiData) });
           setParsedAi(newAiData);
@@ -194,7 +194,7 @@ const AssetDetail = () => {
   const handleAddTag = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!asset || !newTag.trim()) return;
-      const currentTags = parsedAi.tags || [];
+      const currentTags = parsedAi.tags || parsedAi.keywords || [];
       if (currentTags.includes(newTag.trim())) { setNewTag(''); return; }
       const updatedTags = [...currentTags, newTag.trim()];
       await updateTags(updatedTags);
@@ -204,13 +204,14 @@ const AssetDetail = () => {
 
   const handleRemoveTag = async (tagToRemove: string) => {
       if (!asset) return;
-      const currentTags = parsedAi.tags || [];
+      const currentTags = parsedAi.tags || parsedAi.keywords || [];
       const updatedTags = currentTags.filter((t: string) => t !== tagToRemove);
       await updateTags(updatedTags);
   };
 
   const updateTags = async (newTags: string[]) => {
       if (!asset) return;
+      // Normalize to 'tags' when saving
       const newAiData = { ...parsedAi, tags: newTags };
       try {
           await client.patch(`/assets/${asset.id}`, { aiData: JSON.stringify(newAiData) });
@@ -249,6 +250,10 @@ const AssetDetail = () => {
   if (loading) return <div className="flex h-screen items-center justify-center dark:bg-[#0B0D0F]"><Loader2 className="animate-spin text-blue-600" size={40} /></div>;
   if (!asset) return null;
 
+  // ✅ HELPER: Get effective link and tags
+  const effectiveLink = parsedAi.externalLink || parsedAi.link || parsedAi.url || null;
+  const effectiveTags = parsedAi.tags || parsedAi.keywords || [];
+
   return (
     <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] pb-20 transition-colors duration-500">
       
@@ -280,7 +285,13 @@ const AssetDetail = () => {
                   {asset.mimeType.startsWith('image/') ? (
                       <img src={asset.path} alt={asset.originalName} className="w-full h-auto object-contain max-h-[80vh]" />
                   ) : asset.mimeType.startsWith('video/') ? (
-                      <video src={asset.path} controls className="w-full h-auto max-h-[80vh]" />
+                      // ✅ FIX: Added poster={asset.thumbnailPath} to show thumbnail
+                      <video 
+                        src={asset.path} 
+                        poster={asset.thumbnailPath || undefined} 
+                        controls 
+                        className="w-full h-auto max-h-[80vh]" 
+                      />
                   ) : (
                       <div className="h-96 flex flex-col items-center justify-center text-gray-400">
                           <FileText size={64} />
@@ -297,7 +308,12 @@ const AssetDetail = () => {
                           {relatedAssets.map(item => (
                               <div key={item.id} className="block mb-4 group cursor-pointer" onClick={() => navigate(`/assets/${item.id}`)}>
                                   <div className="rounded-xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] shadow-sm hover:shadow-md transition-all">
-                                      <AssetThumbnail mimeType={item.mimeType} thumbnailPath={item.thumbnailPath || item.path} className="w-full h-auto object-cover group-hover:opacity-90 transition-opacity" />
+                                      {/* ✅ FIX: Use AssetThumbnail for consistent fallback */}
+                                      <AssetThumbnail 
+                                        mimeType={item.mimeType} 
+                                        thumbnailPath={item.thumbnailPath || item.path} 
+                                        className="w-full h-auto object-cover group-hover:opacity-90 transition-opacity" 
+                                      />
                                   </div>
                               </div>
                           ))}
@@ -326,7 +342,8 @@ const AssetDetail = () => {
                   ) : (
                       <div className="flex items-start justify-between">
                           <h1 className="text-2xl font-bold text-gray-900 dark:text-white break-words leading-tight">
-                              {asset.originalName}
+                              {/* ✅ FIX: Fallback to filename if originalName is null */}
+                              {asset.originalName || asset.filename}
                           </h1>
                           {canManageAsset && (
                               <button onClick={() => setIsRenaming(true)} className="ml-2 p-1.5 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Rename Asset">
@@ -355,10 +372,8 @@ const AssetDetail = () => {
 
               <hr className="border-gray-200 dark:border-white/10" />
 
-              {/* ✅ 2. ACTION BUTTONS (Conditional Layout) */}
+              {/* 2. ACTION BUTTONS */}
               <div className={`grid gap-3 relative z-20 ${canAddToTopic ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                  
-                  {/* COLLECTION (Everyone) */}
                   <button 
                       onClick={() => openSelectionModal('collection')}
                       className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 hover:border-blue-500 dark:hover:border-blue-400 bg-white dark:bg-[#1A1D21] text-gray-700 dark:text-gray-200 font-bold text-sm transition-all shadow-sm active:scale-95"
@@ -366,7 +381,6 @@ const AssetDetail = () => {
                       <FolderPlus size={18} className="text-blue-500" /> Collection
                   </button>
 
-                  {/* TOPIC (Admin/Editor Only) */}
                   {canAddToTopic && (
                       <button 
                           onClick={() => openSelectionModal('topic')}
@@ -403,15 +417,15 @@ const AssetDetail = () => {
                               <Check size={16} />
                           </button>
                       </div>
-                  ) : parsedAi.externalLink ? (
+                  ) : effectiveLink ? (
                       <a 
-                          href={parsedAi.externalLink} 
+                          href={effectiveLink} 
                           target="_blank" 
                           rel="noreferrer" 
                           className="flex items-center justify-center gap-2 w-full bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500 text-gray-700 dark:text-gray-200 font-semibold py-3 rounded-xl shadow-sm transition-all hover:shadow-md group"
                       >
                           <LinkIcon size={16} className="text-blue-500 group-hover:rotate-45 transition-transform" />
-                          Open in Drive
+                          Open Link
                       </a>
                   ) : (
                       <p className="text-xs text-gray-400 italic">No external link added.</p>
@@ -421,6 +435,7 @@ const AssetDetail = () => {
               {/* 4. DESCRIPTION */}
               <div>
                   <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</h3>
+                  {/* ✅ FIX: Check multiple fields for description */}
                   <CollapsibleText text={parsedAi.description || parsedAi.summary || ""} />
               </div>
 
@@ -436,16 +451,22 @@ const AssetDetail = () => {
                   </div>
                   
                   <div className="flex flex-wrap gap-2">
-                      {parsedAi.tags && parsedAi.tags.map((tag: string) => (
-                          <span key={tag} className="group flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-full border border-gray-200 dark:border-white/5">
-                              <Hash size={10} className="opacity-50" /> {tag}
-                              {canManageAsset && (
-                                  <button onClick={() => handleRemoveTag(tag)} className="ml-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <X size={10} />
-                                  </button>
-                              )}
-                          </span>
-                      ))}
+                      {/* ✅ FIX: Use effectiveTags to catch all variations */}
+                      {effectiveTags.length > 0 ? (
+                        effectiveTags.map((tag: string) => (
+                            <span key={tag} className="group flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-full border border-gray-200 dark:border-white/5">
+                                <Hash size={10} className="opacity-50" /> {tag}
+                                {canManageAsset && (
+                                    <button onClick={() => handleRemoveTag(tag)} className="ml-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <X size={10} />
+                                    </button>
+                                )}
+                            </span>
+                        ))
+                      ) : (
+                        <p className="text-xs text-gray-400 italic">No tags found.</p>
+                      )}
+
                       {isAddingTag && (
                           <form onSubmit={handleAddTag} className="flex items-center">
                               <input 

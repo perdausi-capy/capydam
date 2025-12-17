@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Search, Image as ImageIcon, Film, Music, Grid, Sparkles } from 'lucide-react';
 
 export type FilterType = 'all' | 'image' | 'video' | 'audio';
@@ -13,7 +13,20 @@ interface DashboardHeaderProps {
   setSelectedColor: (color: string | null) => void;
 }
 
-const DashboardHeader: React.FC<DashboardHeaderProps> = ({
+// Move static data outside to prevent recreation
+const COLORS = [
+  { name: 'Red', class: 'bg-red-500' },
+  { name: 'Orange', class: 'bg-orange-500' },
+  { name: 'Yellow', class: 'bg-yellow-400' },
+  { name: 'Green', class: 'bg-green-500' },
+  { name: 'Blue', class: 'bg-blue-500' },
+  { name: 'Purple', class: 'bg-purple-500' },
+  { name: 'Pink', class: 'bg-pink-500' },
+  { name: 'Black', class: 'bg-black' },
+  { name: 'White', class: 'bg-white border border-gray-200' },
+];
+
+const DashboardHeader: React.FC<DashboardHeaderProps> = React.memo(({
   assetsCount,
   searchQuery,
   setSearchQuery,
@@ -25,30 +38,33 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   
   const [isScrolled, setIsScrolled] = useState(false);
 
-  // --- SCROLL LISTENER ---
+  // --- ⚡ OPTIMIZED SCROLL LISTENER ---
   useEffect(() => {
+    let ticking = false;
+
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 10);
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          // Only update state if value actually changes to prevent re-renders
+          const shouldBeScrolled = window.scrollY > 10;
+          setIsScrolled(prev => {
+              if (prev !== shouldBeScrolled) return shouldBeScrolled;
+              return prev;
+          });
+          ticking = false;
+        });
+        ticking = true;
+      }
     };
-    window.addEventListener('scroll', handleScroll);
+
+    // { passive: true } improves scrolling performance massively
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const colors = [
-    { name: 'Red', class: 'bg-red-500' },
-    { name: 'Orange', class: 'bg-orange-500' },
-    { name: 'Yellow', class: 'bg-yellow-400' },
-    { name: 'Green', class: 'bg-green-500' },
-    { name: 'Blue', class: 'bg-blue-500' },
-    { name: 'Purple', class: 'bg-purple-500' },
-    { name: 'Pink', class: 'bg-pink-500' },
-    { name: 'Black', class: 'bg-black' },
-    { name: 'White', class: 'bg-white border border-gray-200' },
-  ];
-
   return (
     <div 
-        className={`sticky top-0 z-30 transition-all duration-500 ease-in-out border-b border-gray-200 dark:border-white/5
+        className={`sticky top-0 z-30 transition-all duration-300 ease-in-out border-b border-gray-200 dark:border-white/5
         ${isScrolled 
             ? 'bg-white/95 dark:bg-[#1A1D21]/95 backdrop-blur-xl py-2 shadow-sm' 
             : 'bg-white/80 dark:bg-[#1A1D21]/80 backdrop-blur-md py-6'
@@ -57,9 +73,8 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       <div className="px-4 lg:px-8 max-w-[2000px] mx-auto relative">
         
         {/* --- TOP ROW: Title & Stats --- */}
-        {/* ✅ FIX: Used max-h-24 (96px) to ensure text isn't cut off */}
         <div 
-            className={`flex flex-col justify-center transition-all duration-500 ease-in-out overflow-hidden ${
+            className={`flex flex-col justify-center transition-all duration-300 ease-in-out overflow-hidden ${
                 isScrolled ? 'max-h-0 opacity-0 mb-0' : 'max-h-24 opacity-100 mb-6'
             }`}
         >
@@ -77,7 +92,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 w-full">
           
           {/* 1. LEFT: Type Filters */}
-          <div className={`transition-all duration-500 ${isScrolled ? 'scale-90 origin-left' : 'scale-100'}`}>
+          <div className={`transition-all duration-300 ${isScrolled ? 'scale-95 origin-left' : 'scale-100'}`}>
               <div className="flex items-center gap-1 p-1 bg-gray-100 dark:bg-white/5 rounded-xl overflow-x-auto max-w-full no-scrollbar">
                 <button onClick={() => setFilterType('all')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${filterType === 'all' ? 'bg-white dark:bg-[#2C3035] text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
                   <Grid size={14} /> All
@@ -94,14 +109,12 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               </div>
           </div>
 
-          {/* 2. MIDDLE: Search Bar (Morphing Position) */}
+          {/* 2. MIDDLE: Search Bar */}
           <div 
             className={`
-                transition-all duration-500 ease-in-out z-20
+                transition-all duration-300 ease-in-out z-20
                 ${isScrolled 
-                    // SCROLLED: Relative position, flows between filters
                     ? 'relative w-full max-w-xl mx-4 order-last md:order-none' 
-                    // DEFAULT: Absolute position, top right corner
                     : 'w-full md:absolute md:top-6 md:right-4 lg:md:right-8 md:w-96'
                 }
             `}
@@ -124,12 +137,12 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           </div>
 
           {/* 3. RIGHT: Color Filter */}
-          <div className={`transition-all duration-500 ${isScrolled ? 'scale-90 origin-right' : 'scale-100'}`}>
+          <div className={`transition-all duration-300 ${isScrolled ? 'scale-95 origin-right' : 'scale-100'}`}>
               <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 md:pb-0 no-scrollbar">
                 {selectedColor && (
                     <button onClick={() => setSelectedColor(null)} className="h-6 px-2 text-[10px] font-bold uppercase tracking-wider bg-gray-200 dark:bg-white/10 rounded-full hover:bg-gray-300 dark:hover:bg-white/20 transition-colors">Clear</button>
                 )}
-                {colors.map((color) => (
+                {COLORS.map((color) => (
                   <button
                     key={color.name}
                     onClick={() => setSelectedColor(selectedColor === color.name ? null : color.name)}
@@ -144,6 +157,6 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export default DashboardHeader;
