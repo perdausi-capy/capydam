@@ -14,10 +14,18 @@ const oldDbConfig = {
     database: 'resourcespace'
 };
 
-// 🎯 FIELD IDs (Based on your investigation)
+// 🎯 ALL FIELD IDs
 const FIELD_IDS = {
     LINK: 10,
     FILENAME: 51,
+    
+    // Description Candidates
+    TITLE: 8,           // 👈 NEW! Found this in your spy data
+    DESC_CAPTION: 18,
+    DESC_EXTENDED: 87,
+    DESC_NOTES: 25,
+
+    // Tags
     KEYWORDS_AI: 1,
     KEYWORDS_SUBJECT: 73,
     KEYWORDS_EVENT: 74,
@@ -26,20 +34,16 @@ const FIELD_IDS = {
     KEYWORDS_LANDMARK: 85
 };
 
-const ALL_IDS = [10, 51, 1, 73, 74, 75, 84, 85];
+const ALL_IDS = Object.values(FIELD_IDS);
 
 async function patchMetadata() {
-    console.log("🩹 Starting Metadata Patch (Regex Mode)...");
+    console.log("🩹 Starting Final Patch (Including Titles as Descriptions)...");
 
     const oldDb = await mysql.createConnection(oldDbConfig);
     console.log("✅ Connected to Old MySQL Database.");
 
-    // 1. GET ALL MIGRATED ASSETS
-    // We look for files that start with "migration/"
     const assetsToFix = await prisma.asset.findMany({
-        where: {
-            filename: { startsWith: 'migration/' }
-        },
+        where: { filename: { startsWith: 'migration/' } },
         select: { id: true, filename: true, originalName: true, aiData: true }
     });
 
@@ -49,18 +53,12 @@ async function patchMetadata() {
     const placeholders = ALL_IDS.map(() => '?').join(',');
 
     for (const asset of assetsToFix) {
-        // 🔍 EXTRACT ID FROM FILENAME
-        // Format: "migration/634_123456.jpg" -> We want "634"
         const match = asset.filename.match(/migration\/(\d+)_/);
         const oldId = match ? match[1] : null;
 
-        if (!oldId) {
-            // console.log(`Skipping unknown format: ${asset.filename}`);
-            continue;
-        }
+        if (!oldId) continue;
 
         try {
-            // 2. QUERY NEW NODE TABLES
             const [rows]: any = await oldDb.execute(
                 `SELECT n.resource_type_field, n.name AS value
                  FROM node n
@@ -70,20 +68,27 @@ async function patchMetadata() {
                 [oldId, ...ALL_IDS]
             );
 
-            // If no metadata found, skip
             if (rows.length === 0) continue;
 
             let driveLink = null;
             let tags: string[] = [];
+            
+            // Description Candidates
+            let valTitle = null;
+            let valCaption = null;
+            let valExtended = null;
+            let valNotes = null;
 
             for (const row of rows) {
                 const fieldId = row.resource_type_field;
                 const val = row.value;
 
-                if (fieldId === FIELD_IDS.LINK) {
-                    driveLink = val;
-                } else if (fieldId !== FIELD_IDS.FILENAME) {
-                    // Everything else is a tag
+                if (fieldId === FIELD_IDS.LINK) driveLink = val;
+                else if (fieldId === FIELD_IDS.TITLE) valTitle = val;
+                else if (fieldId === FIELD_IDS.DESC_CAPTION) valCaption = val;
+                else if (fieldId === FIELD_IDS.DESC_EXTENDED) valExtended = val;
+                else if (fieldId === FIELD_IDS.DESC_NOTES) valNotes = val;
+                else if (fieldId !== FIELD_IDS.FILENAME) {
                     if (val) {
                         const cleanParts = val.split(',').map((t: string) => t.trim()).filter((t: string) => t.length > 0);
                         tags.push(...cleanParts);
@@ -91,7 +96,7 @@ async function patchMetadata() {
                 }
             }
 
-            // 3. Prepare Updates
+            // Prepare Updates
             let aiDataObj: any = {};
             try { aiDataObj = JSON.parse(asset.aiData || '{}'); } catch (e) {}
             
@@ -99,6 +104,18 @@ async function patchMetadata() {
 
             if (driveLink && driveLink.trim()) {
                 aiDataObj.externalLink = driveLink;
+                dataChanged = true;
+            }
+
+            // Waterfall: Caption -> Title -> Extended -> Notes
+            // We prioritized Title because we saw it has good data!
+            const bestDescription = valCaption || valTitle || valExtended || valNotes;
+            
+            if (bestDescription && bestDescription.trim()) {
+                // Remove quotes if present (e.g. '"Title"')
+                const cleanDesc = bestDescription.trim().replace(/^"|"$/g, '');
+                aiDataObj.description = cleanDesc;
+                aiDataObj.summary = cleanDesc;
                 dataChanged = true;
             }
 
@@ -113,7 +130,7 @@ async function patchMetadata() {
                 const updates = { aiData: JSON.stringify(aiDataObj) };
                 await prisma.asset.update({ where: { id: asset.id }, data: updates });
                 successCount++;
-                process.stdout.write(`\r✅ Patched ID ${oldId}: Added ${tags.length} Tags ${driveLink ? '+ Link' : ''}`);
+                process.stdout.write(`\r✅ Patched ID ${oldId}: +Desc? ${!!bestDescription} [${tags.length} Tags]`);
             }
 
         } catch (err: any) {
