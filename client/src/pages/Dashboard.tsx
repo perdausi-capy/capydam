@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import client from '../api/client';
 import { Loader2, Image as ImageIcon, Search, X, Download, FolderPlus, Plus, ExternalLink } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -167,7 +167,7 @@ const Dashboard = () => {
 
   // --- 2. COLLECTIONS: STANDARD QUERY (FIXED) ---
   // Reverted to useQuery for simple array fetching. No more TS errors.
-  const { data: collections = [], refetch: refetchCollections } = useQuery({
+  const { data: collections = [] } = useQuery({
     queryKey: ['collections'],
     queryFn: async () => {
       const res = await client.get('/collections');
