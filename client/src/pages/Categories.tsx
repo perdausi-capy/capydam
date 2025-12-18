@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../api/client';
 import { 
-    Folder, 
-    Loader2, 
+    Folder,  
     Layout, 
     Lightbulb, 
     Plus, 
