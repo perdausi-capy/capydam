@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import client from '../api/client';
-import { Loader2, Image as ImageIcon, Search, X, Download, FolderPlus, Plus, ExternalLink } from 'lucide-react';
+import { Image as ImageIcon, Search, X, Download, FolderPlus, Plus, ExternalLink } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import Masonry from 'react-masonry-css';
 import AssetThumbnail from '../components/AssetThumbnail';
@@ -195,7 +195,7 @@ const Dashboard = () => {
   const isFallback = data?.pages[0]?.isFallback || false;
 
   // --- COLLECTIONS QUERY ---
-  const { data: collections = [], refetch: refetchCollections } = useQuery({
+  const { data: collections = []} = useQuery({
     queryKey: ['collections'],
     queryFn: async () => {
       const res = await client.get('/collections');
