@@ -36,7 +36,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     queryClient.removeQueries(); 
     queryClient.clear();
     logout();
-    navigate('/login');
+    // navigate('/login'); // logout() in AuthContext already redirects
   };
 
   const isActive = (path: string) => {
@@ -112,36 +112,46 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         {/* ✅ UPDATED PROFILE SECTION */}
         <div className="border-t border-gray-100 dark:border-white/10 bg-gray-50/50 dark:bg-black/20 p-3 mt-auto shrink-0 transition-colors">
           <div className={`flex items-center rounded-xl border border-transparent transition-all duration-200 ${!isCollapsed ? 'bg-white dark:bg-white/5 shadow-sm border-gray-100 dark:border-white/5 p-2' : 'justify-center p-0'}`}>
-             
-             {/* Profile Link */}
-             <Link 
+              
+              {/* Profile Link */}
+              <Link 
                 to="/profile" 
                 className={`flex items-center flex-1 min-w-0 group ${isCollapsed ? 'justify-center' : ''}`}
                 title="View Profile"
-             >
-                 <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm shadow-sm overflow-hidden ring-2 ring-transparent group-hover:ring-blue-400 transition-all">
-                    {/* Check for Avatar URL */}
-                    {user?.avatar ? (
-                        <img src={user.avatar} alt={user.name} className="h-full w-full object-cover" />
-                    ) : (
-                        user?.name?.charAt(0) || 'U'
-                    )}
-                 </div>
-                 
-                 <div className={`flex flex-col ml-3 overflow-hidden transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 ml-0' : 'w-auto opacity-100'}`}>
-                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 truncate">{user?.name || 'User'}</p>
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate group-hover:text-blue-500 transition-colors">View Profile</p>
-                 </div>
-             </Link>
+              >
+                  <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm shadow-sm overflow-hidden ring-2 ring-transparent group-hover:ring-blue-400 transition-all relative">
+                     
+                     {/* 🖼️ AVATAR LOGIC */}
+                     {user?.avatar ? (
+                         <img 
+                           src={user.avatar} 
+                           alt={user.name} 
+                           className="h-full w-full object-cover" 
+                           // Fallback to letter if image fails to load
+                           onError={(e) => {
+                             e.currentTarget.style.display = 'none'; // Hide broken image
+                             e.currentTarget.parentElement?.classList.remove('bg-transparent'); // Restore gradient
+                           }}
+                         />
+                     ) : (
+                         <span className="uppercase">{user?.name?.charAt(0) || 'U'}</span>
+                     )}
+                  </div>
+                  
+                  <div className={`flex flex-col ml-3 overflow-hidden transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 ml-0' : 'w-auto opacity-100'}`}>
+                     <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 truncate">{user?.name || 'User'}</p>
+                     <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate group-hover:text-blue-500 transition-colors">View Profile</p>
+                  </div>
+              </Link>
 
-             {/* Logout Button (Desktop) */}
-             <button 
+              {/* Logout Button (Desktop) */}
+              <button 
                 onClick={handleLogout} 
                 className={`text-gray-400 hover:text-red-500 transition-colors p-1.5 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg ${isCollapsed ? 'hidden' : 'ml-1'}`} 
                 title="Logout"
-             >
-                <LogOut size={18} />
-             </button>
+              >
+                 <LogOut size={18} />
+              </button>
           </div>
           
           {/* Logout Button (Mobile) */}
