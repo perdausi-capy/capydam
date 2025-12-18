@@ -1,8 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
-// import { generateEmbedding, expandQuery } from '../services/ai.service';
-// import natural from 'natural';
 import path from 'path';
 import fs from 'fs-extra';
 
@@ -358,15 +356,15 @@ export const getAssetById = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-// --- RECOMMENDATIONS (Search Engine Powered V4.0) ---
+// --- RECOMMENDATIONS (Strict Filtering + Search Scoring V4.1) ---
 export const getRelatedAssets = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     
-    // 1. Fetch Target Asset Info
+    // 1. Fetch Target Asset Info to determine Type and Keywords
     const targetAsset = await prisma.asset.findUnique({
         where: { id },
-        select: { id: true, originalName: true, aiData: true, createdAt: true }
+        select: { id: true, originalName: true, aiData: true, mimeType: true }
     });
 
     if (!targetAsset) {
@@ -374,33 +372,18 @@ export const getRelatedAssets = async (req: Request, res: Response): Promise<voi
         return;
     }
 
-    // 2. CHECK FOR VECTORS (Priority #1)
-    // If it has an embedding, Vector Search is always superior to keyword search.
-    const vectorResult: any = await prisma.$queryRaw`
-      SELECT embedding::text FROM "Asset" WHERE id = ${id}
-    `;
-
-    if (vectorResult && vectorResult.length > 0 && vectorResult[0].embedding) {
-        const vectorString = vectorResult[0].embedding;
-        const relatedVectors = await prisma.$queryRaw`
-          SELECT id, filename, "originalName", "mimeType", "thumbnailPath", "aiData"
-          FROM "Asset"
-          WHERE id != ${id}
-          AND embedding IS NOT NULL
-          AND (embedding <=> ${vectorString}::vector) < 0.45
-          ORDER BY embedding <=> ${vectorString}::vector
-          LIMIT 20;
-        `;
-        
-        if ((relatedVectors as any[]).length > 0) {
-            res.json(relatedVectors);
-            return;
-        }
+    // 2. CONSTRUCT STRICT TYPE FILTER
+    // "If image only images, if video only videos"
+    let typeFilter: any = {};
+    if (targetAsset.mimeType.startsWith('image/')) {
+        typeFilter = { mimeType: { startsWith: 'image/' } };
+    } else if (targetAsset.mimeType.startsWith('video/')) {
+        typeFilter = { mimeType: { startsWith: 'video/' } };
+    } else if (targetAsset.mimeType === 'application/pdf') {
+        typeFilter = { mimeType: 'application/pdf' };
     }
 
-    // 3. SEARCH ENGINE FALLBACK (Priority #2)
-    // We construct a "Search Query" based on this asset's metadata
-    
+    // 3. CONSTRUCT SEARCH QUERY (The "Query")
     // A. Define Stop Words (Noise Filter)
     const stopWords = new Set([
         'image', 'img', 'pic', 'picture', 'photo', 'screenshot', 'screen', 'shot',
@@ -409,7 +392,7 @@ export const getRelatedAssets = async (req: Request, res: Response): Promise<voi
         'untitled', 'design', 'migration', 'import', 'jpg', 'png', 'mp4'
     ]);
 
-    // B. Extract Keywords (The "Query")
+    // B. Extract Keywords
     const rawName = targetAsset.originalName || '';
     const nameKeywords = rawName
         .split(/[\s_\-\.\/]+/)
@@ -426,23 +409,27 @@ export const getRelatedAssets = async (req: Request, res: Response): Promise<voi
     // Combine into unique search terms
     const searchTerms = [...new Set([...tagKeywords, ...nameKeywords])].slice(0, 10);
 
-    // If no keywords found, fallback to Recent (Priority #3)
+    // 4. FALLBACK: If no keywords, return Recent (WITH TYPE FILTER)
     if (searchTerms.length === 0) {
         const recent = await prisma.asset.findMany({
-            where: { id: { not: id } },
+            where: { 
+                id: { not: id },
+                ...typeFilter // ✅ Apply Strict Type Filter
+            },
             orderBy: { createdAt: 'desc' },
             take: 20,
-             // ⚡ Optimization: Lightweight Select
             select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true }
         });
         res.json(recent);
         return;
     }
 
-    // C. RUN THE SEARCH ENGINE (Exact logic from getAssets)
+    // 5. RUN SEARCH ENGINE (Exact logic from getAssets)
+    // We search across ALL candidates that match the type filter
     const candidates = await prisma.asset.findMany({
         where: {
             id: { not: id },
+            ...typeFilter, // ✅ Apply Strict Type Filter
             OR: [
                 ...searchTerms.map(t => ({ originalName: { contains: t, mode: Prisma.QueryMode.insensitive } })),
                 ...searchTerms.map(t => ({ aiData: { contains: t, mode: Prisma.QueryMode.insensitive } }))
@@ -452,7 +439,7 @@ export const getRelatedAssets = async (req: Request, res: Response): Promise<voi
         select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true }
     });
 
-    // D. SCORING ALGORITHM (The Magic) 🪄
+    // 6. SCORING ALGORITHM (The Magic) 🪄
     const scoredAssets = candidates.map(asset => {
         let score = 0;
         const lowerName = (asset.originalName || '').toLowerCase();
@@ -478,10 +465,14 @@ export const getRelatedAssets = async (req: Request, res: Response): Promise<voi
         .slice(0, 20)
         .map(item => item.asset);
 
-    // If scoring filtered everything out, show recent
+    // 7. EMPTY RESULT FALLBACK
+    // If scoring filtered everything out, show recent (WITH TYPE FILTER)
     if (finalResults.length === 0) {
         const recent = await prisma.asset.findMany({
-            where: { id: { not: id } },
+            where: { 
+                id: { not: id },
+                ...typeFilter // ✅ Apply Strict Type Filter
+            },
             orderBy: { createdAt: 'desc' },
             take: 20,
             select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true }
