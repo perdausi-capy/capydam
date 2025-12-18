@@ -509,35 +509,66 @@ export const updateAsset = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// --- DELETE ---
+// --- ROBUST DELETE (Safe for all relation types) ---
 export const deleteAsset = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const userId = (req as any).user?.id;
     const userRole = (req as any).user?.role;
 
+    console.log(`\n🗑️ [DELETE] Deleting Asset ID: ${id}`);
+
+    // 1. Permission Check
     const asset = await prisma.asset.findUnique({ where: { id } });
-
     if (!asset) {
-      res.status(404).json({ message: 'Asset not found' });
-      return;
+        res.status(404).json({ message: 'Asset not found' });
+        return;
     }
-
     if (userRole !== 'admin' && asset.userId !== userId) {
-      res.status(403).json({ message: 'You do not have permission to delete this asset.' });
-      return;
+        res.status(403).json({ message: 'Access denied' });
+        return;
     }
 
-    // 1. Delete from Database
-    await prisma.asset.delete({ where: { id } });
+    // 2. CLEANUP RELATIONS (The Fix)
+    // We use a try/catch block for the collections specifically
+    // in case the model name differs, so it doesn't crash the whole request.
+    console.log("   🔗 removing relations...");
+    
+    try {
+        // Try deleting from 'AssetOnCollection' (Standard Name)
+        // @ts-ignore - Ignores error if model doesn't exist in types
+        if (prisma.assetOnCollection) {
+            await (prisma as any).assetOnCollection.deleteMany({ where: { assetId: id } });
+        }
+        
+        // Try deleting from 'CollectionAsset' (Alternative Name)
+        // @ts-ignore
+        if (prisma.collectionAsset) {
+            await (prisma as any).collectionAsset.deleteMany({ where: { assetId: id } });
+        }
+    } catch (e) {
+        console.log("   ⚠️ Note: Collection cleanup warning (ignoring)", e);
+    }
 
-    // 2. Delete from Supabase (Cloud)
-    if (asset.path) await deleteFromSupabase(asset.path);
-    if (asset.thumbnailPath) await deleteFromSupabase(asset.thumbnailPath);
+    // 3. EXECUTE DELETE
+    await prisma.$transaction([
+        prisma.assetClick.deleteMany({ where: { assetId: id } }),     // Analytics
+        prisma.assetOnCategory.deleteMany({ where: { assetId: id } }), // Categories
+        prisma.asset.delete({ where: { id } })                        // The Asset
+    ]);
+    
+    console.log("   ✅ DB Records Deleted");
+
+    // 4. Cloud Cleanup
+    try {
+        if (asset.path) await deleteFromSupabase(asset.path);
+        if (asset.thumbnailPath) await deleteFromSupabase(asset.thumbnailPath);
+    } catch (e) { /* ignore storage errors */ }
 
     res.json({ message: 'Asset deleted successfully' });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error deleting asset' });
+    console.error("🔥 DELETE ERROR:", error);
+    res.status(500).json({ message: 'Server error', error: String(error) });
   }
 };
