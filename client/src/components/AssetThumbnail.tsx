@@ -1,30 +1,41 @@
 import React from 'react';
 import { FileText, Film, Music, File } from 'lucide-react';
 
-interface Props {
+// ✅ 1. Allow this component to accept standard <img> props (onLoad, loading, etc.)
+interface Props extends React.ImgHTMLAttributes<HTMLImageElement> {
   mimeType: string;
   thumbnailPath: string | null;
   className?: string;
 }
 
-const AssetThumbnail: React.FC<Props> = ({ mimeType, thumbnailPath, className = "" }) => {
-  // 1. If we have a thumbnail (It's an image or video screenshot), show it
+const AssetThumbnail: React.FC<Props> = ({ 
+    mimeType, 
+    thumbnailPath, 
+    className = "", 
+    ...imgProps // ✅ 2. Capture extra props here
+}) => {
+  
+  // 3. If we have a thumbnail, show it
   if (thumbnailPath) {
     return (
         <img
-        // ✅ FIX: Removed "http://localhost:5000/"
-        // The DB now holds the full Supabase URL (https://...)
-        src={thumbnailPath}
-        alt="Thumbnail"
-        className={`block w-full h-auto object-cover ${className}`} 
-        loading="lazy"
-        decoding="async"
+          src={thumbnailPath}
+          alt="Thumbnail"
+          // Merge your classNames with the passed ones
+          className={`block w-full h-auto object-cover ${className}`} 
+          
+          // Defaults (can be overridden by imgProps)
+          loading="lazy"
+          decoding="async"
+          
+          // ✅ 4. Spread the extra props (like onLoad) onto the actual img tag
+          {...imgProps}
         />
     );
   }
 
-  // 2. If no thumbnail, show a nice icon based on type
-  let Icon = File; // Default
+  // 4. If no thumbnail, show a nice icon based on type
+  let Icon = File;
   let colorClass = "bg-gray-100 text-gray-500";
 
   if (mimeType.startsWith('video/')) {
@@ -38,6 +49,7 @@ const AssetThumbnail: React.FC<Props> = ({ mimeType, thumbnailPath, className = 
     colorClass = "bg-orange-50 text-orange-500";
   }
 
+  // Note: We don't spread imgProps here because this isn't an <img> tag.
   return (
     <div 
       className={`
@@ -51,7 +63,7 @@ const AssetThumbnail: React.FC<Props> = ({ mimeType, thumbnailPath, className = 
       <div className="flex flex-col items-center gap-2">
         <Icon size={64} strokeWidth={1} className="opacity-80" />
         <span className="text-xs font-bold uppercase tracking-wider opacity-60">
-            {mimeType.split('/')[1].toUpperCase()}
+            {mimeType.split('/')[1]?.toUpperCase() || 'FILE'}
         </span>
       </div>
     </div>

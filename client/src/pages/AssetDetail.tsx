@@ -6,7 +6,7 @@ import {
     Calendar, HardDrive, FileText, 
     FolderPlus, Hash, ExternalLink, Check, 
     Layout, Link as LinkIcon, Plus, X,
-    Edit2, Search
+    Edit2, Search, Loader2, Share2 // ✅ Added Share2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -39,11 +39,11 @@ const CollapsibleText = ({ text }: { text: string }) => {
     const limit = 200;
 
     if (!text) return null;
-    if (text.length <= limit) return <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-sm">{text}</p>;
+    if (text.length <= limit) return <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-sm break-words">{text}</p>;
 
     return (
         <div>
-            <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-sm">
+            <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-sm break-words">
                 {isExpanded ? text : `${text.substring(0, limit)}...`}
             </p>
             <button 
@@ -60,13 +60,8 @@ const CollapsibleText = ({ text }: { text: string }) => {
 const DetailSkeleton = () => (
     <div className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8 animate-pulse">
         <div className="lg:col-span-2 space-y-8">
-            {/* Main Image Placeholder */}
             <div className="w-full aspect-video bg-gray-200 dark:bg-white/5 rounded-3xl" />
-            
-            {/* Related Title Placeholder */}
             <div className="h-8 w-48 bg-gray-200 dark:bg-white/5 rounded-lg" />
-            
-            {/* Related Grid Placeholder */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="h-40 bg-gray-200 dark:bg-white/5 rounded-xl" />
                 <div className="h-56 bg-gray-200 dark:bg-white/5 rounded-xl" />
@@ -74,8 +69,6 @@ const DetailSkeleton = () => (
                 <div className="h-48 bg-gray-200 dark:bg-white/5 rounded-xl" />
             </div>
         </div>
-        
-        {/* Right Sidebar Placeholder */}
         <div className="space-y-6">
             <div className="h-10 w-3/4 bg-gray-200 dark:bg-white/5 rounded-lg" />
             <div className="flex gap-2">
@@ -88,23 +81,17 @@ const DetailSkeleton = () => (
                 <div className="h-12 w-full bg-gray-200 dark:bg-white/5 rounded-xl" />
             </div>
             <div className="h-24 w-full bg-gray-200 dark:bg-white/5 rounded-2xl" />
-            <div className="space-y-2">
-                <div className="h-4 w-full bg-gray-200 dark:bg-white/5 rounded" />
-                <div className="h-4 w-5/6 bg-gray-200 dark:bg-white/5 rounded" />
-                <div className="h-4 w-4/6 bg-gray-200 dark:bg-white/5 rounded" />
-            </div>
         </div>
     </div>
 );
 
-// --- 🦴 RELATED ITEMS SKELETON (New Component) ---
+// --- RELATED ITEMS SKELETON ---
 const RelatedSkeleton = () => (
     <div className="mt-6">
         <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">More Like This</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="space-y-2">
-                    {/* Random heights to simulate masonry feel */}
                     <div 
                         className="w-full bg-gray-200 dark:bg-white/5 rounded-xl animate-pulse" 
                         style={{ height: i % 2 === 0 ? '200px' : '280px' }} 
@@ -123,72 +110,58 @@ const AssetDetail = () => {
   const [asset, setAsset] = useState<Asset | null>(null);
   const [relatedAssets, setRelatedAssets] = useState<Asset[]>([]);
   
-  // Separate loading states for better UX
   const [loading, setLoading] = useState(true);
   const [isRelatedLoading, setIsRelatedLoading] = useState(true);
   
-  // Data for Selection
   const [collections, setCollections] = useState<CollectionSimple[]>([]);
   const [categories, setCategories] = useState<CategorySimple[]>([]); 
 
-  // MODAL STATES
   const [activeModal, setActiveModal] = useState<'collection' | 'topic' | null>(null);
   const [modalSearch, setModalSearch] = useState(''); 
+  const [addingToId, setAddingToId] = useState<string | null>(null);
 
-  // Edit States
   const [isEditingLink, setIsEditingLink] = useState(false);
   const [driveLink, setDriveLink] = useState('');
   const [isSavingLink, setIsSavingLink] = useState(false);
 
-  // Rename State
   const [isRenaming, setIsRenaming] = useState(false);
   const [newName, setNewName] = useState('');
 
-  // Tag State
   const [newTag, setNewTag] = useState('');
   const [isAddingTag, setIsAddingTag] = useState(false);
 
-  // Delete State
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Parsed AI Data
   const [parsedAi, setParsedAi] = useState<any>({});
   const queryClient = useQueryClient();
 
-
-  // ✅ PERMISSIONS
+  // ✅ Permissions
   const canManageAsset = user?.role === 'admin' || user?.role === 'editor' || user?.id === asset?.userId;
   const canAddToTopic = user?.role === 'admin' || user?.role === 'editor';
 
-  // --- FETCH DATA ---
   useEffect(() => {
     const loadData = async () => {
         setLoading(true);
-        setIsRelatedLoading(true); // Start loading related
-        setRelatedAssets([]); // Clear old related
+        setIsRelatedLoading(true); 
+        setRelatedAssets([]); 
 
         try {
-            // 1. Fetch Asset Details (Fast)
             const assetRes = await client.get(`/assets/${id}`);
             setAsset(assetRes.data);
             setNewName(assetRes.data.originalName || assetRes.data.filename);
             
-            // Parse AI Data immediately
             try {
                 const ai = JSON.parse(assetRes.data.aiData || '{}');
                 setParsedAi(ai);
                 setDriveLink(ai.externalLink || ai.link || ai.url || '');
             } catch { setParsedAi({}); }
 
-            setLoading(false); // Stop main loading so page shows up
+            setLoading(false); 
 
-            // 2. Fetch Metadata in Background
             client.get('/collections').then(res => setCollections(res.data || [])).catch(() => {});
             client.get('/categories').then(res => setCategories(res.data || [])).catch(() => {});
 
-            // 3. Fetch Related Assets (Optimized Endpoint)
-            // We fetch this AFTER the main content renders to keep TTFB low
             try {
                 const relatedRes = await client.get(`/assets/${id}/related`);
                 setRelatedAssets(relatedRes.data || []);
@@ -205,8 +178,6 @@ const AssetDetail = () => {
     };
     if (id) loadData();
   }, [id, navigate]);
-
-  // --- ACTIONS ---
 
   const handleDownload = async () => {
     if (!asset) return;
@@ -225,18 +196,18 @@ const AssetDetail = () => {
     } catch (e) { toast.error("Download failed"); }
   };
 
+  // ✅ New Share Handler
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    toast.success("Link copied to clipboard!");
+  };
+
   const handleDelete = async () => {
     if (!asset) return;
     setIsDeleting(true);
     try {
       await client.delete(`/assets/${asset.id}`);
-      
-      // 🛑 OLD WAY (Shows stale data while fetching in bg)
-      // await queryClient.invalidateQueries({ queryKey: ['assets'] });
-  
-      // ✅ NEW WAY (Nukes the cache -> Forces Dashboard to show Skeletons)
       await queryClient.resetQueries({ queryKey: ['assets'] });
-      
       toast.success("Asset deleted");
       navigate(-1);
     } catch (error) {
@@ -300,24 +271,37 @@ const AssetDetail = () => {
   const openSelectionModal = (type: 'collection' | 'topic') => {
       setModalSearch(''); 
       setActiveModal(type);
+      setAddingToId(null); 
   };
 
   const addToCollection = async (collectionId: string, name: string) => {
-      if (!asset) return;
+      if (!asset || addingToId) return; 
+      setAddingToId(collectionId); 
+      
       try {
           await client.post(`/collections/${collectionId}/assets`, { assetId: asset.id });
           toast.success(`Added to ${name}`);
-          setActiveModal(null);
-      } catch (e) { toast.info("Already in this collection"); }
+          setActiveModal(null); 
+      } catch (e) { 
+          toast.info("Already in this collection"); 
+      } finally {
+          setAddingToId(null);
+      }
   };
 
   const addToTopic = async (categoryId: string, name: string) => {
-      if (!asset) return;
+      if (!asset || addingToId) return;
+      setAddingToId(categoryId);
+
       try {
           await client.post(`/categories/${categoryId}/assets`, { assetId: asset.id });
           toast.success(`Added to ${name}`);
           setActiveModal(null);
-      } catch (e) { toast.info("Already in this topic"); }
+      } catch (e) { 
+          toast.info("Already in this topic"); 
+      } finally {
+          setAddingToId(null);
+      }
   };
 
   const filteredCollections = collections.filter(c => c.name.toLowerCase().includes(modalSearch.toLowerCase()));
@@ -325,7 +309,6 @@ const AssetDetail = () => {
 
   const breakpointColumnsObj = { default: 4, 1100: 3, 700: 2, 500: 1 };
 
-  // ✅ HELPER: Get effective data
   const effectiveLink = parsedAi.externalLink || parsedAi.link || parsedAi.url || null;
   const effectiveTags = parsedAi.tags || parsedAi.keywords || [];
   const effectiveDescription = parsedAi.description || parsedAi.summary || parsedAi.caption || "";
@@ -344,8 +327,19 @@ const AssetDetail = () => {
                   <button onClick={handleDownload} className="flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-black px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:scale-105 transition-transform">
                       <Download size={16} /> Download
                   </button>
+
+                  {/* ✅ SHARE BUTTON (Visible to everyone) */}
+                  <button onClick={handleShare} className="flex items-center gap-2 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-gray-50 dark:hover:bg-white/5 transition-all">
+                      <Share2 size={16} /> Share
+                  </button>
+
+                  {/* ✅ DELETE BUTTON (Visible only to Owners/Admins) */}
                   {canManageAsset && (
-                      <button onClick={() => setShowDeleteConfirm(true)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                      <button 
+                        onClick={() => setShowDeleteConfirm(true)} 
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        title="Delete Asset"
+                      >
                           <Trash2 size={20} />
                       </button>
                   )}
@@ -402,10 +396,10 @@ const AssetDetail = () => {
               </div>
 
               {/* RIGHT: INFO PANEL */}
-              <div className="space-y-6">
+              <div className="space-y-6 min-w-0">
                   
                   {/* 1. TITLE & RENAME */}
-                  <div className="group">
+                  <div className="group min-w-0">
                       {isRenaming ? (
                           <div className="flex items-center gap-2">
                               <input 
@@ -413,18 +407,18 @@ const AssetDetail = () => {
                                   value={newName} 
                                   onChange={(e) => setNewName(e.target.value)} 
                                   autoFocus 
-                                  className="w-full text-2xl font-bold bg-white dark:bg-[#1A1D21] border-b-2 border-blue-500 outline-none text-gray-900 dark:text-white pb-1"
+                                  className="w-full text-2xl font-bold bg-white dark:bg-[#1A1D21] border-b-2 border-blue-500 outline-none text-gray-900 dark:text-white pb-1 min-w-0"
                               />
-                              <button onClick={handleRename} className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200"><Check size={18} /></button>
-                              <button onClick={() => setIsRenaming(false)} className="p-2 bg-gray-100 dark:bg-white/10 text-gray-500 rounded-lg hover:bg-gray-200"><X size={18} /></button>
+                              <button onClick={handleRename} className="shrink-0 p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200"><Check size={18} /></button>
+                              <button onClick={() => setIsRenaming(false)} className="shrink-0 p-2 bg-gray-100 dark:bg-white/10 text-gray-500 rounded-lg hover:bg-gray-200"><X size={18} /></button>
                           </div>
                       ) : (
-                          <div className="flex items-start justify-between">
-                              <h1 className="text-2xl font-bold text-gray-900 dark:text-white break-words leading-tight">
+                          <div className="flex items-start justify-between gap-2">
+                              <h1 className="text-2xl font-bold text-gray-900 dark:text-white leading-tight break-words break-all line-clamp-3" title={asset.originalName || asset.filename}>
                                   {asset.originalName || asset.filename}
                               </h1>
                               {canManageAsset && (
-                                  <button onClick={() => setIsRenaming(true)} className="ml-2 p-1.5 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Rename Asset">
+                                  <button onClick={() => setIsRenaming(true)} className="shrink-0 ml-1 p-1.5 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Rename Asset">
                                       <Edit2 size={16} />
                                   </button>
                               )}
@@ -439,10 +433,10 @@ const AssetDetail = () => {
 
                       {/* ASSET OWNER */}
                       <div className="flex items-center gap-2 mt-4 text-sm font-medium text-gray-700 dark:text-gray-300">
-                          <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center text-[10px] text-white font-bold shadow-sm">
+                          <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center text-[10px] text-white font-bold shadow-sm shrink-0">
                               {asset.uploadedBy?.name?.charAt(0).toUpperCase() || 'U'}
                           </div>
-                          <span>
+                          <span className="truncate">
                               Uploaded by <span className="text-gray-900 dark:text-white font-bold">{asset.uploadedBy?.name || 'Unknown'}</span>
                           </span>
                       </div>
@@ -489,9 +483,9 @@ const AssetDetail = () => {
                                   value={driveLink} 
                                   onChange={e => setDriveLink(e.target.value)} 
                                   placeholder="Paste link..." 
-                                  className="flex-1 text-sm bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                                  className="flex-1 text-sm bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 min-w-0"
                               />
-                              <button onClick={saveDriveLink} disabled={isSavingLink} className="bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-50">
+                              <button onClick={saveDriveLink} disabled={isSavingLink} className="bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-50 shrink-0">
                                   <Check size={16} />
                               </button>
                           </div>
@@ -510,9 +504,9 @@ const AssetDetail = () => {
                       )}
                   </div>
 
-                  {/* 4. DESCRIPTION (Only shows if text exists) */}
+                  {/* 4. DESCRIPTION */}
                   {effectiveDescription && (
-                    <div>
+                    <div className="min-w-0">
                         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</h3>
                         <CollapsibleText text={effectiveDescription} />
                     </div>
@@ -532,10 +526,11 @@ const AssetDetail = () => {
                       <div className="flex flex-wrap gap-2">
                           {effectiveTags.length > 0 ? (
                             effectiveTags.map((tag: string) => (
-                                <span key={tag} className="group flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-full border border-gray-200 dark:border-white/5">
-                                    <Hash size={10} className="opacity-50" /> {tag}
+                                <span key={tag} className="group flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-full border border-gray-200 dark:border-white/5 max-w-full">
+                                    <Hash size={10} className="opacity-50 shrink-0" /> 
+                                    <span className="truncate">{tag}</span>
                                     {canManageAsset && (
-                                        <button onClick={() => handleRemoveTag(tag)} className="ml-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => handleRemoveTag(tag)} className="ml-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                             <X size={10} />
                                         </button>
                                     )}
@@ -565,7 +560,7 @@ const AssetDetail = () => {
           </div>
       )}
 
-      {/* SELECTION MODAL (Unchanged - keeps UI consistent) */}
+      {/* SELECTION MODAL */}
       {activeModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setActiveModal(null)} />
@@ -600,12 +595,15 @@ const AssetDetail = () => {
                                   <button 
                                       key={c.id} 
                                       onClick={() => addToCollection(c.id, c.name)}
-                                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 text-left transition-colors group"
+                                      disabled={!!addingToId} 
+                                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors group
+                                        ${addingToId && addingToId !== c.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'}
+                                      `}
                                   >
                                       <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
-                                          <FolderPlus size={18} />
+                                          {addingToId === c.id ? <Loader2 size={18} className="animate-spin" /> : <FolderPlus size={18} />}
                                       </div>
-                                      <span className="font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-700 dark:group-hover:text-blue-300">{c.name}</span>
+                                      <span className="font-medium text-gray-700 dark:text-gray-200 group-hover:text-blue-700 dark:group-hover:text-blue-300 truncate">{c.name}</span>
                                   </button>
                               ))
                           ) : <div className="p-6 text-center text-gray-400 text-sm">No collections found</div>
@@ -615,12 +613,15 @@ const AssetDetail = () => {
                                   <button 
                                       key={c.id} 
                                       onClick={() => addToTopic(c.id, c.name)}
-                                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-purple-50 dark:hover:bg-purple-900/20 text-left transition-colors group"
+                                      disabled={!!addingToId}
+                                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors group
+                                        ${addingToId && addingToId !== c.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-50 dark:hover:bg-purple-900/20'}
+                                      `}
                                   >
                                       <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
-                                          <Layout size={18} />
+                                          {addingToId === c.id ? <Loader2 size={18} className="animate-spin" /> : <Layout size={18} />}
                                       </div>
-                                      <span className="font-medium text-gray-700 dark:text-gray-200 group-hover:text-purple-700 dark:group-hover:text-purple-300">{c.name}</span>
+                                      <span className="font-medium text-gray-700 dark:text-gray-200 group-hover:text-purple-700 dark:group-hover:text-purple-300 truncate">{c.name}</span>
                                   </button>
                               ))
                           ) : <div className="p-6 text-center text-gray-400 text-sm">No topics found</div>
