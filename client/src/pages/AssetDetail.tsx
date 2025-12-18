@@ -13,6 +13,7 @@ import { toast } from 'react-toastify';
 import ConfirmModal from '../components/ConfirmModal';
 import Masonry from 'react-masonry-css';
 import AssetThumbnail from '../components/AssetThumbnail';
+import { useQueryClient } from '@tanstack/react-query';
 
 // --- TYPES ---
 interface Asset {
@@ -55,7 +56,7 @@ const CollapsibleText = ({ text }: { text: string }) => {
     );
 };
 
-// --- SKELETON LOADER ---
+// --- MAIN PAGE SKELETON ---
 const DetailSkeleton = () => (
     <div className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8 animate-pulse">
         <div className="lg:col-span-2 space-y-8">
@@ -66,7 +67,7 @@ const DetailSkeleton = () => (
             <div className="h-8 w-48 bg-gray-200 dark:bg-white/5 rounded-lg" />
             
             {/* Related Grid Placeholder */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="h-40 bg-gray-200 dark:bg-white/5 rounded-xl" />
                 <div className="h-56 bg-gray-200 dark:bg-white/5 rounded-xl" />
                 <div className="h-32 bg-gray-200 dark:bg-white/5 rounded-xl" />
@@ -96,6 +97,24 @@ const DetailSkeleton = () => (
     </div>
 );
 
+// --- 🦴 RELATED ITEMS SKELETON (New Component) ---
+const RelatedSkeleton = () => (
+    <div className="mt-6">
+        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">More Like This</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="space-y-2">
+                    {/* Random heights to simulate masonry feel */}
+                    <div 
+                        className="w-full bg-gray-200 dark:bg-white/5 rounded-xl animate-pulse" 
+                        style={{ height: i % 2 === 0 ? '200px' : '280px' }} 
+                    />
+                </div>
+            ))}
+        </div>
+    </div>
+);
+
 const AssetDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -103,7 +122,10 @@ const AssetDetail = () => {
 
   const [asset, setAsset] = useState<Asset | null>(null);
   const [relatedAssets, setRelatedAssets] = useState<Asset[]>([]);
+  
+  // Separate loading states for better UX
   const [loading, setLoading] = useState(true);
+  const [isRelatedLoading, setIsRelatedLoading] = useState(true);
   
   // Data for Selection
   const [collections, setCollections] = useState<CollectionSimple[]>([]);
@@ -132,6 +154,7 @@ const AssetDetail = () => {
 
   // Parsed AI Data
   const [parsedAi, setParsedAi] = useState<any>({});
+  const queryClient = useQueryClient();
 
   // ✅ PERMISSIONS
   const canManageAsset = user?.role === 'admin' || user?.role === 'editor' || user?.id === asset?.userId;
@@ -141,6 +164,9 @@ const AssetDetail = () => {
   useEffect(() => {
     const loadData = async () => {
         setLoading(true);
+        setIsRelatedLoading(true); // Start loading related
+        setRelatedAssets([]); // Clear old related
+
         try {
             // 1. Fetch Asset Details (Fast)
             const assetRes = await client.get(`/assets/${id}`);
@@ -154,21 +180,26 @@ const AssetDetail = () => {
                 setDriveLink(ai.externalLink || ai.link || ai.url || '');
             } catch { setParsedAi({}); }
 
+            setLoading(false); // Stop main loading so page shows up
+
             // 2. Fetch Metadata in Background
             client.get('/collections').then(res => setCollections(res.data || [])).catch(() => {});
             client.get('/categories').then(res => setCategories(res.data || [])).catch(() => {});
 
             // 3. Fetch Related Assets (Optimized Endpoint)
-            client.get(`/assets/${id}/related`).then(res => {
-                setRelatedAssets(res.data || []);
-            }).catch(() => {});
+            // We fetch this AFTER the main content renders to keep TTFB low
+            try {
+                const relatedRes = await client.get(`/assets/${id}/related`);
+                setRelatedAssets(relatedRes.data || []);
+            } catch (err) {
+                console.error("Failed to load related assets");
+            } finally {
+                setIsRelatedLoading(false);
+            }
 
         } catch (error) {
             toast.error("Asset not found");
             navigate('/');
-        } finally {
-            // Tiny delay to prevent flicker if API is too fast
-            setTimeout(() => setLoading(false), 300);
         }
     };
     if (id) loadData();
@@ -198,6 +229,11 @@ const AssetDetail = () => {
     setIsDeleting(true);
     try {
       await client.delete(`/assets/${asset.id}`);
+      
+      // 3. 🚨 INVALIDATE CACHE HERE 🚨
+      // This forces the Dashboard to re-fetch fresh data immediately
+      await queryClient.invalidateQueries({ queryKey: ['assets'] });
+      
       toast.success("Asset deleted");
       navigate(-1);
     } catch (error) {
@@ -339,8 +375,10 @@ const AssetDetail = () => {
                       )}
                   </div>
 
-                  {/* Related Assets */}
-                  {relatedAssets.length > 0 && (
+                  {/* RELATED ASSETS SECTION */}
+                  {isRelatedLoading ? (
+                      <RelatedSkeleton />
+                  ) : relatedAssets.length > 0 && (
                       <div>
                           <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">More Like This</h3>
                           <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-4" columnClassName="pl-4 bg-clip-padding">
@@ -524,7 +562,7 @@ const AssetDetail = () => {
           </div>
       )}
 
-      {/* SELECTION MODAL */}
+      {/* SELECTION MODAL (Unchanged - keeps UI consistent) */}
       {activeModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setActiveModal(null)} />
