@@ -24,7 +24,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const { logout, user } = useAuth();
   const { theme } = useTheme(); 
   const location = useLocation();
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
   const queryClient = useQueryClient();
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
