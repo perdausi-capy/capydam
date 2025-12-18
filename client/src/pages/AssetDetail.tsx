@@ -13,6 +13,7 @@ import { toast } from 'react-toastify';
 import ConfirmModal from '../components/ConfirmModal';
 import Masonry from 'react-masonry-css';
 import AssetThumbnail from '../components/AssetThumbnail';
+import { useQueryClient } from '@tanstack/react-query';
 
 // --- TYPES ---
 interface Asset {
@@ -153,6 +154,7 @@ const AssetDetail = () => {
 
   // Parsed AI Data
   const [parsedAi, setParsedAi] = useState<any>({});
+  const queryClient = useQueryClient();
 
 
   // ✅ PERMISSIONS
@@ -228,6 +230,11 @@ const AssetDetail = () => {
     setIsDeleting(true);
     try {
       await client.delete(`/assets/${asset.id}`);
+      
+      // 3. 🚨 INVALIDATE CACHE HERE 🚨
+      // This forces the Dashboard to re-fetch fresh data immediately
+      await queryClient.invalidateQueries({ queryKey: ['assets'] });
+      
       toast.success("Asset deleted");
       navigate(-1);
     } catch (error) {
