@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Image as ImageIcon, Film, Music, Grid, Sparkles, X } from 'lucide-react';
+import { Search, Image as ImageIcon, Film, Grid, Sparkles, X } from 'lucide-react';
 
 export type FilterType = 'all' | 'image' | 'video' ;
 
