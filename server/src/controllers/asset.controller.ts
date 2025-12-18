@@ -358,38 +358,107 @@ export const getAssetById = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-// --- RECOMMENDATIONS ---
+// --- RECOMMENDATIONS (Fixed for Migrated Assets) ---
 export const getRelatedAssets = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
+    console.log(`\n🔍 [Debug] Finding related assets for: ${id}`);
+
+    // 1. Try Vector Search (For AI Assets)
     const targetAsset: any = await prisma.$queryRaw`
-      SELECT embedding::text 
-      FROM "Asset" 
-      WHERE id = ${id}
+      SELECT embedding::text FROM "Asset" WHERE id = ${id}
     `;
 
-    if (!targetAsset || targetAsset.length === 0 || !targetAsset[0].embedding) {
-      res.json([]);
-      return;
+    // A. Use Vector Search if embedding exists
+    if (targetAsset && targetAsset.length > 0 && targetAsset[0].embedding) {
+        console.log("   ✅ Using AI Vector Search");
+        const vectorString = targetAsset[0].embedding;
+        const relatedAssets = await prisma.$queryRaw`
+          SELECT id, filename, "originalName", "mimeType", "thumbnailPath", "aiData"
+          FROM "Asset"
+          WHERE id != ${id}
+          AND embedding IS NOT NULL
+          AND (embedding <=> ${vectorString}::vector) < 0.60
+          ORDER BY embedding <=> ${vectorString}::vector
+          LIMIT 20;
+        `;
+        
+        if ((relatedAssets as any[]).length > 0) {
+            res.json(relatedAssets);
+            return;
+        }
     }
 
-    const vectorString = targetAsset[0].embedding;
+    // ---------------------------------------------------------
+    // B. Text Fallback (For Migrated Assets)
+    // ---------------------------------------------------------
+    console.log("   ⚠️ No embedding or no results. Using Text Fallback.");
+    
+    const currentAsset = await prisma.asset.findUnique({
+        where: { id },
+        select: { originalName: true, aiData: true }
+    });
 
-    // Optimized Raw Query: Only fetch needed columns
-    const relatedAssets = await prisma.$queryRaw`
-      SELECT id, filename, "originalName", "mimeType", "thumbnailPath", "aiData"
-      FROM "Asset"
-      WHERE id != ${id}
-      AND embedding IS NOT NULL
-      AND (embedding <=> ${vectorString}::vector) < 0.60
-      ORDER BY embedding <=> ${vectorString}::vector
-      LIMIT 20;
-    `;
+    if (!currentAsset) {
+        res.json([]);
+        return;
+    }
 
-    res.json(relatedAssets);
+    // 1. Better Keyword Extraction (Handles 'migration/photo.jpg')
+    const rawName = currentAsset.originalName || '';
+    const nameKeywords = rawName
+        .split(/[\s_\-\.\/]+/) // 👈 Added '/' to split path like "migration/file.jpg"
+        .filter(w => w.length > 3 && isNaN(Number(w)) && w !== 'migration'); // Filter 'migration' keyword
+
+    // 2. Extract Tags
+    let tagKeywords: string[] = [];
+    try {
+        const parsed = JSON.parse(currentAsset.aiData || '{}');
+        if (Array.isArray(parsed.tags)) tagKeywords = parsed.tags;
+        if (typeof parsed.keywords === 'string') tagKeywords = parsed.keywords.split(',');
+    } catch (e) {}
+
+    const searchTerms = [...new Set([...nameKeywords, ...tagKeywords])].slice(0, 8);
+    console.log("   🔎 Search Terms:", searchTerms);
+
+    // 3. Perform Text Search
+    if (searchTerms.length > 0) {
+        const relatedByText = await prisma.asset.findMany({
+            where: {
+                id: { not: id },
+                OR: [
+                    ...searchTerms.map(t => ({ originalName: { contains: t, mode: Prisma.QueryMode.insensitive } })),
+                    ...searchTerms.map(t => ({ aiData: { contains: t, mode: Prisma.QueryMode.insensitive } }))
+                ]
+            },
+            take: 20,
+            select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true }
+        });
+
+        if (relatedByText.length > 0) {
+            console.log(`   ✅ Found ${relatedByText.length} matches via text.`);
+            res.json(relatedByText);
+            return;
+        }
+    }
+
+    // ---------------------------------------------------------
+    // C. "Last Resort" Fallback (Recent Uploads)
+    // ---------------------------------------------------------
+    console.log("   ⚠️ No text matches. Showing recent assets.");
+    
+    const recentAssets = await prisma.asset.findMany({
+        where: { id: { not: id } },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true }
+    });
+
+    res.json(recentAssets);
+
   } catch (error) {
-    console.error("Error fetching related assets:", error);
-    res.status(500).json({ message: 'Failed to fetch related assets' });
+    console.error("Related Error:", error);
+    res.status(500).json({ message: 'Error' });
   }
 };
 

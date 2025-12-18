@@ -1,19 +1,26 @@
 import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
-import { verifyJWT } from '../middleware/auth.middleware'; // We need to create this! // already created 
-import { uploadAsset, getAssets, getAssetById, updateAsset, deleteAsset, getRelatedAssets, trackAssetClick  } from '../controllers/asset.controller';
-
+import { verifyJWT } from '../middleware/auth.middleware'; 
+import { 
+    uploadAsset, 
+    getAssets, 
+    getAssetById, 
+    updateAsset, 
+    deleteAsset, 
+    getRelatedAssets, 
+    trackAssetClick 
+} from '../controllers/asset.controller';
 
 const router = Router();
 
-// Configure Multer Storage (Local)
+// --- MULTER CONFIG ---
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    // Ensure this folder exists in your project root!
+    cb(null, 'uploads/'); 
   },
   filename: (req, file, cb) => {
-    // Unique filename: timestamp-random-originalName
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, uniqueSuffix + path.extname(file.originalname));
   },
@@ -24,26 +31,25 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
 });
 
-// Routes
-// POST /api/assets/upload (Protected)
+// --- ROUTES ---
+
+// 1. STATIC & ACTION ROUTES (Must come first)
+// Upload
 router.post('/upload', verifyJWT, upload.single('file'), uploadAsset);
 
-// GET /api/assets (Protected)
-router.get('/', verifyJWT, getAssets);
-
-// GET /api/assets/:id (Fetch single asset)
-router.get('/:id', verifyJWT, getAssetById);
-
-// GET /api/assets/:id/related
-router.get('/:id/related', verifyJWT, getRelatedAssets);
-
-// POST /api/assets/track-click (For Analytics)
+// Analytics
 router.post('/track-click', verifyJWT, trackAssetClick);
 
-// PATCH /api/assets/:id (Update metadata)
-router.patch('/:id', verifyJWT, updateAsset);
+// Search / Browse
+router.get('/', verifyJWT, getAssets);
 
-// DELETE /api/assets/:id
+// 2. SPECIFIC ID ROUTES (Must come BEFORE generic /:id)
+// ✅ FIX: This guarantees 'related' is matched before 'getAssetById' tries to grab it
+router.get('/:id/related', verifyJWT, getRelatedAssets);
+
+// 3. GENERIC ID ROUTES (Catch-all for IDs)
+router.get('/:id', verifyJWT, getAssetById);
+router.patch('/:id', verifyJWT, updateAsset);
 router.delete('/:id', verifyJWT, deleteAsset);
 
 export default router;

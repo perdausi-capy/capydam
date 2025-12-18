@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
 import client from '../api/client';
 import { Loader2, Image as ImageIcon, Search, X, Download, FolderPlus, Plus, ExternalLink } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -19,6 +19,7 @@ interface Asset {
   path: string;
   uploadedBy: { name: string };
   aiData?: string;
+  isSkeleton?: boolean; // New flag for loading state
 }
 
 interface CollectionSimple { id: string; name: string; }
@@ -44,8 +45,24 @@ const parseAiData = (jsonString?: string) => {
 
 const SCROLL_KEY = 'capydam_dashboard_scroll_y';
 
-// --- ⚡ OPTIMIZED CARD COMPONENT ---
-// This component is now isolated. It only updates if its specific props change.
+// --- 🦴 SKELETON CARD (The "Pinterest" loading effect) ---
+const SkeletonCard = () => (
+    <div className="mb-8 w-full">
+        {/* Image Placeholder */}
+        <div className="w-full aspect-[3/4] bg-gray-200 dark:bg-white/5 rounded-2xl animate-pulse" />
+        
+        {/* Text Placeholders */}
+        <div className="mt-3 space-y-2 px-1">
+            <div className="h-4 bg-gray-200 dark:bg-white/5 rounded w-3/4 animate-pulse" />
+            <div className="flex gap-2">
+                <div className="h-3 w-12 bg-gray-200 dark:bg-white/5 rounded-full animate-pulse" />
+                <div className="h-3 w-8 bg-gray-200 dark:bg-white/5 rounded-full animate-pulse" />
+            </div>
+        </div>
+    </div>
+);
+
+// --- ⚡ REAL CARD COMPONENT ---
 const AssetCard = React.memo(({ 
     asset, 
     index, 
@@ -59,21 +76,20 @@ const AssetCard = React.memo(({
     onDownload: (e: React.MouseEvent, asset: Asset) => void,
     onAddToCollection: (e: React.MouseEvent, id: string) => void
 }) => {
-    // Memoize data parsing so it doesn't run on every render
     const { tags, link } = useMemo(() => parseAiData(asset.aiData), [asset.aiData]);
 
     return (
-        <div className="group relative mb-8 block transition-all duration-300 w-full min-w-0">
+        // transform-gpu triggers hardware acceleration for smoother scrolling
+        <div className="group relative mb-8 block transition-all duration-300 w-full min-w-0 transform-gpu">
             <div className="relative">
                 <div className="relative w-full rounded-2xl overflow-hidden transition-all duration-300 bg-gray-100 dark:bg-[#1A1D21] shadow-sm hover:shadow-xl hover:-translate-y-1">
                     <Link to={`/assets/${asset.id}`} className="block cursor-pointer" onClick={() => onClick(asset.id, index)}>
                         <div className="group-hover:opacity-95 transition-opacity">
-                            {/* Force lazy loading for performance */}
                             <AssetThumbnail 
                                 mimeType={asset.mimeType} 
                                 thumbnailPath={asset.thumbnailPath || asset.path} 
                                 className="w-full h-auto"
-                                // @ts-ignore - Assuming your AssetThumbnail passes props down to img
+                                // @ts-ignore 
                                 loading="lazy" 
                             />
                         </div>
@@ -112,7 +128,7 @@ const AssetCard = React.memo(({
             </div>
         </div>
     );
-}, (prev, next) => prev.asset.id === next.asset.id); // Strict equality check
+}, (prev, next) => prev.asset.id === next.asset.id);
 
 // --- DASHBOARD COMPONENT ---
 const Dashboard = () => {
@@ -128,7 +144,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const observer = useRef<IntersectionObserver | null>(null);
 
-  // --- 1. ASSETS: INFINITE SCROLL ---
+  // --- QUERY ---
   const {
     data,
     fetchNextPage,
@@ -145,29 +161,41 @@ const Dashboard = () => {
             type: filterType, 
             color: selectedColor,
             page: pageParam,
-            limit: 50 // Chunk size
+            limit: 20 
         }
       });
-      // Handle different response shapes seamlessly
       const results = res.data.results || (Array.isArray(res.data) ? res.data : []);
       const isFallback = res.data.isFallback || false;
-      
-      // If we got fewer than limit, we are at the end
-      const nextPage = results.length === 50 ? pageParam + 1 : undefined;
+      const nextPage = results.length === 20 ? pageParam + 1 : undefined;
       return { results, isFallback, nextPage };
     },
     getNextPageParam: (lastPage) => lastPage.nextPage,
     initialPageParam: 1,
-    staleTime: 1000 * 60 * 2, // 2 mins cache
+    staleTime: 1000 * 60 * 2,
   });
 
-  // Flatten the pages into a single array for Masonry
-  const assets = useMemo(() => data?.pages.flatMap(page => page.results) || [], [data]);
+  // --- 🪄 MAGIC: Combine Real Assets + Skeletons ---
+  const assets = useMemo(() => {
+      const realAssets = data?.pages.flatMap(page => page.results) || [];
+      
+      // If we are fetching more, append 10 "Skeleton" items
+      // This lets Masonry layout them in the columns naturally
+      if (isFetchingNextPage) {
+          const skeletons = Array.from({ length: 10 }).map((_, i) => ({
+              id: `skeleton-${i}`,
+              isSkeleton: true, // Marker
+              filename: '', thumbnailPath: '', mimeType: '', originalName: '', path: '', uploadedBy: { name: '' }
+          }));
+          return [...realAssets, ...skeletons];
+      }
+      
+      return realAssets;
+  }, [data, isFetchingNextPage]);
+
   const isFallback = data?.pages[0]?.isFallback || false;
 
-  // --- 2. COLLECTIONS: STANDARD QUERY (FIXED) ---
-  // Reverted to useQuery for simple array fetching. No more TS errors.
-  const { data: collections = [] } = useQuery({
+  // --- COLLECTIONS QUERY ---
+  const { data: collections = [], refetch: refetchCollections } = useQuery({
     queryKey: ['collections'],
     queryFn: async () => {
       const res = await client.get('/collections');
@@ -176,7 +204,7 @@ const Dashboard = () => {
     staleTime: 1000 * 60, 
   });
 
-  // --- INFINITE SCROLL TRIGGER ---
+  // --- SCROLL TRIGGER ---
   const lastAssetRef = useCallback((node: HTMLDivElement) => {
     if (assetsLoading || isFetchingNextPage) return;
     if (observer.current) observer.current.disconnect();
@@ -185,7 +213,7 @@ const Dashboard = () => {
       if (entries[0].isIntersecting && hasNextPage) {
         fetchNextPage();
       }
-    });
+    }, { rootMargin: '200px' }); // Load 200px before reaching bottom
     if (node) observer.current.observe(node);
   }, [assetsLoading, isFetchingNextPage, hasNextPage, fetchNextPage]);
 
@@ -205,8 +233,8 @@ const Dashboard = () => {
     if (assetError) toast.error("Failed to load assets");
   }, [isFallback, assetError, debouncedSearch]);
 
-  // Memoized handlers to keep AssetCard stable
   const handleAssetClick = useCallback((assetId: string, index: number) => {
+    if (assetId.startsWith('skeleton')) return; // Ignore skeleton clicks
     if (debouncedSearch) {
         client.post('/assets/track-click', { assetId, query: debouncedSearch, position: index + 1 }).catch(() => {});
     }
@@ -267,14 +295,15 @@ const Dashboard = () => {
 
       <div className="px-4 lg:px-8 mt-6 max-w-[2000px] mx-auto w-full">
         {assetsLoading ? (
-            <div className="flex h-64 w-full items-center justify-center">
-                <Loader2 className="animate-spin text-blue-500 dark:text-blue-400" size={32} />
+            // Initial Full Page Loading Skeleton
+            <div className="w-full overflow-hidden">
+                <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-6" columnClassName="pl-6 bg-clip-padding">
+                    {Array.from({ length: 15 }).map((_, i) => <SkeletonCard key={i} />)}
+                </Masonry>
             </div>
         ) : assets.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/10 p-16 text-center mt-8 opacity-60">
-                <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-full mb-4">
-                    <ImageIcon size={32} className="text-gray-400 dark:text-gray-500" />
-                </div>
+                <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-full mb-4"><ImageIcon size={32} className="text-gray-400 dark:text-gray-500" /></div>
                 <p className="text-lg font-medium text-gray-600 dark:text-gray-300">No assets found</p>
                 <button onClick={() => { handleSearchChange(''); setFilterType('image'); setSelectedColor(null); }} className="text-blue-600 dark:text-blue-400 font-medium hover:underline mt-2">Clear all filters</button>
             </div>
@@ -282,9 +311,14 @@ const Dashboard = () => {
             <div className="w-full overflow-hidden">
                 <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-6" columnClassName="pl-6 bg-clip-padding">
                     {assets.map((asset, index) => {
-                        // Attach ref to the last element for infinite scroll
-                        if (assets.length === index + 1) {
-                            return (
+                        // Check if item is a Skeleton
+                        if (asset.isSkeleton) {
+                            return <SkeletonCard key={asset.id} />;
+                        }
+
+                        // Attach ref to the last REAL element to trigger fetch
+                        if (index === assets.length - 11) { // Trigger slightly before end (10 skeletons + 1)
+                             return (
                                 <div ref={lastAssetRef} key={asset.id}>
                                     <AssetCard asset={asset} index={index} onClick={handleAssetClick} onDownload={handleDownload} onAddToCollection={openCollectionModal} />
                                 </div>
@@ -293,11 +327,6 @@ const Dashboard = () => {
                         return <AssetCard key={asset.id} asset={asset} index={index} onClick={handleAssetClick} onDownload={handleDownload} onAddToCollection={openCollectionModal} />;
                     })}
                 </Masonry>
-                {isFetchingNextPage && (
-                    <div className="w-full flex justify-center py-8">
-                        <Loader2 className="animate-spin text-gray-400" size={24} />
-                    </div>
-                )}
             </div>
         )}
       </div>
@@ -307,29 +336,10 @@ const Dashboard = () => {
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsCollectionModalOpen(false)} />
                 <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative w-full max-w-md bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-white/5">
-                        <h3 className="font-bold text-gray-900 dark:text-white">Add to Collection</h3>
-                        <button onClick={() => setIsCollectionModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={20} /></button>
-                    </div>
-                    <div className="px-6 py-3 bg-gray-50 dark:bg-white/5">
-                        <div className="flex items-center gap-2 bg-white dark:bg-black/20 rounded-xl px-3 py-2 border border-gray-200 dark:border-white/10">
-                            <Search size={16} className="text-gray-400" />
-                            <input type="text" placeholder="Find a folder..." autoFocus value={modalSearch} onChange={(e) => setModalSearch(e.target.value)} className="bg-transparent border-none outline-none text-sm w-full text-gray-800 dark:text-gray-200 placeholder-gray-400" />
-                        </div>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-                        {filteredCollections.length > 0 ? (
-                            filteredCollections.map(c => (
-                                <button key={c.id} onClick={() => addToCollection(c.id, c.name)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-left transition-colors group">
-                                    <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg group-hover:scale-110 transition-transform"><FolderPlus size={18} /></div>
-                                    <span className="font-medium text-gray-700 dark:text-gray-200 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">{c.name}</span>
-                                </button>
-                            ))
-                        ) : ( <div className="p-8 text-center text-gray-400 text-sm">{collections.length === 0 ? "You haven't created any collections yet." : "No matching folders found."}</div> )}
-                    </div>
-                    <div className="p-4 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/5">
-                        <button onClick={() => navigate('/collections')} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-bold py-3 hover:scale-[1.02] transition-transform"><Plus size={16} /> Create New Collection</button>
-                    </div>
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-white/5"><h3 className="font-bold text-gray-900 dark:text-white">Add to Collection</h3><button onClick={() => setIsCollectionModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={20} /></button></div>
+                    <div className="px-6 py-3 bg-gray-50 dark:bg-white/5"><div className="flex items-center gap-2 bg-white dark:bg-black/20 rounded-xl px-3 py-2 border border-gray-200 dark:border-white/10"><Search size={16} className="text-gray-400" /><input type="text" placeholder="Find a folder..." autoFocus value={modalSearch} onChange={(e) => setModalSearch(e.target.value)} className="bg-transparent border-none outline-none text-sm w-full text-gray-800 dark:text-gray-200 placeholder-gray-400" /></div></div>
+                    <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">{filteredCollections.length > 0 ? ( filteredCollections.map(c => (<button key={c.id} onClick={() => addToCollection(c.id, c.name)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-left transition-colors group"><div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg group-hover:scale-110 transition-transform"><FolderPlus size={18} /></div><span className="font-medium text-gray-700 dark:text-gray-200 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">{c.name}</span></button>)) ) : ( <div className="p-8 text-center text-gray-400 text-sm">{collections.length === 0 ? "You haven't created any collections yet." : "No matching folders found."}</div> )}</div>
+                    <div className="p-4 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/5"><button onClick={() => navigate('/collections')} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-bold py-3 hover:scale-[1.02] transition-transform"><Plus size={16} /> Create New Collection</button></div>
                 </motion.div>
             </div>
         )}

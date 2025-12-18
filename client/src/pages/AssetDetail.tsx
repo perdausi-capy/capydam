@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
-    ArrowLeft, Download, Trash2, Loader2, 
+    ArrowLeft, Download, Trash2, 
     Calendar, HardDrive, FileText, 
     FolderPlus, Hash, ExternalLink, Check, 
     Layout, Link as LinkIcon, Plus, X,
@@ -35,25 +35,66 @@ interface CategorySimple { id: string; name: string; }
 // --- COMPONENT: Collapsible Text ---
 const CollapsibleText = ({ text }: { text: string }) => {
     const [isExpanded, setIsExpanded] = useState(false);
-    const limit = 150;
+    const limit = 200;
 
-    if (!text) return <span className="text-gray-400 italic">No description available.</span>;
-    if (text.length <= limit) return <p className="text-gray-600 dark:text-gray-300 leading-relaxed">{text}</p>;
+    if (!text) return null;
+    if (text.length <= limit) return <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-sm">{text}</p>;
 
     return (
         <div>
-            <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+            <p className="text-gray-600 dark:text-gray-300 leading-relaxed text-sm">
                 {isExpanded ? text : `${text.substring(0, limit)}...`}
             </p>
             <button 
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="mt-1 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline uppercase tracking-wide"
+                className="mt-2 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline uppercase tracking-wide flex items-center gap-1"
             >
-                {isExpanded ? 'See Less' : 'See More'}
+                {isExpanded ? 'Show Less' : 'Read More'}
             </button>
         </div>
     );
 };
+
+// --- SKELETON LOADER ---
+const DetailSkeleton = () => (
+    <div className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8 animate-pulse">
+        <div className="lg:col-span-2 space-y-8">
+            {/* Main Image Placeholder */}
+            <div className="w-full aspect-video bg-gray-200 dark:bg-white/5 rounded-3xl" />
+            
+            {/* Related Title Placeholder */}
+            <div className="h-8 w-48 bg-gray-200 dark:bg-white/5 rounded-lg" />
+            
+            {/* Related Grid Placeholder */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="h-40 bg-gray-200 dark:bg-white/5 rounded-xl" />
+                <div className="h-56 bg-gray-200 dark:bg-white/5 rounded-xl" />
+                <div className="h-32 bg-gray-200 dark:bg-white/5 rounded-xl" />
+                <div className="h-48 bg-gray-200 dark:bg-white/5 rounded-xl" />
+            </div>
+        </div>
+        
+        {/* Right Sidebar Placeholder */}
+        <div className="space-y-6">
+            <div className="h-10 w-3/4 bg-gray-200 dark:bg-white/5 rounded-lg" />
+            <div className="flex gap-2">
+                <div className="h-4 w-20 bg-gray-200 dark:bg-white/5 rounded-lg" />
+                <div className="h-4 w-20 bg-gray-200 dark:bg-white/5 rounded-lg" />
+            </div>
+            <div className="h-px bg-gray-200 dark:bg-white/5 my-6" />
+            <div className="grid grid-cols-2 gap-3">
+                <div className="h-12 w-full bg-gray-200 dark:bg-white/5 rounded-xl" />
+                <div className="h-12 w-full bg-gray-200 dark:bg-white/5 rounded-xl" />
+            </div>
+            <div className="h-24 w-full bg-gray-200 dark:bg-white/5 rounded-2xl" />
+            <div className="space-y-2">
+                <div className="h-4 w-full bg-gray-200 dark:bg-white/5 rounded" />
+                <div className="h-4 w-5/6 bg-gray-200 dark:bg-white/5 rounded" />
+                <div className="h-4 w-4/6 bg-gray-200 dark:bg-white/5 rounded" />
+            </div>
+        </div>
+    </div>
+);
 
 const AssetDetail = () => {
   const { id } = useParams();
@@ -97,41 +138,41 @@ const AssetDetail = () => {
   const canAddToTopic = user?.role === 'admin' || user?.role === 'editor';
 
   // --- FETCH DATA ---
-  const fetchData = async () => {
-    try {
-      const [assetRes, colRes, catRes] = await Promise.all([
-          client.get(`/assets/${id}`),
-          client.get('/collections'),
-          client.get('/categories')
-      ]);
-      
-      setAsset(assetRes.data);
-      // ✅ FIX: Fallback to filename if originalName is empty
-      setNewName(assetRes.data.originalName || assetRes.data.filename); 
-      setCollections(colRes.data || []);
-      setCategories(catRes.data || []);
-
-      try {
-          const ai = JSON.parse(assetRes.data.aiData || '{}');
-          setParsedAi(ai);
-          // ✅ FIX: Check multiple keys for the link
-          setDriveLink(ai.externalLink || ai.link || ai.url || ''); 
-      } catch (e) { setParsedAi({}); }
-
-      const relatedRes = await client.get(`/assets/${id}/related`);
-      setRelatedAssets(relatedRes.data || []);
-
-    } catch (error) {
-      toast.error("Failed to load asset details");
-      navigate('/');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchData();
-  }, [id]);
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            // 1. Fetch Asset Details (Fast)
+            const assetRes = await client.get(`/assets/${id}`);
+            setAsset(assetRes.data);
+            setNewName(assetRes.data.originalName || assetRes.data.filename);
+            
+            // Parse AI Data immediately
+            try {
+                const ai = JSON.parse(assetRes.data.aiData || '{}');
+                setParsedAi(ai);
+                setDriveLink(ai.externalLink || ai.link || ai.url || '');
+            } catch { setParsedAi({}); }
+
+            // 2. Fetch Metadata in Background
+            client.get('/collections').then(res => setCollections(res.data || [])).catch(() => {});
+            client.get('/categories').then(res => setCategories(res.data || [])).catch(() => {});
+
+            // 3. Fetch Related Assets (Optimized Endpoint)
+            client.get(`/assets/${id}/related`).then(res => {
+                setRelatedAssets(res.data || []);
+            }).catch(() => {});
+
+        } catch (error) {
+            toast.error("Asset not found");
+            navigate('/');
+        } finally {
+            // Tiny delay to prevent flicker if API is too fast
+            setTimeout(() => setLoading(false), 300);
+        }
+    };
+    if (id) loadData();
+  }, [id, navigate]);
 
   // --- ACTIONS ---
 
@@ -181,7 +222,6 @@ const AssetDetail = () => {
       if (!asset) return;
       setIsSavingLink(true);
       try {
-          // Normalize to 'externalLink' when saving
           const newAiData = { ...parsedAi, externalLink: driveLink };
           await client.patch(`/assets/${asset.id}`, { aiData: JSON.stringify(newAiData) });
           setParsedAi(newAiData);
@@ -211,7 +251,6 @@ const AssetDetail = () => {
 
   const updateTags = async (newTags: string[]) => {
       if (!asset) return;
-      // Normalize to 'tags' when saving
       const newAiData = { ...parsedAi, tags: newTags };
       try {
           await client.patch(`/assets/${asset.id}`, { aiData: JSON.stringify(newAiData) });
@@ -247,12 +286,10 @@ const AssetDetail = () => {
 
   const breakpointColumnsObj = { default: 4, 1100: 3, 700: 2, 500: 1 };
 
-  if (loading) return <div className="flex h-screen items-center justify-center dark:bg-[#0B0D0F]"><Loader2 className="animate-spin text-blue-600" size={40} /></div>;
-  if (!asset) return null;
-
-  // ✅ HELPER: Get effective link and tags
+  // ✅ HELPER: Get effective data
   const effectiveLink = parsedAi.externalLink || parsedAi.link || parsedAi.url || null;
   const effectiveTags = parsedAi.tags || parsedAi.keywords || [];
+  const effectiveDescription = parsedAi.description || parsedAi.summary || parsedAi.caption || "";
 
   return (
     <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] pb-20 transition-colors duration-500">
@@ -277,214 +314,215 @@ const AssetDetail = () => {
           </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* LEFT: PREVIEW */}
-          <div className="lg:col-span-2 space-y-12">
-              <div className="rounded-3xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] border border-gray-200 dark:border-white/5 shadow-sm">
-                  {asset.mimeType.startsWith('image/') ? (
-                      <img src={asset.path} alt={asset.originalName} className="w-full h-auto object-contain max-h-[80vh]" />
-                  ) : asset.mimeType.startsWith('video/') ? (
-                      // ✅ FIX: Added poster={asset.thumbnailPath} to show thumbnail
-                      <video 
-                        src={asset.path} 
-                        poster={asset.thumbnailPath || undefined} 
-                        controls 
-                        className="w-full h-auto max-h-[80vh]" 
-                      />
-                  ) : (
-                      <div className="h-96 flex flex-col items-center justify-center text-gray-400">
-                          <FileText size={64} />
-                          <p className="mt-4 font-medium">Preview not available</p>
+      {loading || !asset ? (
+          <DetailSkeleton />
+      ) : (
+          <div className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+              
+              {/* LEFT: PREVIEW */}
+              <div className="lg:col-span-2 space-y-12">
+                  <div className="rounded-3xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] border border-gray-200 dark:border-white/5 shadow-sm">
+                      {asset.mimeType.startsWith('image/') ? (
+                          <img src={asset.path} alt={asset.originalName} className="w-full h-auto object-contain max-h-[80vh]" />
+                      ) : asset.mimeType.startsWith('video/') ? (
+                          <video 
+                            src={asset.path} 
+                            poster={asset.thumbnailPath || undefined} 
+                            controls 
+                            className="w-full h-auto max-h-[80vh]" 
+                          />
+                      ) : (
+                          <div className="h-96 flex flex-col items-center justify-center text-gray-400">
+                              <FileText size={64} />
+                              <p className="mt-4 font-medium">Preview not available</p>
+                          </div>
+                      )}
+                  </div>
+
+                  {/* Related Assets */}
+                  {relatedAssets.length > 0 && (
+                      <div>
+                          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">More Like This</h3>
+                          <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-4" columnClassName="pl-4 bg-clip-padding">
+                              {relatedAssets.map(item => (
+                                  <div key={item.id} className="block mb-4 group cursor-pointer" onClick={() => navigate(`/assets/${item.id}`)}>
+                                      <div className="rounded-xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] shadow-sm hover:shadow-md transition-all">
+                                          <AssetThumbnail 
+                                            mimeType={item.mimeType} 
+                                            thumbnailPath={item.thumbnailPath || item.path} 
+                                            className="w-full h-auto object-cover group-hover:opacity-90 transition-opacity" 
+                                          />
+                                      </div>
+                                  </div>
+                              ))}
+                          </Masonry>
                       </div>
                   )}
               </div>
 
-              {/* Related Assets */}
-              {relatedAssets.length > 0 && (
-                  <div>
-                      <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">More Like This</h3>
-                      <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-4" columnClassName="pl-4 bg-clip-padding">
-                          {relatedAssets.map(item => (
-                              <div key={item.id} className="block mb-4 group cursor-pointer" onClick={() => navigate(`/assets/${item.id}`)}>
-                                  <div className="rounded-xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] shadow-sm hover:shadow-md transition-all">
-                                      {/* ✅ FIX: Use AssetThumbnail for consistent fallback */}
-                                      <AssetThumbnail 
-                                        mimeType={item.mimeType} 
-                                        thumbnailPath={item.thumbnailPath || item.path} 
-                                        className="w-full h-auto object-cover group-hover:opacity-90 transition-opacity" 
-                                      />
-                                  </div>
-                              </div>
-                          ))}
-                      </Masonry>
-                  </div>
-              )}
-          </div>
-
-          {/* RIGHT: INFO PANEL */}
-          <div className="space-y-6">
-              
-              {/* 1. TITLE & RENAME */}
-              <div className="group">
-                  {isRenaming ? (
-                      <div className="flex items-center gap-2">
-                          <input 
-                              type="text" 
-                              value={newName} 
-                              onChange={(e) => setNewName(e.target.value)} 
-                              autoFocus 
-                              className="w-full text-2xl font-bold bg-white dark:bg-[#1A1D21] border-b-2 border-blue-500 outline-none text-gray-900 dark:text-white pb-1"
-                          />
-                          <button onClick={handleRename} className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200"><Check size={18} /></button>
-                          <button onClick={() => setIsRenaming(false)} className="p-2 bg-gray-100 dark:bg-white/10 text-gray-500 rounded-lg hover:bg-gray-200"><X size={18} /></button>
+              {/* RIGHT: INFO PANEL */}
+              <div className="space-y-6">
+                  
+                  {/* 1. TITLE & RENAME */}
+                  <div className="group">
+                      {isRenaming ? (
+                          <div className="flex items-center gap-2">
+                              <input 
+                                  type="text" 
+                                  value={newName} 
+                                  onChange={(e) => setNewName(e.target.value)} 
+                                  autoFocus 
+                                  className="w-full text-2xl font-bold bg-white dark:bg-[#1A1D21] border-b-2 border-blue-500 outline-none text-gray-900 dark:text-white pb-1"
+                              />
+                              <button onClick={handleRename} className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200"><Check size={18} /></button>
+                              <button onClick={() => setIsRenaming(false)} className="p-2 bg-gray-100 dark:bg-white/10 text-gray-500 rounded-lg hover:bg-gray-200"><X size={18} /></button>
+                          </div>
+                      ) : (
+                          <div className="flex items-start justify-between">
+                              <h1 className="text-2xl font-bold text-gray-900 dark:text-white break-words leading-tight">
+                                  {asset.originalName || asset.filename}
+                              </h1>
+                              {canManageAsset && (
+                                  <button onClick={() => setIsRenaming(true)} className="ml-2 p-1.5 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Rename Asset">
+                                      <Edit2 size={16} />
+                                  </button>
+                              )}
+                          </div>
+                      )}
+                      
+                      <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-gray-400 font-medium mt-2">
+                          <span className="flex items-center gap-1.5"><Calendar size={14}/> {new Date(asset.createdAt).toLocaleDateString()}</span>
+                          <span className="flex items-center gap-1.5"><HardDrive size={14}/> {(asset.size / 1024 / 1024).toFixed(2)} MB</span>
+                          <span className="uppercase bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded text-[10px] tracking-wide">{asset.mimeType.split('/')[1]}</span>
                       </div>
-                  ) : (
-                      <div className="flex items-start justify-between">
-                          <h1 className="text-2xl font-bold text-gray-900 dark:text-white break-words leading-tight">
-                              {/* ✅ FIX: Fallback to filename if originalName is null */}
-                              {asset.originalName || asset.filename}
-                          </h1>
+
+                      {/* ASSET OWNER */}
+                      <div className="flex items-center gap-2 mt-4 text-sm font-medium text-gray-700 dark:text-gray-300">
+                          <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center text-[10px] text-white font-bold shadow-sm">
+                              {asset.uploadedBy?.name?.charAt(0).toUpperCase() || 'U'}
+                          </div>
+                          <span>
+                              Uploaded by <span className="text-gray-900 dark:text-white font-bold">{asset.uploadedBy?.name || 'Unknown'}</span>
+                          </span>
+                      </div>
+                  </div>
+
+                  <hr className="border-gray-200 dark:border-white/10" />
+
+                  {/* 2. ACTION BUTTONS */}
+                  <div className={`grid gap-3 relative z-20 ${canAddToTopic ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                      <button 
+                          onClick={() => openSelectionModal('collection')}
+                          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 hover:border-blue-500 dark:hover:border-blue-400 bg-white dark:bg-[#1A1D21] text-gray-700 dark:text-gray-200 font-bold text-sm transition-all shadow-sm active:scale-95"
+                      >
+                          <FolderPlus size={18} className="text-blue-500" /> Collection
+                      </button>
+
+                      {canAddToTopic && (
+                          <button 
+                              onClick={() => openSelectionModal('topic')}
+                              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 hover:border-purple-500 dark:hover:border-purple-400 bg-white dark:bg-[#1A1D21] text-gray-700 dark:text-gray-200 font-bold text-sm transition-all shadow-sm active:scale-95"
+                          >
+                              <Layout size={18} className="text-purple-500" /> Topic
+                          </button>
+                      )}
+                  </div>
+
+                  {/* 3. GOOGLE DRIVE LINK */}
+                  <div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl p-5 border border-blue-100 dark:border-blue-800/30">
+                      <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm font-bold text-gray-800 dark:text-blue-100 flex items-center gap-2">
+                              <ExternalLink size={16} /> Source Link
+                          </h3>
                           {canManageAsset && (
-                              <button onClick={() => setIsRenaming(true)} className="ml-2 p-1.5 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Rename Asset">
-                                  <Edit2 size={16} />
+                              <button onClick={() => setIsEditingLink(!isEditingLink)} className="text-xs font-bold text-blue-600 hover:underline">
+                                  {isEditingLink ? 'Cancel' : 'Edit'}
                               </button>
                           )}
                       </div>
-                  )}
-                  
-                  <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-gray-400 font-medium mt-2">
-                      <span className="flex items-center gap-1.5"><Calendar size={14}/> {new Date(asset.createdAt).toLocaleDateString()}</span>
-                      <span className="flex items-center gap-1.5"><HardDrive size={14}/> {(asset.size / 1024 / 1024).toFixed(2)} MB</span>
-                      <span className="uppercase bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded text-[10px] tracking-wide">{asset.mimeType.split('/')[1]}</span>
-                  </div>
 
-                  {/* ASSET OWNER */}
-                  <div className="flex items-center gap-2 mt-4 text-sm font-medium text-gray-700 dark:text-gray-300">
-                      <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center text-[10px] text-white font-bold shadow-sm">
-                          {asset.uploadedBy?.name?.charAt(0).toUpperCase() || 'U'}
-                      </div>
-                      <span>
-                          Uploaded by <span className="text-gray-900 dark:text-white font-bold">{asset.uploadedBy?.name || 'Unknown'}</span>
-                      </span>
-                  </div>
-              </div>
-
-              <hr className="border-gray-200 dark:border-white/10" />
-
-              {/* 2. ACTION BUTTONS */}
-              <div className={`grid gap-3 relative z-20 ${canAddToTopic ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                  <button 
-                      onClick={() => openSelectionModal('collection')}
-                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 hover:border-blue-500 dark:hover:border-blue-400 bg-white dark:bg-[#1A1D21] text-gray-700 dark:text-gray-200 font-bold text-sm transition-all shadow-sm active:scale-95"
-                  >
-                      <FolderPlus size={18} className="text-blue-500" /> Collection
-                  </button>
-
-                  {canAddToTopic && (
-                      <button 
-                          onClick={() => openSelectionModal('topic')}
-                          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 hover:border-purple-500 dark:hover:border-purple-400 bg-white dark:bg-[#1A1D21] text-gray-700 dark:text-gray-200 font-bold text-sm transition-all shadow-sm active:scale-95"
-                      >
-                          <Layout size={18} className="text-purple-500" /> Topic
-                      </button>
-                  )}
-              </div>
-
-              {/* 3. GOOGLE DRIVE LINK */}
-              <div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl p-5 border border-blue-100 dark:border-blue-800/30">
-                  <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-bold text-gray-800 dark:text-blue-100 flex items-center gap-2">
-                          <ExternalLink size={16} /> Source Link
-                      </h3>
-                      {canManageAsset && (
-                          <button onClick={() => setIsEditingLink(!isEditingLink)} className="text-xs font-bold text-blue-600 hover:underline">
-                              {isEditingLink ? 'Cancel' : 'Edit'}
-                          </button>
-                      )}
-                  </div>
-
-                  {isEditingLink ? (
-                      <div className="flex gap-2">
-                          <input 
-                              type="url" 
-                              value={driveLink} 
-                              onChange={e => setDriveLink(e.target.value)} 
-                              placeholder="Paste link..." 
-                              className="flex-1 text-sm bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                          <button onClick={saveDriveLink} disabled={isSavingLink} className="bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-50">
-                              <Check size={16} />
-                          </button>
-                      </div>
-                  ) : effectiveLink ? (
-                      <a 
-                          href={effectiveLink} 
-                          target="_blank" 
-                          rel="noreferrer" 
-                          className="flex items-center justify-center gap-2 w-full bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500 text-gray-700 dark:text-gray-200 font-semibold py-3 rounded-xl shadow-sm transition-all hover:shadow-md group"
-                      >
-                          <LinkIcon size={16} className="text-blue-500 group-hover:rotate-45 transition-transform" />
-                          Open Link
-                      </a>
-                  ) : (
-                      <p className="text-xs text-gray-400 italic">No external link added.</p>
-                  )}
-              </div>
-
-              {/* 4. DESCRIPTION */}
-              <div>
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</h3>
-                  {/* ✅ FIX: Check multiple fields for description */}
-                  <CollapsibleText text={parsedAi.description || parsedAi.summary || ""} />
-              </div>
-
-              {/* 5. TAGS */}
-              <div>
-                  <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tags</h3>
-                      {canManageAsset && !isAddingTag && (
-                          <button onClick={() => setIsAddingTag(true)} className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-white/5 p-1 rounded transition-colors">
-                              <Plus size={14} />
-                          </button>
-                      )}
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-2">
-                      {/* ✅ FIX: Use effectiveTags to catch all variations */}
-                      {effectiveTags.length > 0 ? (
-                        effectiveTags.map((tag: string) => (
-                            <span key={tag} className="group flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-full border border-gray-200 dark:border-white/5">
-                                <Hash size={10} className="opacity-50" /> {tag}
-                                {canManageAsset && (
-                                    <button onClick={() => handleRemoveTag(tag)} className="ml-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <X size={10} />
-                                    </button>
-                                )}
-                            </span>
-                        ))
-                      ) : (
-                        <p className="text-xs text-gray-400 italic">No tags found.</p>
-                      )}
-
-                      {isAddingTag && (
-                          <form onSubmit={handleAddTag} className="flex items-center">
+                      {isEditingLink ? (
+                          <div className="flex gap-2">
                               <input 
-                                  autoFocus 
-                                  type="text" 
-                                  value={newTag} 
-                                  onChange={e => setNewTag(e.target.value)} 
-                                  onBlur={() => setIsAddingTag(false)} 
-                                  className="text-xs bg-white dark:bg-black/20 border border-blue-500 rounded-full px-2 py-1 outline-none w-24" 
-                                  placeholder="New tag..." 
+                                  type="url" 
+                                  value={driveLink} 
+                                  onChange={e => setDriveLink(e.target.value)} 
+                                  placeholder="Paste link..." 
+                                  className="flex-1 text-sm bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
                               />
-                          </form>
+                              <button onClick={saveDriveLink} disabled={isSavingLink} className="bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-50">
+                                  <Check size={16} />
+                              </button>
+                          </div>
+                      ) : effectiveLink ? (
+                          <a 
+                              href={effectiveLink} 
+                              target="_blank" 
+                              rel="noreferrer" 
+                              className="flex items-center justify-center gap-2 w-full bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500 text-gray-700 dark:text-gray-200 font-semibold py-3 rounded-xl shadow-sm transition-all hover:shadow-md group"
+                          >
+                              <LinkIcon size={16} className="text-blue-500 group-hover:rotate-45 transition-transform" />
+                              Open Link
+                          </a>
+                      ) : (
+                          <p className="text-xs text-gray-400 italic">No external link added.</p>
                       )}
                   </div>
-              </div>
 
+                  {/* 4. DESCRIPTION (Only shows if text exists) */}
+                  {effectiveDescription && (
+                    <div>
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</h3>
+                        <CollapsibleText text={effectiveDescription} />
+                    </div>
+                  )}
+
+                  {/* 5. TAGS */}
+                  <div>
+                      <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tags</h3>
+                          {canManageAsset && !isAddingTag && (
+                              <button onClick={() => setIsAddingTag(true)} className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-white/5 p-1 rounded transition-colors">
+                                  <Plus size={14} />
+                              </button>
+                          )}
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-2">
+                          {effectiveTags.length > 0 ? (
+                            effectiveTags.map((tag: string) => (
+                                <span key={tag} className="group flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-full border border-gray-200 dark:border-white/5">
+                                    <Hash size={10} className="opacity-50" /> {tag}
+                                    {canManageAsset && (
+                                        <button onClick={() => handleRemoveTag(tag)} className="ml-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <X size={10} />
+                                        </button>
+                                    )}
+                                </span>
+                            ))
+                          ) : (
+                            <p className="text-xs text-gray-400 italic">No tags found.</p>
+                          )}
+
+                          {isAddingTag && (
+                              <form onSubmit={handleAddTag} className="flex items-center">
+                                  <input 
+                                      autoFocus 
+                                      type="text" 
+                                      value={newTag} 
+                                      onChange={e => setNewTag(e.target.value)} 
+                                      onBlur={() => setIsAddingTag(false)} 
+                                      className="text-xs bg-white dark:bg-black/20 border border-blue-500 rounded-full px-2 py-1 outline-none w-24" 
+                                      placeholder="New tag..." 
+                                  />
+                              </form>
+                          )}
+                      </div>
+                  </div>
+
+              </div>
           </div>
-      </div>
+      )}
 
       {/* SELECTION MODAL */}
       {activeModal && (
