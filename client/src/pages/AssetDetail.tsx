@@ -231,9 +231,11 @@ const AssetDetail = () => {
     try {
       await client.delete(`/assets/${asset.id}`);
       
-      // 3. 🚨 INVALIDATE CACHE HERE 🚨
-      // This forces the Dashboard to re-fetch fresh data immediately
-      await queryClient.invalidateQueries({ queryKey: ['assets'] });
+      // 🛑 OLD WAY (Shows stale data while fetching in bg)
+      // await queryClient.invalidateQueries({ queryKey: ['assets'] });
+  
+      // ✅ NEW WAY (Nukes the cache -> Forces Dashboard to show Skeletons)
+      await queryClient.resetQueries({ queryKey: ['assets'] });
       
       toast.success("Asset deleted");
       navigate(-1);
