@@ -358,103 +358,139 @@ export const getAssetById = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-// --- RECOMMENDATIONS (Fixed for Migrated Assets) ---
+// --- RECOMMENDATIONS (Search Engine Powered V4.0) ---
 export const getRelatedAssets = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    console.log(`\n🔍 [Debug] Finding related assets for: ${id}`);
-
-    // 1. Try Vector Search (For AI Assets)
-    const targetAsset: any = await prisma.$queryRaw`
-      SELECT embedding::text FROM "Asset" WHERE id = ${id}
-    `;
-
-    // A. Use Vector Search if embedding exists
-    if (targetAsset && targetAsset.length > 0 && targetAsset[0].embedding) {
-        console.log("   ✅ Using AI Vector Search");
-        const vectorString = targetAsset[0].embedding;
-        const relatedAssets = await prisma.$queryRaw`
-          SELECT id, filename, "originalName", "mimeType", "thumbnailPath", "aiData"
-          FROM "Asset"
-          WHERE id != ${id}
-          AND embedding IS NOT NULL
-          AND (embedding <=> ${vectorString}::vector) < 0.60
-          ORDER BY embedding <=> ${vectorString}::vector
-          LIMIT 20;
-        `;
-        
-        if ((relatedAssets as any[]).length > 0) {
-            res.json(relatedAssets);
-            return;
-        }
-    }
-
-    // ---------------------------------------------------------
-    // B. Text Fallback (For Migrated Assets)
-    // ---------------------------------------------------------
-    console.log("   ⚠️ No embedding or no results. Using Text Fallback.");
     
-    const currentAsset = await prisma.asset.findUnique({
+    // 1. Fetch Target Asset Info
+    const targetAsset = await prisma.asset.findUnique({
         where: { id },
-        select: { originalName: true, aiData: true }
+        select: { id: true, originalName: true, aiData: true, createdAt: true }
     });
 
-    if (!currentAsset) {
+    if (!targetAsset) {
         res.json([]);
         return;
     }
 
-    // 1. Better Keyword Extraction (Handles 'migration/photo.jpg')
-    const rawName = currentAsset.originalName || '';
-    const nameKeywords = rawName
-        .split(/[\s_\-\.\/]+/) // 👈 Added '/' to split path like "migration/file.jpg"
-        .filter(w => w.length > 3 && isNaN(Number(w)) && w !== 'migration'); // Filter 'migration' keyword
+    // 2. CHECK FOR VECTORS (Priority #1)
+    // If it has an embedding, Vector Search is always superior to keyword search.
+    const vectorResult: any = await prisma.$queryRaw`
+      SELECT embedding::text FROM "Asset" WHERE id = ${id}
+    `;
 
-    // 2. Extract Tags
-    let tagKeywords: string[] = [];
-    try {
-        const parsed = JSON.parse(currentAsset.aiData || '{}');
-        if (Array.isArray(parsed.tags)) tagKeywords = parsed.tags;
-        if (typeof parsed.keywords === 'string') tagKeywords = parsed.keywords.split(',');
-    } catch (e) {}
-
-    const searchTerms = [...new Set([...nameKeywords, ...tagKeywords])].slice(0, 8);
-    console.log("   🔎 Search Terms:", searchTerms);
-
-    // 3. Perform Text Search
-    if (searchTerms.length > 0) {
-        const relatedByText = await prisma.asset.findMany({
-            where: {
-                id: { not: id },
-                OR: [
-                    ...searchTerms.map(t => ({ originalName: { contains: t, mode: Prisma.QueryMode.insensitive } })),
-                    ...searchTerms.map(t => ({ aiData: { contains: t, mode: Prisma.QueryMode.insensitive } }))
-                ]
-            },
-            take: 20,
-            select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true }
-        });
-
-        if (relatedByText.length > 0) {
-            console.log(`   ✅ Found ${relatedByText.length} matches via text.`);
-            res.json(relatedByText);
+    if (vectorResult && vectorResult.length > 0 && vectorResult[0].embedding) {
+        const vectorString = vectorResult[0].embedding;
+        const relatedVectors = await prisma.$queryRaw`
+          SELECT id, filename, "originalName", "mimeType", "thumbnailPath", "aiData"
+          FROM "Asset"
+          WHERE id != ${id}
+          AND embedding IS NOT NULL
+          AND (embedding <=> ${vectorString}::vector) < 0.45
+          ORDER BY embedding <=> ${vectorString}::vector
+          LIMIT 20;
+        `;
+        
+        if ((relatedVectors as any[]).length > 0) {
+            res.json(relatedVectors);
             return;
         }
     }
 
-    // ---------------------------------------------------------
-    // C. "Last Resort" Fallback (Recent Uploads)
-    // ---------------------------------------------------------
-    console.log("   ⚠️ No text matches. Showing recent assets.");
+    // 3. SEARCH ENGINE FALLBACK (Priority #2)
+    // We construct a "Search Query" based on this asset's metadata
     
-    const recentAssets = await prisma.asset.findMany({
-        where: { id: { not: id } },
-        orderBy: { createdAt: 'desc' },
-        take: 20,
+    // A. Define Stop Words (Noise Filter)
+    const stopWords = new Set([
+        'image', 'img', 'pic', 'picture', 'photo', 'screenshot', 'screen', 'shot',
+        'copy', 'final', 'draft', 'upload', 'new', 'old', 'backup', 
+        'ds', 'store', 'frame', 'rectangle', 'group', 'vector',
+        'untitled', 'design', 'migration', 'import', 'jpg', 'png', 'mp4'
+    ]);
+
+    // B. Extract Keywords (The "Query")
+    const rawName = targetAsset.originalName || '';
+    const nameKeywords = rawName
+        .split(/[\s_\-\.\/]+/)
+        .map(w => w.toLowerCase())
+        .filter(w => w.length > 3 && !/^\d+$/.test(w) && !stopWords.has(w));
+
+    let tagKeywords: string[] = [];
+    try {
+        const parsed = JSON.parse(targetAsset.aiData || '{}');
+        if (Array.isArray(parsed.tags)) tagKeywords = parsed.tags;
+        if (typeof parsed.keywords === 'string') tagKeywords = parsed.keywords.split(',');
+    } catch (e) {}
+
+    // Combine into unique search terms
+    const searchTerms = [...new Set([...tagKeywords, ...nameKeywords])].slice(0, 10);
+
+    // If no keywords found, fallback to Recent (Priority #3)
+    if (searchTerms.length === 0) {
+        const recent = await prisma.asset.findMany({
+            where: { id: { not: id } },
+            orderBy: { createdAt: 'desc' },
+            take: 20,
+             // ⚡ Optimization: Lightweight Select
+            select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true }
+        });
+        res.json(recent);
+        return;
+    }
+
+    // C. RUN THE SEARCH ENGINE (Exact logic from getAssets)
+    const candidates = await prisma.asset.findMany({
+        where: {
+            id: { not: id },
+            OR: [
+                ...searchTerms.map(t => ({ originalName: { contains: t, mode: Prisma.QueryMode.insensitive } })),
+                ...searchTerms.map(t => ({ aiData: { contains: t, mode: Prisma.QueryMode.insensitive } }))
+            ]
+        },
+        take: 100, // Fetch pool of candidates
         select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true }
     });
 
-    res.json(recentAssets);
+    // D. SCORING ALGORITHM (The Magic) 🪄
+    const scoredAssets = candidates.map(asset => {
+        let score = 0;
+        const lowerName = (asset.originalName || '').toLowerCase();
+        const lowerAI = (String(asset.aiData) || '').toLowerCase();
+
+        searchTerms.forEach(term => {
+            const lowerTerm = term.toLowerCase();
+            // High score for Name match
+            if (lowerName.includes(lowerTerm)) score += 50;
+            // Medium score for Tag/AI match
+            if (lowerAI.includes(lowerTerm)) score += 30;
+            // Exact match bonus
+            if (lowerName === lowerTerm) score += 50;
+        });
+
+        return { asset, score };
+    });
+
+    // Sort by Score DESC
+    const finalResults = scoredAssets
+        .filter(item => item.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 20)
+        .map(item => item.asset);
+
+    // If scoring filtered everything out, show recent
+    if (finalResults.length === 0) {
+        const recent = await prisma.asset.findMany({
+            where: { id: { not: id } },
+            orderBy: { createdAt: 'desc' },
+            take: 20,
+            select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true }
+        });
+        res.json(recent);
+        return;
+    }
+
+    res.json(finalResults);
 
   } catch (error) {
     console.error("Related Error:", error);
