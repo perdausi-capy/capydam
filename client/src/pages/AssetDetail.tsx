@@ -6,7 +6,7 @@ import {
     Calendar, HardDrive, FileText, 
     FolderPlus, Hash, ExternalLink, Check, 
     Layout, Link as LinkIcon, Plus, X,
-    Edit2, Search, Loader2, Share2 // ✅ Added Share2
+    Edit2, Search, Loader2, Share2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -56,46 +56,27 @@ const CollapsibleText = ({ text }: { text: string }) => {
     );
 };
 
-// --- MAIN PAGE SKELETON ---
+// --- SKELETONS ---
 const DetailSkeleton = () => (
     <div className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8 animate-pulse">
         <div className="lg:col-span-2 space-y-8">
             <div className="w-full aspect-video bg-gray-200 dark:bg-white/5 rounded-3xl" />
             <div className="h-8 w-48 bg-gray-200 dark:bg-white/5 rounded-lg" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="h-40 bg-gray-200 dark:bg-white/5 rounded-xl" />
-                <div className="h-56 bg-gray-200 dark:bg-white/5 rounded-xl" />
-                <div className="h-32 bg-gray-200 dark:bg-white/5 rounded-xl" />
-                <div className="h-48 bg-gray-200 dark:bg-white/5 rounded-xl" />
-            </div>
         </div>
         <div className="space-y-6">
             <div className="h-10 w-3/4 bg-gray-200 dark:bg-white/5 rounded-lg" />
-            <div className="flex gap-2">
-                <div className="h-4 w-20 bg-gray-200 dark:bg-white/5 rounded-lg" />
-                <div className="h-4 w-20 bg-gray-200 dark:bg-white/5 rounded-lg" />
-            </div>
-            <div className="h-px bg-gray-200 dark:bg-white/5 my-6" />
-            <div className="grid grid-cols-2 gap-3">
-                <div className="h-12 w-full bg-gray-200 dark:bg-white/5 rounded-xl" />
-                <div className="h-12 w-full bg-gray-200 dark:bg-white/5 rounded-xl" />
-            </div>
             <div className="h-24 w-full bg-gray-200 dark:bg-white/5 rounded-2xl" />
         </div>
     </div>
 );
 
-// --- RELATED ITEMS SKELETON ---
 const RelatedSkeleton = () => (
     <div className="mt-6">
         <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">More Like This</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="space-y-2">
-                    <div 
-                        className="w-full bg-gray-200 dark:bg-white/5 rounded-xl animate-pulse" 
-                        style={{ height: i % 2 === 0 ? '200px' : '280px' }} 
-                    />
+                    <div className="w-full bg-gray-200 dark:bg-white/5 rounded-xl animate-pulse" style={{ height: '200px' }} />
                 </div>
             ))}
         </div>
@@ -136,9 +117,19 @@ const AssetDetail = () => {
   const [parsedAi, setParsedAi] = useState<any>({});
   const queryClient = useQueryClient();
 
-  // ✅ Permissions
-  const canManageAsset = user?.role === 'admin' || user?.role === 'editor' || user?.id === asset?.userId;
-  const canAddToTopic = user?.role === 'admin' || user?.role === 'editor';
+  // ✅ 1. PERMISSION LOGIC SPLIT
+  const isOwner = user?.id === asset?.userId;
+  const isAdmin = user?.role === 'admin';
+  const isEditor = user?.role === 'editor';
+
+  // Editors can manage Metadata (Rename, Tags, Links)
+  const canManageAsset = isAdmin || isEditor || isOwner;
+  
+  // 🛑 Editors CANNOT Delete (Only Admin or Owner)
+  const canDelete = isAdmin || isOwner;
+
+  // Add to Topic (Editor/Admin)
+  const canAddToTopic = isAdmin || isEditor;
 
   useEffect(() => {
     const loadData = async () => {
@@ -196,7 +187,6 @@ const AssetDetail = () => {
     } catch (e) { toast.error("Download failed"); }
   };
 
-  // ✅ New Share Handler
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
     toast.success("Link copied to clipboard!");
@@ -277,31 +267,21 @@ const AssetDetail = () => {
   const addToCollection = async (collectionId: string, name: string) => {
       if (!asset || addingToId) return; 
       setAddingToId(collectionId); 
-      
       try {
           await client.post(`/collections/${collectionId}/assets`, { assetId: asset.id });
           toast.success(`Added to ${name}`);
           setActiveModal(null); 
-      } catch (e) { 
-          toast.info("Already in this collection"); 
-      } finally {
-          setAddingToId(null);
-      }
+      } catch (e) { toast.info("Already in this collection"); } finally { setAddingToId(null); }
   };
 
   const addToTopic = async (categoryId: string, name: string) => {
       if (!asset || addingToId) return;
       setAddingToId(categoryId);
-
       try {
           await client.post(`/categories/${categoryId}/assets`, { assetId: asset.id });
           toast.success(`Added to ${name}`);
           setActiveModal(null);
-      } catch (e) { 
-          toast.info("Already in this topic"); 
-      } finally {
-          setAddingToId(null);
-      }
+      } catch (e) { toast.info("Already in this topic"); } finally { setAddingToId(null); }
   };
 
   const filteredCollections = collections.filter(c => c.name.toLowerCase().includes(modalSearch.toLowerCase()));
@@ -328,13 +308,12 @@ const AssetDetail = () => {
                       <Download size={16} /> Download
                   </button>
 
-                  {/* ✅ SHARE BUTTON (Visible to everyone) */}
                   <button onClick={handleShare} className="flex items-center gap-2 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-gray-50 dark:hover:bg-white/5 transition-all">
                       <Share2 size={16} /> Share
                   </button>
 
-                  {/* ✅ DELETE BUTTON (Visible only to Owners/Admins) */}
-                  {canManageAsset && (
+                  {/* ✅ DELETE BUTTON: Visible only to Owners or Admins */}
+                  {canDelete && (
                       <button 
                         onClick={() => setShowDeleteConfirm(true)} 
                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
@@ -358,12 +337,7 @@ const AssetDetail = () => {
                       {asset.mimeType.startsWith('image/') ? (
                           <img src={asset.path} alt={asset.originalName} className="w-full h-auto object-contain max-h-[80vh]" />
                       ) : asset.mimeType.startsWith('video/') ? (
-                          <video 
-                            src={asset.path} 
-                            poster={asset.thumbnailPath || undefined} 
-                            controls 
-                            className="w-full h-auto max-h-[80vh]" 
-                          />
+                          <video src={asset.path} poster={asset.thumbnailPath || undefined} controls className="w-full h-auto max-h-[80vh]" />
                       ) : (
                           <div className="h-96 flex flex-col items-center justify-center text-gray-400">
                               <FileText size={64} />
@@ -417,6 +391,7 @@ const AssetDetail = () => {
                               <h1 className="text-2xl font-bold text-gray-900 dark:text-white leading-tight break-words break-all line-clamp-3" title={asset.originalName || asset.filename}>
                                   {asset.originalName || asset.filename}
                               </h1>
+                              {/* Editors CAN rename, so we use canManageAsset */}
                               {canManageAsset && (
                                   <button onClick={() => setIsRenaming(true)} className="shrink-0 ml-1 p-1.5 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Rename Asset">
                                       <Edit2 size={16} />
