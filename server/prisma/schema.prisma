@@ -1,8 +1,5 @@
-// server/prisma/schema.prisma
-
 generator client {
   provider        = "prisma-client-js"
-  // 1. Enable the preview feature for extensions
   previewFeatures = ["postgresqlExtensions"] 
 }
 
@@ -10,19 +7,14 @@ datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
-  // 2. Explicitly tell Prisma we need the vector extension
   extensions = [vector]
 }
 
-// User Roles for RBAC (Role Based Access Control)
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
-  // ⚠️ CHANGE: Make password optional for SSO
   password  String?  
-  // ✅ NEW: Track how they signed in ('google', 'email', 'legacy_import')
   provider  String   @default("email") 
-  
   name      String?
   role      String   @default("viewer") 
   status    String   @default("PENDING") 
@@ -32,14 +24,33 @@ model User {
   
   collections Collection[]
   assets      Asset[] 
+  
+  // ✅ RELATION TO FEEDBACK
+  feedbacks   Feedback[]
 }
 
+// ✅ FEEDBACK MODEL
+model Feedback {
+  id        String   @id @default(uuid())
+  type      String   // 'general', 'bug', 'feature'
+  subject   String
+  message   String
+  status    String   @default("new") 
+  createdAt DateTime @default(now())
 
-// GLOBAL CATEGORIES (System Folders)
+  adminReply String?   // The message from the admin
+  repliedAt  DateTime? // When the reply was sent
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([status])
+}
+
 model Category {
   id        String   @id @default(uuid())
   name      String   @unique
-  group     String   // "Features" or "Inspiration"
+  group     String   
   coverImage String?
   assets    AssetOnCategory[]
   createdAt DateTime @default(now())
@@ -56,52 +67,37 @@ model AssetOnCategory {
 }
 
 model Asset {
-  id            String   @id @default(uuid())
-  filename      String
-  originalName  String
-  mimeType      String
-  size          Int
-  
-  categories AssetOnCategory[]
-  path          String    
-  thumbnailPath String?
-
-  // ✅ NEW: Add fields for ResourceSpace Metadata
-  description   String?   // ResourceSpace "Caption"
-  keywords      String[]  // ResourceSpace "Keywords" (Postgres supports arrays!)
-  legacyId      Int?      // To track which ResourceSpace ID this came from (crucial for migration debugging)
-
-  aiData        String?   // JSON string
-  embedding     Unsupported("vector(1536)")?
-  
-  uploadedBy    User     @relation(fields: [userId], references: [id])
-  userId        String
-
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  collections   AssetOnCollection[]
+  id             String   @id @default(uuid())
+  filename       String
+  originalName   String
+  mimeType       String
+  size           Int
+  categories     AssetOnCategory[]
+  path           String    
+  thumbnailPath  String?
+  description    String?   
+  keywords       String[]  
+  legacyId       Int?      
+  aiData         String?   
+  embedding      Unsupported("vector(1536)")?
+  uploadedBy     User      @relation(fields: [userId], references: [id])
+  userId         String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  collections    AssetOnCollection[]
 }
 
-// Many-to-Many relationship for Collections (Phase 5)
 model Collection {
   id        String   @id @default(uuid())
   name      String
   slug      String   @unique
-  
-
-  // New Ownership Fields
-  userId    String   // <--- Required: The Owner
+  userId    String   
   owner     User     @relation(fields: [userId], references: [id])
-
-  // NEW: Self-Relation for Sub-folders
   parentId  String?
-  parent    Collection?   @relation("SubCollections", fields: [parentId], references: [id], onDelete: Cascade) // Delete parent -> delete children
+  parent    Collection?   @relation("SubCollections", fields: [parentId], references: [id], onDelete: Cascade)
   children  Collection[]  @relation("SubCollections")
-
-  createdAt DateTime @default(now()) // Good practice to have this
+  createdAt DateTime @default(now()) 
   updatedAt DateTime @updatedAt
-
   assets    AssetOnCollection[]
 }
 
@@ -127,7 +123,7 @@ model AssetClick {
   id          String   @id @default(uuid())
   assetId     String
   query       String
-  position    Int      // 1 = Top result, 10 = 10th result
+  position    Int      
   userId      String?
   createdAt   DateTime @default(now())
 }

@@ -10,11 +10,9 @@ import authRoutes from './routes/auth.routes';
 import assetRoutes from './routes/asset.routes';
 import userRoutes from './routes/user.routes';
 import collectionRoutes from './routes/collection.routes';
-
-// ✅ 1. MAKE SURE THIS IMPORT IS HERE
 import categoryRoutes from './routes/category.routes'; 
-
-
+// ✅ 1. NEW IMPORT
+import feedbackRoutes from './routes/feedback.routes';
 
 const app: Express = express();
 const PORT = process.env.PORT || 5000;
@@ -35,10 +33,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/collections', collectionRoutes);
-
-// ✅ 2. CRITICAL: REGISTER THE CATEGORY ROUTE
-// This tells the server: "When someone asks for /api/categories, go to categoryRoutes"
 app.use('/api/categories', categoryRoutes);
+
+// ✅ 2. REGISTER FEEDBACK ROUTE
+app.use('/api/feedback', feedbackRoutes);
 
 // Debug Route to verify server is alive
 app.get('/', (req: Request, res: Response) => {
@@ -49,5 +47,6 @@ app.listen(PORT, () => {
   console.log(`⚡️ [server]: Server is running at http://localhost:${PORT}`);
   console.log(`   - Auth Routes: /api/auth`);
   console.log(`   - Asset Routes: /api/assets`);
-  console.log(`   - Category Routes: /api/categories`); // <--- Check your terminal for this line
+  console.log(`   - Category Routes: /api/categories`);
+  console.log(`   - Feedback Routes: /api/feedback`); // ✅ Added log
 });

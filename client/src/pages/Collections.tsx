@@ -2,17 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../api/client';
 import { 
-    Folder, 
-    Loader2, 
-    Plus, 
-    X, 
-    Trash2, 
-    // Image as ImageIcon, <--- DELETE
-    MoreVertical,
-    Edit2,
-    Layers, 
-    Clock,
-    // UploadCloud <--- DELETE
+  Folder, 
+  Loader2, 
+  Plus, 
+  X, 
+  Trash2, 
+  MoreVertical,
+  Edit2,
+  Layers, 
+  Clock,
 } from 'lucide-react';
 // import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -25,13 +23,13 @@ interface Collection {
   name: string;
   createdAt: string;
   _count: { assets: number };
-  coverImage: string | null; // Controller returns this now
+  coverImage: string | null; 
 }
 
 const Collections = () => {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
-//   const { user } = useAuth();
+  // const { user } = useAuth();
   
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -77,7 +75,6 @@ const Collections = () => {
     setIsSubmitting(true);
     try {
         if (editingId) {
-            // Note: Ensure you have an 'updateCollection' controller for this to work
             await client.patch(`/collections/${editingId}`, { name: formName });
             toast.success("Collection updated!");
         } else {
@@ -97,7 +94,6 @@ const Collections = () => {
     if (!deleteId) return;
     setIsDeleting(true);
     try {
-        // Note: Ensure you have a 'deleteCollection' controller for this to work
         await client.delete(`/collections/${deleteId}`);
         toast.success("Collection deleted");
         setCollections(prev => prev.filter(c => c.id !== deleteId));
@@ -106,23 +102,30 @@ const Collections = () => {
     finally { setIsDeleting(false); }
   };
 
-  if (loading) return <div className="flex h-screen items-center justify-center dark:bg-[#0B0D0F]"><Loader2 className="animate-spin text-blue-600 dark:text-blue-400" size={32} /></div>;
+  if (loading) return <div className="flex h-screen items-center justify-center dark:bg-[#0B0D0F]"><Loader2 className="animate-spin text-indigo-500" size={32} /></div>;
 
   return (
-    <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] transition-colors duration-500">
+    <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] transition-colors duration-500 relative overflow-hidden font-sans">
       
+      {/* 🌟 AMBIENT BACKGROUND GLOW (The Gradient You Wanted) */}
+      <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-[-10%] right-[-5%] w-[600px] h-[600px] bg-indigo-400/10 dark:bg-indigo-600/10 blur-[120px] rounded-full" />
+        <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-400/10 dark:bg-blue-600/10 blur-[120px] rounded-full" />
+      </div>
+
       {/* HEADER */}
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white dark:bg-[#121417] border-b border-gray-200 dark:border-white/5 pt-12 pb-16 px-8"
+        // Changed bg to transparent/glassy so the glow shows through
+        className="relative z-10 pt-12 pb-12 px-8 border-b border-gray-200/50 dark:border-white/5 backdrop-blur-sm"
       >
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-end gap-6">
               <div>
                   <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-sm tracking-wider uppercase mb-2">
                       <Layers size={16} /> Personal Space
                   </div>
-                  <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-4">
+                  <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-r dark:from-white dark:via-gray-200 dark:to-gray-500 tracking-tight mb-4">
                       My Collections
                   </h1>
                   <p className="text-lg text-gray-500 dark:text-gray-400 max-w-2xl">
@@ -140,9 +143,9 @@ const Collections = () => {
       </motion.div>
 
       {/* GRID */}
-      <div className="max-w-7xl mx-auto px-8 py-12">
+      <div className="relative z-10 max-w-7xl mx-auto px-8 py-12">
         {collections.length === 0 ? (
-            <div className="text-center py-20 opacity-50">
+            <div className="text-center py-20 opacity-50 bg-white/50 dark:bg-white/5 rounded-3xl border border-dashed border-gray-300 dark:border-white/10 backdrop-blur-sm">
                 <Folder size={64} className="mx-auto mb-4 text-gray-300 dark:text-gray-600" />
                 <p className="text-gray-500 dark:text-gray-400">No collections yet. Create one!</p>
             </div>
@@ -158,7 +161,7 @@ const Collections = () => {
                     >
                         <Link to={`/collections/${col.id}`} className="flex-1 flex flex-col">
                             
-                            {/* COVER AREA (With Glitch Fix) */}
+                            {/* COVER AREA */}
                             <div 
                                 className="relative flex-1 w-full overflow-hidden bg-gradient-to-br from-indigo-50 to-blue-100 dark:from-indigo-900/20 dark:to-blue-900/10 flex items-center justify-center isolation-isolate"
                                 style={{ WebkitMaskImage: '-webkit-radial-gradient(white, black)' }}
@@ -230,7 +233,7 @@ const Collections = () => {
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative w-full max-w-md bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl p-6 border border-gray-200 dark:border-white/10">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white">{editingId ? 'Edit Collection' : 'New Collection'}</h3>
-                    <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white"><X size={20}/></button>
+                    <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-900 dark:hover:text-white"><X size={20}/></button>
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>

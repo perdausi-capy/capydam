@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import logo from '../assets/capytech-fav.png';
@@ -16,7 +16,9 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  Compass
+  Compass,
+  HelpCircle, // ✅ Added HelpIcon
+  MessageSquare
 } from 'lucide-react';
 import FloatingThemeToggle from './FloatingThemeToggle';
 
@@ -24,7 +26,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const { logout, user } = useAuth();
   const { theme } = useTheme(); 
   const location = useLocation();
-  // const navigate = useNavigate();
   const queryClient = useQueryClient();
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -36,7 +37,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     queryClient.removeQueries(); 
     queryClient.clear();
     logout();
-    // navigate('/login'); // logout() in AuthContext already redirects
   };
 
   const isActive = (path: string) => {
@@ -91,6 +91,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         {/* Navigation Items */}
         <nav className="flex-1 flex flex-col space-y-1 p-3 mt-2 overflow-y-auto custom-scrollbar">
           
+          {/* Collapse Toggle */}
           <div className={`flex gap-2 mb-6 p-1.5 rounded-xl bg-gray-50 dark:bg-black/20 border border-gray-100 dark:border-white/5 transition-colors ${isCollapsed ? 'flex-col' : 'flex-row'}`}>
              <button onClick={() => setIsCollapsed(!isCollapsed)} className="flex-1 flex items-center justify-center p-2 text-gray-500 dark:text-gray-400 bg-white dark:bg-white/5 hover:text-blue-600 hover:bg-white dark:hover:bg-white/10 dark:hover:text-white rounded-lg transition-all shadow-sm border border-gray-100 dark:border-white/5 hover:border-blue-200" title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}>
                 {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
@@ -99,48 +100,61 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
           <NavItem to="/" icon={<Compass size={20} />} label="Explore" isCollapsed={isCollapsed} active={isActive('/')} onClick={handleNavClick} />
           <NavItem to="/library" icon={<LayoutDashboard size={20} />} label="Library" isCollapsed={isCollapsed} active={isActive('/library')} onClick={handleNavClick} />
-          {user?.role !== 'viewer' && <NavItem to="/upload" icon={<UploadCloud size={20} />} label="Upload" isCollapsed={isCollapsed} active={isActive('/upload')} onClick={handleNavClick} />}
+          
+          {user?.role !== 'viewer' && (
+            <NavItem to="/upload" icon={<UploadCloud size={20} />} label="Upload" isCollapsed={isCollapsed} active={isActive('/upload')} onClick={handleNavClick} />
+          )}
+          
           <NavItem to="/collections" icon={<Folder size={20} />} label="Collections" isCollapsed={isCollapsed} active={isActive('/collections')} onClick={handleNavClick} />
+          
+          {/* ✅ NEW: Support Link */}
+          <NavItem to="/support" icon={<HelpCircle size={20} />} label="Support" isCollapsed={isCollapsed} active={isActive('/support')} onClick={handleNavClick} />
+
+          {/* Admin Section */}
           {user?.role === 'admin' && (
             <>
               <div className={`my-4 border-t border-gray-100 dark:border-white/5 ${isCollapsed ? 'mx-2' : 'mx-4'}`}></div>
               <NavItem to="/users" icon={<Users size={20} />} label="Users" isCollapsed={isCollapsed} active={isActive('/users')} onClick={handleNavClick} />
+              <NavItem 
+                to="/admin/feedback" 
+                icon={<MessageSquare size={20} />} 
+                label="Feedback" 
+                isCollapsed={isCollapsed} 
+                active={isActive('/admin/feedback')} 
+                onClick={handleNavClick} 
+            />
             </>
           )}
         </nav>
 
-        {/* ✅ UPDATED PROFILE SECTION */}
+        {/* PROFILE SECTION */}
         <div className="border-t border-gray-100 dark:border-white/10 bg-gray-50/50 dark:bg-black/20 p-3 mt-auto shrink-0 transition-colors">
           <div className={`flex items-center rounded-xl border border-transparent transition-all duration-200 ${!isCollapsed ? 'bg-white dark:bg-white/5 shadow-sm border-gray-100 dark:border-white/5 p-2' : 'justify-center p-0'}`}>
               
-              {/* Profile Link */}
               <Link 
                 to="/profile" 
                 className={`flex items-center flex-1 min-w-0 group ${isCollapsed ? 'justify-center' : ''}`}
                 title="View Profile"
               >
                   <div className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm shadow-sm overflow-hidden ring-2 ring-transparent group-hover:ring-blue-400 transition-all relative">
-                     
-                     {/* 🖼️ AVATAR LOGIC */}
-                     {user?.avatar ? (
-                         <img 
-                           src={user.avatar} 
-                           alt={user.name} 
-                           className="h-full w-full object-cover" 
-                           // Fallback to letter if image fails to load
-                           onError={(e) => {
-                             e.currentTarget.style.display = 'none'; // Hide broken image
-                             e.currentTarget.parentElement?.classList.remove('bg-transparent'); // Restore gradient
-                           }}
-                         />
-                     ) : (
-                         <span className="uppercase">{user?.name?.charAt(0) || 'U'}</span>
-                     )}
+                      {user?.avatar ? (
+                          <img 
+                            src={user.avatar} 
+                            alt={user.name} 
+                            className="h-full w-full object-cover" 
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none'; 
+                              e.currentTarget.parentElement?.classList.remove('bg-transparent'); 
+                            }}
+                          />
+                      ) : (
+                          <span className="uppercase">{user?.name?.charAt(0) || 'U'}</span>
+                      )}
                   </div>
                   
                   <div className={`flex flex-col ml-3 overflow-hidden transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 ml-0' : 'w-auto opacity-100'}`}>
-                     <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 truncate">{user?.name || 'User'}</p>
-                     <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate group-hover:text-blue-500 transition-colors">View Profile</p>
+                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 truncate">{user?.name || 'User'}</p>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate group-hover:text-blue-500 transition-colors">View Profile</p>
                   </div>
               </Link>
 
