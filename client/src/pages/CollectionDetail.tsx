@@ -6,7 +6,6 @@ import {
   Trash2, 
   FolderOpen, 
   Folder, 
-  Share2,
   Calendar,
   Image as ImageIcon,
   Plus,
@@ -135,7 +134,7 @@ const CollectionDetail = () => {
           });
           return { previousData };
       },
-      onError: (err, newTodo, context) => {
+      onError: (_err, _newTodo, context) => {
           queryClient.setQueryData(['collection', id], context?.previousData);
           toast.error("Failed to delete assets");
       },
@@ -246,10 +245,10 @@ const CollectionDetail = () => {
       if (draggedAssetId) { await addToSubCollection(folderId, folderName, draggedAssetId); }
   };
 
-  const toggleDropdown = (e: React.MouseEvent, assetId: string) => {
-    e.preventDefault(); e.stopPropagation();
-    setActiveDropdownId(activeDropdownId === assetId ? null : assetId);
-  };
+//   const toggleDropdown = (e: React.MouseEvent, assetId: string) => {
+//     e.preventDefault(); e.stopPropagation();
+//     setActiveDropdownId(activeDropdownId === assetId ? null : assetId);
+//   };
 
   const openMoveModal = (e: React.MouseEvent, assetId: string) => {
       e.preventDefault(); e.stopPropagation();
