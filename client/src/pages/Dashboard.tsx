@@ -195,7 +195,7 @@ const Dashboard = () => {
   const isFallback = data?.pages[0]?.isFallback || false;
 
   // --- COLLECTIONS QUERY ---
-  const { data: collections = [], refetch: refetchCollections } = useQuery({
+  const { data: collections = [] } = useQuery({
     queryKey: ['collections'],
     queryFn: async () => {
       const res = await client.get('/collections');

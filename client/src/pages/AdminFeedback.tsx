@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   MessageSquare, Bug, Lightbulb, CheckCircle, 
   Clock, Trash2, Mail, User, Search, Loader2, X, Send,

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import logo from '../assets/capytech-fav.png';
@@ -17,7 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Compass,
-  HelpCircle, // ✅ Added HelpIcon
+  HelpCircle,
   MessageSquare
 } from 'lucide-react';
 import FloatingThemeToggle from './FloatingThemeToggle';
@@ -45,6 +45,13 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     return false;
   };
 
+  // 💎 REUSABLE BRAND TITLE COMPONENT
+  const BrandTitle = () => (
+    <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-teal-500 dark:from-blue-400 dark:to-teal-300 bg-clip-text text-transparent drop-shadow-sm uppercase">
+      CAPYDAM
+    </span>
+  );
+
   return (
     <div className="flex min-h-screen bg-[#F3F4F6] dark:bg-[#0B0D0F] transition-colors duration-500 ease-in-out">
 
@@ -58,10 +65,13 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       
       {/* MOBILE HEADER */} 
       <div className="fixed top-0 left-0 right-0 z-20 flex h-16 items-center justify-between border-b bg-white dark:bg-[#1A1D21] dark:border-white/10 px-4 shadow-sm lg:hidden transition-colors duration-300">
-        <div className="flex items-center gap-2">
+        
+        {/* CLICKABLE LOGO (Mobile) */}
+        <Link to="/" className="flex items-center gap-2.5">
             <img src={logo} alt="Capydam" className="h-8 w-8 object-contain" />
-            <span className="text-xl font-bold text-gray-900 dark:text-white">Capydam</span>
-        </div>
+            <BrandTitle />
+        </Link>
+
         <button 
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           className="rounded-lg p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10"
@@ -80,12 +90,17 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         
         {/* Logo Section */}
         <div className="flex h-16 items-center px-4 border-b border-gray-100 dark:border-white/5 shrink-0 transition-colors">
-           <div className={`flex items-center w-full ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-               <img src={logo} alt="Capydam" className="h-8 w-8 object-contain shrink-0" />
+           {/* CLICKABLE LOGO (Desktop Sidebar) */}
+           <Link to="/" className={`flex items-center w-full group ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
+               <img 
+                 src={logo} 
+                 alt="Capydam" 
+                 className="h-8 w-8 object-contain shrink-0 transition-transform duration-300 group-hover:rotate-[-10deg] group-hover:scale-110" 
+               />
                <div className={`overflow-hidden transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-                   <span className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Capydam</span>
+                   <BrandTitle />
                </div>
-           </div>
+           </Link>
         </div>
         
         {/* Navigation Items */}
@@ -107,7 +122,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           
           <NavItem to="/collections" icon={<Folder size={20} />} label="Collections" isCollapsed={isCollapsed} active={isActive('/collections')} onClick={handleNavClick} />
           
-          {/* ✅ NEW: Support Link */}
+          {/* Support Link */}
           <NavItem to="/support" icon={<HelpCircle size={20} />} label="Support" isCollapsed={isCollapsed} active={isActive('/support')} onClick={handleNavClick} />
 
           {/* Admin Section */}
