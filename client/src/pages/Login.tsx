@@ -175,7 +175,7 @@ const Login = () => {
                             onChange={(e) => setEmail(e.target.value)}
                             disabled={isLoading || showPortal}
                             className="w-full bg-gray-50 dark:bg-[#0B0D0F]/50 border border-gray-200 dark:border-white/10 rounded-xl pl-11 pr-5 py-4 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-gray-900 dark:text-white transition-all placeholder:text-gray-400 dark:placeholder:text-gray-600 group-hover:border-blue-200 dark:group-hover:border-white/20"
-                            placeholder="admin@capytech.com"
+                            placeholder="email@capytech.com"
                         />
                     </div>
                 </div>

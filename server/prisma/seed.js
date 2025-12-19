@@ -8,8 +8,8 @@ const client_1 = require("@prisma/client");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const prisma = new client_1.PrismaClient();
 async function main() {
-    const email = 'admin@dam.local';
-    const password = await bcryptjs_1.default.hash('admin123', 10);
+    const email = 'capytech@dam.admin';
+    const password = await bcryptjs_1.default.hash('Capytech2025!', 10);
     const admin = await prisma.user.upsert({
         where: { email },
         update: { status: 'ACTIVE' },

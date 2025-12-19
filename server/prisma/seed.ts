@@ -1,26 +1,33 @@
-// server/prisma/seed.ts
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = 'admin@dam.local';
-  const password = await bcrypt.hash('admin123', 10);
+  const email = 'capytech@dam.admin';
+  // 🔐 Securely hash the new password
+  const password = await bcrypt.hash('capytech2025!', 10);
 
   const admin = await prisma.user.upsert({
     where: { email },
-    update: { status: 'ACTIVE' },
+    // ✅ UPDATE block: Ensures password resets even if account exists
+    update: { 
+        status: 'ACTIVE',
+        password: password, 
+        role: 'admin',
+        name: 'CapyAdmin' // Updated name for branding
+    },
+    // ✅ CREATE block: Runs only if account doesn't exist
     create: {
       email,
-      name: 'Admin User',
+      name: 'CapyAdmin',
       password,
       role: 'admin',
-      status: 'ACTIVE', // Set active on creation
+      status: 'ACTIVE',
     },
   });
 
-  console.log({ admin });
+  console.log('🌱 Admin account seeded:', { email: admin.email, role: admin.role });
 }
 
 main()
