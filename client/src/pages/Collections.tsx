@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import client from '../api/client';
 import { 
   Folder, 
-  Loader2, 
   Plus, 
   X, 
   Trash2, 
@@ -12,7 +11,6 @@ import {
   Layers, 
   Clock,
 } from 'lucide-react';
-// import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import ConfirmModal from '../components/ConfirmModal';
 import { motion } from 'framer-motion';
@@ -26,10 +24,29 @@ interface Collection {
   coverImage: string | null; 
 }
 
+// --- 🦴 SKELETON COMPONENT ---
+const CollectionSkeleton = () => (
+    <div className="flex flex-col rounded-3xl border border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] shadow-sm overflow-hidden h-64">
+        {/* Cover Area Skeleton */}
+        <div className="relative flex-1 w-full bg-gray-200 dark:bg-white/5 animate-pulse">
+            <div className="absolute top-4 right-4 h-6 w-12 rounded-full bg-gray-300 dark:bg-white/10" />
+        </div>
+        
+        {/* Footer Skeleton */}
+        <div className="flex items-center justify-between p-5 border-t border-gray-100 dark:border-white/5 bg-white dark:bg-[#1A1D21]">
+            <div className="space-y-2 w-2/3">
+                <div className="h-4 bg-gray-200 dark:bg-white/5 rounded w-3/4 animate-pulse" />
+                <div className="h-3 bg-gray-200 dark:bg-white/5 rounded w-1/2 animate-pulse" />
+            </div>
+            <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-white/5 animate-pulse" />
+        </div>
+    </div>
+);
+
 const Collections = () => {
   const [collections, setCollections] = useState<Collection[]>([]);
+  // Start loading as true, but don't block the UI
   const [loading, setLoading] = useState(true);
-  // const { user } = useAuth();
   
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -102,22 +119,22 @@ const Collections = () => {
     finally { setIsDeleting(false); }
   };
 
-  if (loading) return <div className="flex h-screen items-center justify-center dark:bg-[#0B0D0F]"><Loader2 className="animate-spin text-indigo-500" size={32} /></div>;
+  // ❌ REMOVED: Blocking Spinner
+  // if (loading) return ...
 
   return (
     <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] transition-colors duration-500 relative overflow-hidden font-sans">
       
-      {/* 🌟 AMBIENT BACKGROUND GLOW (The Gradient You Wanted) */}
+      {/* 🌟 AMBIENT BACKGROUND GLOW */}
       <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
         <div className="absolute top-[-10%] right-[-5%] w-[600px] h-[600px] bg-indigo-400/10 dark:bg-indigo-600/10 blur-[120px] rounded-full" />
         <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-400/10 dark:bg-blue-600/10 blur-[120px] rounded-full" />
       </div>
 
-      {/* HEADER */}
+      {/* HEADER (Always Visible) */}
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        // Changed bg to transparent/glassy so the glow shows through
         className="relative z-10 pt-12 pb-12 px-8 border-b border-gray-200/50 dark:border-white/5 backdrop-blur-sm"
       >
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-end gap-6">
@@ -144,12 +161,21 @@ const Collections = () => {
 
       {/* GRID */}
       <div className="relative z-10 max-w-7xl mx-auto px-8 py-12">
-        {collections.length === 0 ? (
+        {loading ? (
+             // ✅ LOADING STATE: Show Skeletons
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {Array.from({ length: 8 }).map((_, i) => (
+                    <CollectionSkeleton key={i} />
+                ))}
+            </div>
+        ) : collections.length === 0 ? (
+            // EMPTY STATE
             <div className="text-center py-20 opacity-50 bg-white/50 dark:bg-white/5 rounded-3xl border border-dashed border-gray-300 dark:border-white/10 backdrop-blur-sm">
                 <Folder size={64} className="mx-auto mb-4 text-gray-300 dark:text-gray-600" />
                 <p className="text-gray-500 dark:text-gray-400">No collections yet. Create one!</p>
             </div>
         ) : (
+            // DATA STATE
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {collections.map((col, index) => (
                     <motion.div 
