@@ -18,6 +18,7 @@ import Users from './pages/Users';
 import Profile from './pages/Profile';
 import Support from './pages/Support';
 import AdminFeedback from './pages/AdminFeedback'; // ✅ Added
+import AdminAnalytics from './pages/AdminAnalytics';
 
 // --- WRAPPERS ---
 
@@ -70,6 +71,9 @@ function App() {
             {/* --- Admin Routes (Restricted) --- */}
             <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
             <Route path="/admin/feedback" element={<AdminRoute><AdminFeedback /></AdminRoute>} /> {/* ✅ Added */}
+            <Route path="/admin/analytics" element={<AdminRoute><AdminAnalytics /></AdminRoute>} /> {/* ✅ Added */}
+            
+            
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" />} />

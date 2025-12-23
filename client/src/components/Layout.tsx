@@ -19,7 +19,8 @@ import {
   ChevronRight,
   Compass,
   HelpCircle,
-  MessageSquare
+  MessageSquare,
+  TrendingUp
 } from 'lucide-react';
 import FloatingThemeToggle from './FloatingThemeToggle';
 
@@ -175,6 +176,15 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 onClick={handleNavClick} 
                 badge={stats?.newFeedback}
             />
+
+              <NavItem 
+                to="/admin/analytics" 
+                icon={<TrendingUp size={20} />} 
+                label="Analytics" 
+                isCollapsed={isCollapsed} 
+                active={isActive('/admin/analytics')} 
+                onClick={handleNavClick} 
+              />
             </>
           )}
         </nav>

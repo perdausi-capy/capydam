@@ -14,6 +14,7 @@ import categoryRoutes from './routes/category.routes';
 // ✅ 1. NEW IMPORT
 import feedbackRoutes from './routes/feedback.routes';
 import adminRoutes from './routes/admin.routes';
+import analyticsRoutes from './routes/analytics.routes';
 
 const app: Express = express();
 const PORT = process.env.PORT || 5000;
@@ -36,6 +37,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/collections', collectionRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // ✅ 2. REGISTER FEEDBACK ROUTE
 app.use('/api/feedback', feedbackRoutes);
