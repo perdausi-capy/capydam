@@ -4,7 +4,7 @@ import client from '../api/client';
 import { toast } from 'react-toastify';
 import { 
     User, Camera, Loader2, Mail, Shield, Check, 
-    ArrowLeft, Sparkles, HardDrive, Folder, Trash2, Calendar, Clock
+    ArrowLeft, Sparkles, HardDrive, Folder, Calendar, Clock
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal'; // ✅ Import Modal
