@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import client from '../api/client';
 import { 
-  HardDrive, Users, FileVideo, FileImage, ShieldCheck, Activity, 
+  HardDrive, Users, FileVideo, FileImage, Activity, 
   Terminal, Globe, Lock, Wifi, X
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
