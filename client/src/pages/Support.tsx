@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   MessageSquare, Bug, Lightbulb, 
   Send, CheckCircle, History, User, 
   Clock, Sparkles, Trash2, Loader2, 
-  FileText, ArrowRight
+  FileText, ArrowRight, Paperclip, X, UploadCloud, Image as ImageIcon
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import client from '../api/client';
@@ -21,6 +21,7 @@ interface FeedbackItem {
   createdAt: string;
   adminReply?: string;
   repliedAt?: string;
+  attachment?: string; // ✅ Added to show evidence in history if needed
 }
 
 const Support = () => {
@@ -37,6 +38,10 @@ const Support = () => {
     subject: '',
     message: ''
   });
+
+  // ✅ Attachment State
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // History State
   const [myFeedbacks, setMyFeedbacks] = useState<FeedbackItem[]>([]);
@@ -59,12 +64,30 @@ const Support = () => {
     if (activeTab === 'history') {
         fetchHistory();
     } else {
-        // Silent fetch for badge count
         client.get('/feedback/my').then(res => setMyFeedbacks(res.data)).catch(() => {});
     }
   }, [activeTab]);
 
   // --- ACTIONS ---
+
+  // ✅ Handle File Selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+        const file = e.target.files[0];
+        // Optional: Limit size to 5MB
+        if (file.size > 5 * 1024 * 1024) {
+            toast.warning("File is too large. Max 5MB.");
+            return;
+        }
+        setAttachment(file);
+    }
+  };
+
+  const handleRemoveFile = () => {
+      setAttachment(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.subject.trim() || !formData.message.trim()) {
@@ -74,10 +97,28 @@ const Support = () => {
 
     setLoading(true);
     try {
-      await client.post('/feedback', formData);
+      // ✅ Use FormData for File Upload
+      const payload = new FormData();
+      payload.append('type', formData.type);
+      payload.append('subject', formData.subject);
+      payload.append('message', formData.message);
+      
+      if (attachment) {
+          payload.append('attachment', attachment);
+      }
+
+      await client.post('/feedback', payload, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
       setSuccess(true);
       toast.success("Feedback sent!");
+      
+      // Reset Form
       setFormData({ type: 'general', subject: '', message: '' }); 
+      setAttachment(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+
       client.get('/feedback/my').then(res => setMyFeedbacks(res.data));
     } catch (error) {
       toast.error("Failed to send feedback.");
@@ -103,7 +144,6 @@ const Support = () => {
   const replyCount = myFeedbacks.filter(f => f.adminReply).length;
 
   const getTypeColor = (type: FeedbackType, active: boolean) => {
-      // Light Mode Colors vs Dark Mode Colors
       if (type === 'bug') {
           return active 
             ? 'bg-red-50 border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500 dark:text-red-500' 
@@ -114,7 +154,6 @@ const Support = () => {
             ? 'bg-amber-50 border-amber-200 text-amber-600 dark:bg-amber-500/10 dark:border-amber-500 dark:text-amber-500' 
             : 'hover:border-amber-200 hover:bg-amber-50/50 dark:hover:border-amber-500/50 dark:hover:text-amber-500';
       }
-      // General
       return active 
         ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-500/10 dark:border-blue-500 dark:text-blue-500' 
         : 'hover:border-blue-200 hover:bg-blue-50/50 dark:hover:border-blue-500/50 dark:hover:text-blue-500';
@@ -124,7 +163,6 @@ const Support = () => {
   if (success && activeTab === 'form') {
     return (
         <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] text-gray-900 dark:text-white flex items-center justify-center p-6 relative overflow-hidden transition-colors duration-500">
-            {/* Ambient Background Glow */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-green-400/10 dark:bg-green-500/20 blur-[100px] rounded-full pointer-events-none" />
             
             <div className="bg-white/80 dark:bg-white/5 backdrop-blur-2xl border border-gray-100 dark:border-white/10 p-12 rounded-3xl shadow-2xl dark:shadow-none text-center max-w-md w-full relative z-10 animate-in zoom-in-95 duration-300">
@@ -157,7 +195,6 @@ const Support = () => {
   return (
     <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] text-gray-900 dark:text-white p-6 lg:p-12 transition-colors duration-500 relative overflow-hidden font-sans">
       
-      {/* 🌟 Ambient Background Effects */}
       <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
         <div className="absolute top-[-10%] right-[-5%] w-[600px] h-[600px] bg-blue-400/10 dark:bg-blue-600/10 blur-[120px] rounded-full" />
         <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-400/10 dark:bg-purple-600/10 blur-[120px] rounded-full" />
@@ -176,7 +213,6 @@ const Support = () => {
                 </p>
             </div>
 
-            {/* Glass Tab Switcher */}
             <div className="bg-white/60 dark:bg-white/5 backdrop-blur-md border border-white/20 dark:border-white/10 p-1.5 rounded-2xl flex items-center shadow-sm dark:shadow-none">
                 <button 
                     onClick={() => setActiveTab('form')}
@@ -253,7 +289,6 @@ const Support = () => {
                     {/* Right Column: The Form */}
                     <div className="lg:col-span-8">
                         <div className="bg-white/80 dark:bg-white/5 backdrop-blur-xl border border-white/20 dark:border-white/10 p-8 rounded-3xl shadow-xl shadow-gray-200/50 dark:shadow-none relative">
-                            {/* Subtle Form Glow */}
                             <div className="absolute top-0 right-0 w-64 h-64 bg-blue-400/10 dark:bg-blue-500/5 blur-[80px] rounded-full pointer-events-none" />
 
                             <form onSubmit={handleSubmit} className="space-y-8 relative z-10">
@@ -307,6 +342,44 @@ const Support = () => {
                                             onChange={e => setFormData({...formData, message: e.target.value})}
                                         />
                                     </div>
+
+                                    {/* ✅ ATTACHMENT INPUT */}
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest ml-1">Attachment (Optional)</label>
+                                        
+                                        {!attachment ? (
+                                            <div 
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className="w-full border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl p-6 flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-gray-50 dark:hover:bg-white/5 transition-all cursor-pointer group"
+                                            >
+                                                <div className="p-3 bg-gray-100 dark:bg-white/5 rounded-full mb-3 group-hover:scale-110 transition-transform">
+                                                    <UploadCloud size={24} className="text-gray-500 dark:text-gray-400 group-hover:text-blue-500" />
+                                                </div>
+                                                <p className="text-sm font-medium">Click to upload screenshot or evidence</p>
+                                                <p className="text-xs mt-1 opacity-70">JPG, PNG, PDF allowed (Max 5MB)</p>
+                                            </div>
+                                        ) : (
+                                            <div className="w-full bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-500/20 rounded-xl p-4 flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg">
+                                                        {attachment.type.includes('image') ? <ImageIcon size={20}/> : <Paperclip size={20}/>}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-gray-900 dark:text-white truncate max-w-[200px]">{attachment.name}</p>
+                                                        <p className="text-xs text-gray-500">{(attachment.size / 1024).toFixed(1)} KB</p>
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleRemoveFile}
+                                                    className="p-2 hover:bg-red-100 dark:hover:bg-red-500/20 text-gray-400 hover:text-red-500 rounded-lg transition-colors"
+                                                >
+                                                    <X size={18} />
+                                                </button>
+                                            </div>
+                                        )}
+                                        <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*,.pdf" />
+                                    </div>
                                 </div>
 
                                 {/* Submit Button */}
@@ -347,7 +420,6 @@ const Support = () => {
                         myFeedbacks.map((item) => (
                             <div key={item.id} className="group bg-white dark:bg-[#121418] border border-gray-100 dark:border-white/5 rounded-2xl overflow-hidden hover:border-gray-200 dark:hover:border-white/10 transition-all shadow-sm hover:shadow-md dark:shadow-lg relative">
                                 
-                                {/* Header */}
                                 <div className="p-6 border-b border-gray-50 dark:border-white/5 flex justify-between items-start bg-gray-50/50 dark:bg-white/[0.02]">
                                     <div className="flex items-center gap-4">
                                         <div className={`p-3 rounded-xl ${
@@ -388,14 +460,26 @@ const Support = () => {
                                     </div>
                                 </div>
 
-                                {/* Content */}
                                 <div className="p-6">
                                     <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
                                         {item.message}
                                     </p>
+                                    
+                                    {/* ✅ SHOW ATTACHMENT LINK IF EXISTS */}
+                                    {item.attachment && (
+                                        <div className="mt-4">
+                                            <a 
+                                                href={item.attachment} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-white/5 rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors"
+                                            >
+                                                <Paperclip size={16} /> View Attachment
+                                            </a>
+                                        </div>
+                                    )}
                                 </div>
 
-                                {/* Admin Reply */}
                                 {item.adminReply && (
                                     <div className="bg-blue-50/50 dark:bg-transparent dark:bg-gradient-to-b dark:from-blue-500/5 dark:to-transparent border-t border-blue-100 dark:border-blue-500/10 p-6">
                                         <div className="flex items-start gap-4">

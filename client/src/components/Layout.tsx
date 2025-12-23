@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import logo from '../assets/capytech-fav.png';
+import logo from '../assets/capytech-fav.png'; // Small Icon
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import client from '../api/client';
 import { 
   LayoutDashboard, 
   UploadCloud, 
@@ -22,14 +23,35 @@ import {
 } from 'lucide-react';
 import FloatingThemeToggle from './FloatingThemeToggle';
 
+// Define Stats Interface
+interface AdminStats {
+  pendingUsers: number;
+  newFeedback: number;
+}
+
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const { logout, user } = useAuth();
   const { theme } = useTheme(); 
   const location = useLocation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
+
+  // ✅ 1. FETCH ADMIN STATS
+  const isAdmin = user?.role === 'admin' || user?.role === 'editor';
+  
+  const { data: stats } = useQuery<AdminStats>({
+    queryKey: ['admin-stats'],
+    queryFn: async () => {
+      const { data } = await client.get('/admin/stats');
+      return data;
+    },
+    enabled: isAdmin,
+    refetchInterval: 30000,
+    staleTime: 1000 * 60 * 1
+  });
 
   const handleNavClick = () => setIsMobileMenuOpen(false);
 
@@ -37,6 +59,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     queryClient.removeQueries(); 
     queryClient.clear();
     logout();
+    navigate('/login');
   };
 
   const isActive = (path: string) => {
@@ -45,11 +68,13 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     return false;
   };
 
-  // 💎 REUSABLE BRAND TITLE COMPONENT
+  // 💎 REUSABLE BRAND TITLE COMPONENT (Full Logo Image)
   const BrandTitle = () => (
-    <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-teal-500 dark:from-blue-400 dark:to-teal-300 bg-clip-text text-transparent drop-shadow-sm uppercase">
-      CAPYDAM
-    </span>
+    <img
+      src="/title-brand.png" 
+      alt="Capydam"
+      className="h-12 w-auto select-none object-contain"
+    />
   );
 
   return (
@@ -63,12 +88,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       
       <FloatingThemeToggle />
       
-      {/* MOBILE HEADER */} 
+      {/* MOBILE HEADER (Always shows Brand Title) */} 
       <div className="fixed top-0 left-0 right-0 z-20 flex h-16 items-center justify-between border-b bg-white dark:bg-[#1A1D21] dark:border-white/10 px-4 shadow-sm lg:hidden transition-colors duration-300">
-        
-        {/* CLICKABLE LOGO (Mobile) */}
-        <Link to="/" className="flex items-center gap-2.5">
-            <img src={logo} alt="Capydam" className="h-8 w-8 object-contain" />
+        <Link to="/" className="flex items-center">
             <BrandTitle />
         </Link>
 
@@ -88,18 +110,24 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           `}
         >
         
-        {/* Logo Section */}
-        <div className="flex h-16 items-center px-4 border-b border-gray-100 dark:border-white/5 shrink-0 transition-colors">
-           {/* CLICKABLE LOGO (Desktop Sidebar) */}
-           <Link to="/" className={`flex items-center w-full group ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-               <img 
-                 src={logo} 
-                 alt="Capydam" 
-                 className="h-8 w-8 object-contain shrink-0 transition-transform duration-300 group-hover:rotate-[-10deg] group-hover:scale-110" 
-               />
-               <div className={`overflow-hidden transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+        {/* LOGO SECTION (Swaps based on collapse state) */}
+        <div className="flex h-16 items-center border-b border-gray-100 dark:border-white/5 shrink-0 transition-colors">
+           <Link 
+             to="/" 
+             // ✅ UPDATED: Removed logic, always center justify
+             className="flex items-center w-full h-full justify-center transition-all duration-300"
+           >
+               {isCollapsed ? (
+                   // 1. COLLAPSED: Show Small Icon
+                   <img 
+                     src={logo} 
+                     alt="Icon" 
+                     className="h-8 w-8 object-contain transition-transform hover:scale-110" 
+                   />
+               ) : (
+                   // 2. EXPANDED: Show Full Brand Title Image
                    <BrandTitle />
-               </div>
+               )}
            </Link>
         </div>
         
@@ -121,15 +149,23 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           )}
           
           <NavItem to="/collections" icon={<Folder size={20} />} label="Collections" isCollapsed={isCollapsed} active={isActive('/collections')} onClick={handleNavClick} />
-          
-          {/* Support Link */}
           <NavItem to="/support" icon={<HelpCircle size={20} />} label="Support" isCollapsed={isCollapsed} active={isActive('/support')} onClick={handleNavClick} />
 
           {/* Admin Section */}
-          {user?.role === 'admin' && (
+          {isAdmin && (
             <>
               <div className={`my-4 border-t border-gray-100 dark:border-white/5 ${isCollapsed ? 'mx-2' : 'mx-4'}`}></div>
-              <NavItem to="/users" icon={<Users size={20} />} label="Users" isCollapsed={isCollapsed} active={isActive('/users')} onClick={handleNavClick} />
+              
+              <NavItem 
+                to="/users" 
+                icon={<Users size={20} />} 
+                label="Users" 
+                isCollapsed={isCollapsed} 
+                active={isActive('/users')} 
+                onClick={handleNavClick}
+                badge={stats?.pendingUsers}
+              />
+              
               <NavItem 
                 to="/admin/feedback" 
                 icon={<MessageSquare size={20} />} 
@@ -137,6 +173,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 isCollapsed={isCollapsed} 
                 active={isActive('/admin/feedback')} 
                 onClick={handleNavClick} 
+                badge={stats?.newFeedback}
             />
             </>
           )}
@@ -173,7 +210,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                   </div>
               </Link>
 
-              {/* Logout Button (Desktop) */}
               <button 
                 onClick={handleLogout} 
                 className={`text-gray-400 hover:text-red-500 transition-colors p-1.5 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg ${isCollapsed ? 'hidden' : 'ml-1'}`} 
@@ -183,7 +219,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               </button>
           </div>
           
-          {/* Logout Button (Mobile) */}
           <button onClick={handleLogout} className={`mt-2 flex w-full justify-center p-2 text-red-500 lg:hidden`}><LogOut size={20} /></button>
         </div>
       </aside>
@@ -197,12 +232,43 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-const NavItem = ({ to, icon, label, isCollapsed, active, onClick }: any) => {
+// NavItem Helper
+const NavItem = ({ to, icon, label, isCollapsed, active, onClick, badge }: any) => {
   return (
-    <Link to={to} onClick={onClick} title={isCollapsed ? label : ''} className={`group relative flex items-center rounded-lg px-3 py-2.5 transition-all duration-200 ${active ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'} ${isCollapsed ? 'justify-center' : ''}`}>
+    <Link 
+      to={to} 
+      onClick={onClick} 
+      title={isCollapsed ? label : ''} 
+      className={`
+        group relative flex items-center rounded-lg px-3 py-2.5 transition-all duration-200 
+        ${active 
+          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' 
+          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'
+        } 
+        ${isCollapsed ? 'justify-center' : ''}
+      `}
+    >
       {active && <div className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-full bg-blue-600 dark:bg-blue-500" />}
-      <span className={`shrink-0 transition-colors ${active ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-white'}`}>{icon}</span>
-      {!isCollapsed && <span className="ml-3 truncate font-medium text-sm">{label}</span>}
+      
+      <div className="relative shrink-0 flex items-center justify-center">
+        <span className={`transition-colors ${active ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-white'}`}>
+          {icon}
+        </span>
+        {isCollapsed && badge > 0 && (
+          <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-red-500 border-2 border-white dark:border-[#1A1D21]" />
+        )}
+      </div>
+
+      {!isCollapsed && (
+        <div className="flex flex-1 items-center justify-between ml-3 overflow-hidden">
+          <span className="truncate font-medium text-sm">{label}</span>
+          {badge > 0 && (
+            <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30 px-1.5 text-[10px] font-bold text-red-600 dark:text-red-400">
+              {badge > 99 ? '99+' : badge}
+            </span>
+          )}
+        </div>
+      )}
     </Link>
   );
 };

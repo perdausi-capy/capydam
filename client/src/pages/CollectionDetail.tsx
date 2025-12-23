@@ -6,6 +6,7 @@ import {
   Trash2, 
   FolderOpen, 
   Folder, 
+  Share2,
   Calendar,
   Image as ImageIcon,
   Plus,
@@ -16,7 +17,7 @@ import {
   Move,
   Check, 
   CheckSquare,
-  Loader2 
+  Loader2 // Imported Loader
 } from 'lucide-react';
 import Masonry from 'react-masonry-css';
 import ConfirmModal from '../components/ConfirmModal';
@@ -101,7 +102,9 @@ const CollectionDetail = () => {
   const [moveModalOpen, setMoveModalOpen] = useState(false);
   const [assetToMove, setAssetToMove] = useState<string | null>(null); 
   const [moveSearch, setMoveSearch] = useState('');
-  const [isMoving, setIsMoving] = useState(false); 
+  
+  // ✅ GLOBAL PROCESSING STATE (For Drag & Drop Loader)
+  const [isProcessing, setIsProcessing] = useState(false); 
   
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -112,6 +115,7 @@ const CollectionDetail = () => {
   const [isSelectionMode, setIsSelectionMode] = useState(false); 
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
+  // Drag State
   const [draggedAssetId, setDraggedAssetId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
   const [assetToRemove, setAssetToRemove] = useState<string | null>(null);
@@ -134,7 +138,7 @@ const CollectionDetail = () => {
           });
           return { previousData };
       },
-      onError: (_err, _newTodo, context) => {
+      onError: (err, newTodo, context) => {
           queryClient.setQueryData(['collection', id], context?.previousData);
           toast.error("Failed to delete assets");
       },
@@ -149,36 +153,57 @@ const CollectionDetail = () => {
   });
 
   // --- ACTIONS ---
-  const addToSubCollection = async (targetId: string, targetName: string, specificAssetId?: string) => {
+
+  // ✅ UNIFIED MOVE FUNCTION (Handles Single, Bulk, and Drag)
+  const addToSubCollection = async (targetId: string, targetName: string, specificAssetIds?: string[]) => {
     let idsToMove: string[] = [];
-    if (specificAssetId) idsToMove = [specificAssetId];
-    else if (selectedIds.size > 0) idsToMove = Array.from(selectedIds);
-    else if (assetToMove) idsToMove = [assetToMove];
-    else if (activeDropdownId) idsToMove = [activeDropdownId];
+
+    // 1. Determine what we are moving
+    if (specificAssetIds && specificAssetIds.length > 0) {
+        // Passed explicitly (e.g. from Drag Drop)
+        idsToMove = specificAssetIds;
+    } else if (selectedIds.size > 0) {
+        // Bulk Selection
+        idsToMove = Array.from(selectedIds);
+    } else if (assetToMove) {
+        // Single Modal Move
+        idsToMove = [assetToMove];
+    } else if (activeDropdownId) {
+        // Dropdown Move
+        idsToMove = [activeDropdownId];
+    }
 
     if (idsToMove.length === 0) return;
 
-    setIsMoving(true); 
+    // 2. Show Loading Overlay
+    setIsProcessing(true); 
+
     try {
+        // 3. Perform Moves
         await Promise.all(idsToMove.map(assetId => client.post(`/collections/${targetId}/assets`, { assetId })));
+        
         toast.success(`Moved ${idsToMove.length} item(s) to ${targetName}`);
         
+        // 4. Optimistic Update (Remove from current view instantly)
         queryClient.setQueryData(['collection', id], (old: CollectionData | undefined) => {
             if (!old) return old;
             return { ...old, assets: old.assets.filter(a => !idsToMove.includes(a.id)) };
         });
         
+        // 5. Cleanup UI States
         setMoveModalOpen(false);
         setSelectedIds(new Set());
         setActiveDropdownId(null);
         setDraggedAssetId(null);
         setAssetToMove(null);
         setIsSelectionMode(false);
+        
+        // 6. Refresh Data
         queryClient.invalidateQueries({ queryKey: ['collection'] });
     } catch (error) { 
         toast.error("Move failed"); 
     } finally {
-        setIsMoving(false); 
+        setIsProcessing(false); // Hide Loading Overlay
     }
   };
 
@@ -224,31 +249,53 @@ const CollectionDetail = () => {
     } catch (err) { toast.error('Download failed'); }
   };
 
-  // --- DRAG AND DROP ---
+  // --- 🔥 DRAG AND DROP (ENHANCED) ---
   const handleDragStart = (e: React.DragEvent, assetId: string) => {
       if (!canManage) return;
-      setDraggedAssetId(assetId);
+      
+      // If we are dragging an item that is part of the selection, we are moving the WHOLE selection
+      if (selectedIds.has(assetId)) {
+          // Do not clear selection, we are about to bulk move
+      } else {
+           // Standard single drag
+           setDraggedAssetId(assetId);
+      }
+      
       e.dataTransfer.effectAllowed = "move";
+      // Optional: Set custom drag image here if you want
   };
+
   const handleDragOver = (e: React.DragEvent, folderId: string) => {
       e.preventDefault();
       if (!canManage) return;
       setDragOverFolderId(folderId);
   };
+
   const handleDragLeave = (e: React.DragEvent) => {
       e.preventDefault();
       setDragOverFolderId(null);
   };
+
   const handleDrop = async (e: React.DragEvent, folderId: string, folderName: string) => {
       e.preventDefault();
       setDragOverFolderId(null);
-      if (draggedAssetId) { await addToSubCollection(folderId, folderName, draggedAssetId); }
+      
+      // 1. Check: Are we dragging a single item that IS NOT in the selection?
+      if (draggedAssetId && !selectedIds.has(draggedAssetId)) {
+          await addToSubCollection(folderId, folderName, [draggedAssetId]);
+          setDraggedAssetId(null);
+      } 
+      // 2. Check: Are we dragging items from the Multi-Selection?
+      else if (selectedIds.size > 0) {
+           // We infer that if selectedIds > 0 and a drop happened, we move the selection
+           await addToSubCollection(folderId, folderName, Array.from(selectedIds));
+      }
   };
 
-//   const toggleDropdown = (e: React.MouseEvent, assetId: string) => {
-//     e.preventDefault(); e.stopPropagation();
-//     setActiveDropdownId(activeDropdownId === assetId ? null : assetId);
-//   };
+  const toggleDropdown = (e: React.MouseEvent, assetId: string) => {
+    e.preventDefault(); e.stopPropagation();
+    setActiveDropdownId(activeDropdownId === assetId ? null : assetId);
+  };
 
   const openMoveModal = (e: React.MouseEvent, assetId: string) => {
       e.preventDefault(); e.stopPropagation();
@@ -269,6 +316,24 @@ const CollectionDetail = () => {
       </div>
 
       {activeDropdownId && <div className="fixed inset-0 z-40 cursor-default" onClick={() => setActiveDropdownId(null)} />}
+
+      {/* ✅ GLOBAL PROCESSING LOADER */}
+      <AnimatePresence>
+        {isProcessing && (
+            <motion.div 
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }} 
+                exit={{ opacity: 0 }} 
+                className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/50 dark:bg-black/50 backdrop-blur-sm"
+            >
+                <div className="bg-white dark:bg-[#1A1D21] p-6 rounded-2xl shadow-2xl flex flex-col items-center border border-gray-100 dark:border-white/10">
+                    <Loader2 size={48} className="animate-spin text-blue-600 dark:text-blue-400 mb-4" />
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">Processing...</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Moving your assets safely.</p>
+                </div>
+            </motion.div>
+        )}
+      </AnimatePresence>
 
       {loading ? (
           <CollectionDetailSkeleton />
@@ -350,29 +415,30 @@ const CollectionDetail = () => {
                                 return (
                                 <div 
                                     key={asset.id} 
-                                    draggable={canManage && !isSelectionMode}
+                                    // ✅ Allow drag if managed, EVEN IF in selection mode (for bulk drag)
+                                    draggable={canManage}
                                     onDragStart={(e) => handleDragStart(e, asset.id)}
                                     onClick={(e) => isSelectionMode && toggleSelection(e, asset.id)}
                                     className={`group relative mb-8 block transition-all duration-300 cursor-pointer ${draggedAssetId === asset.id ? 'opacity-40 scale-95 grayscale' : 'opacity-100'}`}
                                     style={{ contentVisibility: 'auto', containIntrinsicSize: '300px' }} 
                                 >
-                                    {/* ✅ FIXED CHECKMARK STYLE: Hidden by default, Glass on hover, Blue on select */}
+                                    {/* SELECTION CIRCLE */}
                                     <div 
                                         onClick={(e) => toggleSelection(e, asset.id)}
                                         className={`
                                             absolute top-3 left-3 z-30 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center shadow-lg
                                             ${isSelected 
-                                                ? 'bg-blue-600 border-2 border-blue-600 text-white w-7 h-7 scale-110' // SELECTED: Solid Blue
+                                                ? 'bg-blue-600 border-2 border-blue-600 text-white w-7 h-7 scale-110' // Selected
                                                 : isSelectionMode
-                                                    ? 'bg-black/20 backdrop-blur-sm border-2 border-white/80 w-7 h-7' // UNSELECTED (Mode Active): Visible Glass Ring
-                                                    : 'bg-black/20 backdrop-blur-sm border-2 border-white/80 opacity-0 group-hover:opacity-100 w-7 h-7' // DEFAULT: Hidden, Glass Ring on Hover
+                                                    ? 'bg-black/20 backdrop-blur-sm border-2 border-white/80 w-7 h-7' // Unselected (Mode Active)
+                                                    : 'bg-black/20 backdrop-blur-sm border-2 border-white/80 opacity-0 group-hover:opacity-100 w-7 h-7' // Hidden
                                             }
                                         `}
                                     >
                                         {isSelected && <Check size={14} strokeWidth={3} />}
                                     </div>
 
-                                    {/* Card Container - No Movement, Darkens on Hover */}
+                                    {/* Card Container */}
                                     <div className={`
                                         relative w-full rounded-2xl overflow-hidden transition-all duration-300 bg-gray-100 dark:bg-[#1A1D21] shadow-sm
                                         ${isSelected ? 'ring-4 ring-blue-600 scale-[0.98]' : 'hover:shadow-md'} 
@@ -426,11 +492,11 @@ const CollectionDetail = () => {
       <AnimatePresence>
         {moveModalOpen && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !isMoving && setMoveModalOpen(false)} />
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !isProcessing && setMoveModalOpen(false)} />
                 <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative w-full max-w-md bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
                     
-                    {/* ✅ LOADING OVERLAY */}
-                    {isMoving && (
+                    {/* ✅ MODAL LOADING OVERLAY */}
+                    {isProcessing && (
                         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white/80 dark:bg-black/80 backdrop-blur-sm">
                             <Loader2 size={40} className="animate-spin text-blue-600 dark:text-blue-400 mb-2" />
                             <p className="text-sm font-bold text-gray-600 dark:text-gray-300">Moving items...</p>
@@ -439,18 +505,18 @@ const CollectionDetail = () => {
 
                     <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-white/5">
                         <h3 className="font-bold text-gray-900 dark:text-white">Move {selectedIds.size > 0 ? selectedIds.size : 'Asset'} Items</h3>
-                        <button onClick={() => setMoveModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" disabled={isMoving}><X size={20} /></button>
+                        <button onClick={() => setMoveModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" disabled={isProcessing}><X size={20} /></button>
                     </div>
                     <div className="px-6 py-3 bg-gray-50 dark:bg-white/5">
                         <div className="flex items-center gap-2 bg-white dark:bg-black/20 rounded-xl px-3 py-2 border border-gray-200 dark:border-white/10">
                             <Search size={16} className="text-gray-400" />
-                            <input type="text" placeholder="Find a folder..." autoFocus value={moveSearch} onChange={(e) => setMoveSearch(e.target.value)} className="bg-transparent border-none outline-none text-sm w-full text-gray-800 dark:text-gray-200 placeholder-gray-400" disabled={isMoving} />
+                            <input type="text" placeholder="Find a folder..." autoFocus value={moveSearch} onChange={(e) => setMoveSearch(e.target.value)} className="bg-transparent border-none outline-none text-sm w-full text-gray-800 dark:text-gray-200 placeholder-gray-400" disabled={isProcessing} />
                         </div>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
                         {filteredFolders.length > 0 ? ( 
                             filteredFolders.map(sub => (
-                                <button key={sub.id} onClick={() => addToSubCollection(sub.id, sub.name)} disabled={isMoving} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-left transition-colors group disabled:opacity-50">
+                                <button key={sub.id} onClick={() => addToSubCollection(sub.id, sub.name)} disabled={isProcessing} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-left transition-colors group disabled:opacity-50">
                                     <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg group-hover:scale-110 transition-transform"><Folder size={18} /></div>
                                     <span className="font-medium text-gray-700 dark:text-gray-200 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">{sub.name}</span>
                                 </button>
@@ -458,7 +524,7 @@ const CollectionDetail = () => {
                         ) : ( <div className="p-8 text-center text-gray-400 text-sm">{collection?.children.length === 0 ? "No sub-folders created yet." : "No matching folders found."}</div> )}
                     </div>
                     <div className="p-4 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/5">
-                        <button onClick={() => { setMoveModalOpen(false); setIsCreateFolderOpen(true); }} disabled={isMoving} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-bold py-3 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:hover:scale-100"><Plus size={16} /> Create New Folder</button>
+                        <button onClick={() => { setMoveModalOpen(false); setIsCreateFolderOpen(true); }} disabled={isProcessing} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-bold py-3 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:hover:scale-100"><Plus size={16} /> Create New Folder</button>
                     </div>
                 </motion.div>
             </div>

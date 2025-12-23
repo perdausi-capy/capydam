@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import client from '../api/client';
 import { 
   MessageSquare, Bug, Lightbulb, CheckCircle, 
   Clock, Trash2, Mail, User, Search, Loader2, X, Send,
-  CornerDownRight, Filter
+  CornerDownRight, Filter, Paperclip, ExternalLink
 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import client from '../api/client';
+import ConfirmModal from '../components/ConfirmModal'; // ✅ Added Modal
 
 // --- TYPES ---
 type FeedbackType = 'general' | 'bug' | 'feature';
@@ -16,17 +18,21 @@ interface FeedbackItem {
   type: FeedbackType;
   subject: string;
   message: string;
-  userEmail: string; 
-  userName: string;  
+  user: { // Updated to match new backend response structure
+    name: string | null;
+    email: string;
+    avatar: string | null;
+  };
   createdAt: string;
   status: FeedbackStatus;
   adminReply?: string;
   repliedAt?: string;
+  attachment?: string; // ✅ Attachment Support
 }
 
 const AdminFeedback = () => {
-  const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  
   const [filter, setFilter] = useState<'all' | 'new' | 'resolved'>('all');
   const [search, setSearch] = useState('');
 
@@ -35,46 +41,49 @@ const AdminFeedback = () => {
   const [selectedFeedback, setSelectedFeedback] = useState<FeedbackItem | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
+  
+  // Delete State
+  const [itemToDelete, setItemToDelete] = useState<FeedbackItem | null>(null);
 
-  // --- LOAD DATA ---
-  useEffect(() => {
-    const fetchFeedback = async () => {
-      try {
-        const { data } = await client.get('/feedback');
-        setFeedbacks(data);
-      } catch (error) {
-        toast.error("Failed to load feedback");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchFeedback();
-  }, []);
+  // --- 1. FETCH DATA ---
+  const { data: feedbacks, isLoading } = useQuery<FeedbackItem[]>({
+    queryKey: ['admin-feedback'],
+    queryFn: async () => {
+      const { data } = await client.get('/feedback');
+      return data;
+    },
+    staleTime: 1000 * 30, // 30s cache
+  });
 
   // --- ACTIONS ---
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this feedback permanently?')) return;
-    try {
+  
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
         await client.delete(`/feedback/${id}`);
-        setFeedbacks(prev => prev.filter(f => f.id !== id));
+    },
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['admin-feedback'] });
+        setItemToDelete(null);
         toast.success('Feedback deleted');
-    } catch (e) { toast.error("Failed to delete"); }
-  };
+    },
+    onError: () => toast.error("Failed to delete")
+  });
 
   const handleMarkAsRead = async (id: string) => {
     try {
-        await client.patch(`/feedback/${id}`, { status: 'read' });
-        setFeedbacks(prev => prev.map(f => f.id === id ? { ...f, status: 'read' } : f));
+        await client.patch(`/feedback/${id}/status`, { status: 'read' }); // Updated route
+        queryClient.invalidateQueries({ queryKey: ['admin-feedback'] });
     } catch (e) { toast.error("Failed to update"); }
   };
 
   const openReplyModal = (item: FeedbackItem) => {
     setSelectedFeedback(item);
-    setReplyMessage(''); 
+    setReplyMessage(item.adminReply || ''); // Pre-fill if editing
     setReplyModalOpen(true);
   };
 
-  const handleSendReply = async () => {
+  const handleSendReply = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!selectedFeedback || !replyMessage.trim()) return;
     
     setSendingReply(true);
@@ -85,16 +94,7 @@ const AdminFeedback = () => {
         
         toast.success(`Reply sent!`);
         setReplyModalOpen(false);
-        
-        // Update UI
-        setFeedbacks(prev => prev.map(f => 
-            f.id === selectedFeedback.id ? { 
-                ...f, 
-                status: 'resolved', 
-                adminReply: replyMessage,
-                repliedAt: new Date().toISOString()
-            } : f
-        ));
+        queryClient.invalidateQueries({ queryKey: ['admin-feedback'] });
     } catch (error) {
         toast.error("Failed to send reply");
     } finally {
@@ -103,15 +103,14 @@ const AdminFeedback = () => {
   };
 
   // --- HELPERS ---
-  const filteredData = feedbacks.filter(item => {
-    const matchesFilter = filter === 'all' || 
-                          (filter === 'new' && item.status === 'new') ||
-                          (filter === 'resolved' && item.status === 'resolved');
+  const filteredData = feedbacks?.filter(item => {
+    const matchesFilter = filter === 'all' || item.status === filter;
     
     const matchesSearch = item.subject.toLowerCase().includes(search.toLowerCase()) || 
-                          item.userEmail.toLowerCase().includes(search.toLowerCase());
+                          item.user.email.toLowerCase().includes(search.toLowerCase()) ||
+                          (item.user.name && item.user.name.toLowerCase().includes(search.toLowerCase()));
     return matchesFilter && matchesSearch;
-  });
+  }) || [];
 
   const getTypeIcon = (type: FeedbackType) => {
     switch (type) {
@@ -127,7 +126,7 @@ const AdminFeedback = () => {
       return 'bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20';
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#F8F9FC] dark:bg-[#0B0D0F]"><Loader2 className="animate-spin text-blue-500" size={40} /></div>;
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-[#F8F9FC] dark:bg-[#0B0D0F]"><Loader2 className="animate-spin text-blue-500" size={40} /></div>;
 
   return (
     <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] p-6 lg:p-10 transition-colors duration-500 relative overflow-hidden font-sans">
@@ -151,9 +150,8 @@ const AdminFeedback = () => {
                 </p>
             </div>
             
-            {/* Glass Control Bar */}
+            {/* Control Bar */}
             <div className="bg-white/60 dark:bg-white/5 backdrop-blur-md border border-white/20 dark:border-white/10 p-2 rounded-2xl flex flex-col sm:flex-row items-center gap-3 shadow-sm dark:shadow-none w-full md:w-auto">
-                {/* Search */}
                 <div className="relative w-full sm:w-64">
                     <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input 
@@ -165,7 +163,6 @@ const AdminFeedback = () => {
                     />
                 </div>
                 
-                {/* Filters */}
                 <div className="flex bg-gray-100 dark:bg-[#0B0D0F]/50 p-1 rounded-xl w-full sm:w-auto border border-gray-200 dark:border-white/10">
                     {(['all', 'new', 'resolved'] as const).map((f) => (
                         <button 
@@ -221,20 +218,25 @@ const AdminFeedback = () => {
                                         {item.subject}
                                     </h3>
                                     {item.status === 'new' && (
-                                        <span className="bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">
-                                            New
-                                        </span>
+                                        <span className="bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">New</span>
                                     )}
                                     {item.status === 'resolved' && (
-                                        <span className="bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-500/30 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">
-                                            Resolved
-                                        </span>
+                                        <span className="bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-300 border border-green-200 dark:border-green-500/30 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">Resolved</span>
                                     )}
                                 </div>
                                 
                                 <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
                                     {item.message}
                                 </p>
+
+                                {/* ✅ EVIDENCE LINK */}
+                                {item.attachment && (
+                                    <div className="mt-2">
+                                        <a href={item.attachment} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-white/5 text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                                            <Paperclip size={12} /> View Evidence <ExternalLink size={10} />
+                                        </a>
+                                    </div>
+                                )}
                                 
                                 {/* ADMIN REPLY BOX */}
                                 {item.adminReply && (
@@ -251,7 +253,7 @@ const AdminFeedback = () => {
 
                                 <div className="flex items-center gap-6 pt-2 text-xs text-gray-400 font-medium">
                                     <span className="flex items-center gap-1.5 bg-gray-50 dark:bg-white/5 px-2 py-1 rounded-md">
-                                        <User size={12} /> {item.userName} <span className="opacity-50">({item.userEmail})</span>
+                                        <User size={12} /> {item.user.name || 'Unknown'} <span className="opacity-50">({item.user.email})</span>
                                     </span>
                                     <span className="flex items-center gap-1.5">
                                         <Clock size={12} /> {new Date(item.createdAt).toLocaleDateString()}
@@ -278,7 +280,7 @@ const AdminFeedback = () => {
                                 </button>
 
                                 <button 
-                                    onClick={() => handleDelete(item.id)} 
+                                    onClick={() => setItemToDelete(item)} 
                                     className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-200 dark:hover:border-red-900/30 transition-colors md:mt-auto"
                                 >
                                     <Trash2 size={14} /> Delete
@@ -300,7 +302,7 @@ const AdminFeedback = () => {
                     <div className="px-6 py-4 border-b border-gray-100 dark:border-white/5 flex items-center justify-between bg-gray-50/50 dark:bg-white/[0.02]">
                         <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                             <Mail size={18} className="text-blue-500" /> 
-                            Reply to {selectedFeedback.userName}
+                            Reply to {selectedFeedback.user.name}
                         </h3>
                         <button onClick={() => setReplyModalOpen(false)} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-white/10 transition-colors text-gray-500 dark:text-gray-400">
                             <X size={20} />
@@ -310,52 +312,66 @@ const AdminFeedback = () => {
                     {/* Body */}
                     <div className="p-6 space-y-4">
                         <div className="bg-gray-50 dark:bg-black/20 p-4 rounded-xl border border-gray-100 dark:border-white/5">
-                            <div className="flex items-center gap-2 text-xs font-bold uppercase text-gray-400 mb-1">
-                                <MessageSquare size={12} /> User Said:
+                            <div className="flex items-center justify-between mb-1">
+                                <div className="flex items-center gap-2 text-xs font-bold uppercase text-gray-400">
+                                    <MessageSquare size={12} /> User Said:
+                                </div>
+                                {/* ✅ Evidence Quick Link in Modal */}
+                                {selectedFeedback.attachment && (
+                                    <a href={selectedFeedback.attachment} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                                        <Paperclip size={10} /> Evidence
+                                    </a>
+                                )}
                             </div>
                             <p className="text-sm text-gray-600 dark:text-gray-300 italic">"{selectedFeedback.message}"</p>
                         </div>
 
-                        {selectedFeedback.adminReply && (
-                            <div className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1.5 bg-blue-50 dark:bg-blue-500/10 p-2 rounded-lg">
-                                <CheckCircle size={12} /> Editing previous reply
+                        <form onSubmit={handleSendReply}>
+                            <div className="space-y-2">
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Your Response</label>
+                                <textarea 
+                                    autoFocus
+                                    rows={6}
+                                    className="w-full bg-white dark:bg-[#0B0D0F] border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 dark:text-white resize-none placeholder:text-gray-400"
+                                    placeholder="Type your reply here..."
+                                    value={replyMessage}
+                                    onChange={e => setReplyMessage(e.target.value)}
+                                />
                             </div>
-                        )}
-
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Your Response</label>
-                            <textarea 
-                                autoFocus
-                                rows={6}
-                                className="w-full bg-white dark:bg-[#0B0D0F] border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 dark:text-white resize-none placeholder:text-gray-400"
-                                placeholder="Type your reply here..."
-                                value={replyMessage}
-                                onChange={(e) => setReplyMessage(e.target.value)}
-                            />
-                        </div>
+                            
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button 
+                                    type="button" 
+                                    onClick={() => setReplyModalOpen(false)}
+                                    className="px-5 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 font-bold hover:bg-gray-50 dark:hover:bg-white/5"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    type="submit" 
+                                    disabled={!replyMessage.trim() || sendingReply}
+                                    className="px-6 py-2.5 rounded-xl bg-gray-900 dark:bg-blue-600 hover:bg-gray-800 dark:hover:bg-blue-500 text-white text-sm font-bold shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                >
+                                    {sendingReply ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                                    Send Reply
+                                </button>
+                            </div>
+                        </form>
                     </div>
-
-                    {/* Footer */}
-                    <div className="px-6 py-4 bg-gray-50 dark:bg-white/[0.02] border-t border-gray-100 dark:border-white/5 flex justify-end gap-3">
-                        <button 
-                            onClick={() => setReplyModalOpen(false)}
-                            className="px-4 py-2 rounded-xl text-sm font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/5 transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button 
-                            onClick={handleSendReply}
-                            disabled={sendingReply || !replyMessage.trim()}
-                            className="px-6 py-2 rounded-xl bg-gray-900 dark:bg-blue-600 hover:bg-gray-800 dark:hover:bg-blue-500 text-white text-sm font-bold shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                        >
-                            {sendingReply ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                            Send Reply
-                        </button>
-                    </div>
-
                 </div>
             </div>
         )}
+
+        {/* ✅ CONFIRM DELETE MODAL */}
+        <ConfirmModal 
+            isOpen={!!itemToDelete}
+            onClose={() => setItemToDelete(null)}
+            onConfirm={() => itemToDelete && deleteMutation.mutate(itemToDelete.id)}
+            title="Delete Feedback"
+            message="Are you sure you want to delete this ticket? This cannot be undone."
+            confirmText="Delete"
+            isDangerous
+        />
 
       </div>
     </div>

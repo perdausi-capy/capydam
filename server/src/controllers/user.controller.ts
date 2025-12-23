@@ -1,32 +1,69 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
-import { uploadToSupabase } from '../utils/supabase'; // ✅ Ensure this file exists
+import { uploadToSupabase } from '../utils/supabase'; 
 import fs from 'fs-extra'; 
 
-// Define Multer Request Type locally to avoid TS errors
+// Define Multer Request Type locally
 interface MulterRequest extends Request {
   file?: Express.Multer.File;
   user?: { id: string };
 }
 
-// 1. Get All Users (Admin Dashboard)
+// ✅ 1. Get All Users
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
   try {
-    const users = await prisma.user.findMany({
-      select: { 
-        id: true, 
-        name: true, 
-        email: true, 
-        role: true, 
-        status: true, 
-        createdAt: true,
-        avatar: true // ✅ Make sure you ran 'npx prisma db push' so this column exists
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const search = (req.query.search as string) || '';
+    const role = (req.query.role as string) || 'all';
+
+    const skip = (page - 1) * limit;
+
+    const whereClause: any = {
+      AND: [
+        search ? {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+          ],
+        } : {},
+        role !== 'all' ? { role: role } : {},
+      ],
+    };
+
+    const [total, users] = await prisma.$transaction([
+      prisma.user.count({ where: whereClause }),
+      prisma.user.findMany({
+        where: whereClause,
+        select: { 
+          id: true, 
+          name: true, 
+          email: true, 
+          role: true, 
+          status: true, 
+          createdAt: true,
+          updatedAt: true, // ✅ ADDED THIS LINE
+          avatar: true 
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    res.json({
+      data: users,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
       },
-      orderBy: { createdAt: 'desc' },
     });
-    res.json(users);
+
   } catch (error) {
+    console.error("Get Users Error:", error);
     res.status(500).json({ message: 'Error fetching users' });
   }
 };
@@ -62,11 +99,18 @@ export const rejectUser = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-// 4. Update Role (For existing active users)
+// 4. Update Role (Safe Version)
 export const updateUserRole = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const { role } = req.body;
+
+    // Safety: Ensure only valid roles are passed
+    const validRoles = ['admin', 'editor', 'viewer'];
+    if (!validRoles.includes(role)) {
+        res.status(400).json({ message: 'Invalid role provided' });
+        return;
+    }
 
     await prisma.user.update({
       where: { id },
@@ -108,19 +152,13 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-// ✅ 6. Update Profile (Name & Avatar)
+// 6. Update Profile (Preserved & Safe)
 export const updateProfile = async (req: Request, res: Response): Promise<void> => {
   const multerReq = req as MulterRequest;
-  
-  // 🔍 DEBUG: Log to see what we are receiving
-  // console.log("User in Controller:", (req as any).user);
-
-  // 🛡️ SAFETY CHECK: Force cast to 'any' to ensure we capture the user attached by middleware
   const user = (req as any).user;
   const userId = user?.id;
   const { name } = req.body;
 
-  // 🛑 STOP if no user found (Prevents the Prisma Crash)
   if (!userId) {
      res.status(401).json({ message: 'User not authenticated or ID missing' });
      return;
@@ -129,38 +167,31 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
   try {
     let avatarPath = undefined;
 
-    // Handle Avatar Upload
     if (multerReq.file) {
       const { path: tempPath, mimetype } = multerReq.file;
       
-      // Upload to 'avatars' folder
       avatarPath = await uploadToSupabase(
         tempPath, 
         `avatars/${userId}-${Date.now()}`, 
         mimetype
       );
 
-      // Cleanup local temp file
       await fs.remove(tempPath).catch(() => {});
     }
 
-    // Update Database
     const updatedUser = await prisma.user.update({
-      where: { id: userId }, // ✅ userId is now guaranteed to exist here
+      where: { id: userId },
       data: {
         name: name,
         ...(avatarPath && { avatar: avatarPath }), 
       },
     });
 
-    // Exclude password from response
     const { password, ...userWithoutPassword } = updatedUser;
-
     res.json(userWithoutPassword);
 
   } catch (error) {
     console.error("Profile Update Error:", error);
-    // Cleanup if file exists but DB failed
     if (multerReq.file?.path) {
         await fs.remove(multerReq.file.path).catch(() => {});
     }
@@ -168,7 +199,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
   }
 };
 
-
+// 7. Get Single User Details
 export const getUserById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -192,7 +223,6 @@ export const getUserById = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    // Remove password
     const { password, ...userData } = user;
     res.json(userData);
   } catch (error) {
@@ -200,10 +230,7 @@ export const getUserById = async (req: Request, res: Response): Promise<void> =>
   }
 };
   
-// 8. Delete Active User
-// ... other imports
-
-// 8. Delete Active User (Robust Fix)
+// 8. Delete User (Transaction Safe)
 export const deleteUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -214,7 +241,6 @@ export const deleteUser = async (req: Request, res: Response): Promise<void> => 
         return;
     }
 
-    // 1. Find all assets uploaded by this user (to get their IDs)
     const userAssets = await prisma.asset.findMany({
         where: { userId: id },
         select: { id: true }
@@ -222,35 +248,23 @@ export const deleteUser = async (req: Request, res: Response): Promise<void> => 
     
     const assetIds = userAssets.map(a => a.id);
 
-    // 2. Perform Clean-up Transaction
     await prisma.$transaction([
-        
-        // A. Remove ALL links to the user's assets from ANY collection
-        // (This fixes the "Foreign Key Constraint" error on Assets)
+        // Remove asset links in collections
         prisma.assetOnCollection.deleteMany({
-            where: {
-                assetId: { in: assetIds }
-            }
+            where: { assetId: { in: assetIds } }
         }),
-
-        // B. Clear the user's OWN collections (remove assets inside them)
+        // Remove collections owned by user
         prisma.assetOnCollection.deleteMany({
-            where: {
-                collection: { userId: id }
-            }
+            where: { collection: { userId: id } }
         }),
-
-        // C. Delete the User's Collections
         prisma.collection.deleteMany({
             where: { userId: id }
         }),
-
-        // D. Delete the User's Assets
+        // Remove assets owned by user
         prisma.asset.deleteMany({
             where: { userId: id }
         }),
-
-        // E. Finally, Delete the User
+        // Finally, delete user
         prisma.user.delete({
             where: { id }
         })

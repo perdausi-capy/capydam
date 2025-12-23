@@ -41,6 +41,8 @@ model Feedback {
   adminReply String?   // The message from the admin
   repliedAt  DateTime? // When the reply was sent
 
+  attachment String?
+
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
