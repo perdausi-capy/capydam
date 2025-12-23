@@ -87,6 +87,7 @@ model Asset {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   collections    AssetOnCollection[]
+  previewFrames String[]  @default([])
 }
 
 model Collection {

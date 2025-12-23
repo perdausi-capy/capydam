@@ -74,3 +74,29 @@ export const generateVideoThumbnail = async (filePath: string, outputDir: string
 export const generatePdfThumbnail = async (filePath: string, outputDir: string): Promise<string | null> => {
   return null; // Return null -> Frontend shows Icon
 };
+
+// ✅ ADD THIS NEW FUNCTION
+export const generateVideoPreviews = (videoPath: string, outputDir: string, filenameBase: string): Promise<string[]> => {
+  return new Promise((resolve, reject) => {
+    const filenames: string[] = [];
+    
+    ffmpeg(videoPath)
+      .on('filenames', (fnames) => {
+        // fluent-ffmpeg returns an array of filenames
+        fnames.forEach((f) => filenames.push(f));
+      })
+      .on('end', () => {
+        resolve(filenames);
+      })
+      .on('error', (err) => {
+        console.error('FFmpeg error:', err);
+        reject(err);
+      })
+      .screenshots({
+        count: 10,             // 📸 Take 10 snapshots
+        folder: outputDir,
+        filename: `${filenameBase}-scrub-%i.jpg`,
+        size: '320x?',         // Small size for fast loading
+      });
+  });
+};

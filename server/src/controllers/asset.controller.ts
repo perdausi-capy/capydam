@@ -4,18 +4,21 @@ import { Prisma } from '@prisma/client';
 import path from 'path';
 import fs from 'fs-extra';
 
-// Import Services
+// Import Storage Services
 import { 
   uploadToSupabase, 
   deleteFromSupabase 
 } from '../services/storage.service';
 
+// Import Image Services
 import { 
   generateThumbnail, 
   generateVideoThumbnail, 
-  generatePdfThumbnail 
+  generatePdfThumbnail,
+  generateVideoPreviews // ✅ Required for scrubbing
 } from '../services/image.service';
 
+// Import AI Services
 import { 
   analyzeImage, 
   analyzePdf, 
@@ -27,7 +30,9 @@ interface MulterRequest extends Request {
   user?: any;
 }
 
-// --- UPLOAD (Synchronous: Waits for AI) ---
+// ==========================================
+// 1. UPLOAD ASSET (Synchronous Wait for AI)
+// ==========================================
 export const uploadAsset = async (req: Request, res: Response): Promise<void> => {
   const multerReq = req as MulterRequest;
 
@@ -43,7 +48,7 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
     const creativity = parseFloat(req.body.creativity || '0.2'); 
     const specificity = req.body.specificity || 'general';
 
-    // 1. Capture User Inputs (Name & Link)
+    // A. Capture User Inputs
     const finalOriginalName = req.body.originalName || multerOriginalName;
     
     let initialAiData = {};
@@ -55,18 +60,41 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
         }
     }
 
-    // 2. Generate Thumbnails (Locally)
+    // B. Setup Local Thumbnail Directory
     const thumbnailDir = path.join(__dirname, '../../uploads/thumbnails');
     await fs.ensureDir(thumbnailDir);
     
     let thumbnailRelativePath = null;
+    let previewFrames: string[] = []; // ✅ Store 10 frame URLs here
 
+    // C. Generate Thumbnails & Previews (Locally)
     try {
       if (mimetype.startsWith('image/')) {
          thumbnailRelativePath = await generateThumbnail(tempPath, thumbnailDir);
       } 
       else if (mimetype.startsWith('video/')) {
+         // 1. Main Thumbnail
          thumbnailRelativePath = await generateVideoThumbnail(tempPath, thumbnailDir);
+
+         // 2. ✅ Generate 10 Scrubbing Previews
+         try {
+             // Generate local files (e.g., vid-scrub-1.jpg ... vid-scrub-10.jpg)
+             const previewFiles = await generateVideoPreviews(tempPath, thumbnailDir, filename);
+             
+             // Upload each frame to Supabase immediately
+             for (const pFile of previewFiles) {
+                 const localPPath = path.join(thumbnailDir, pFile);
+                 const cloudPPath = await uploadToSupabase(
+                     localPPath, 
+                     `previews/${pFile}`, 
+                     'image/jpeg'
+                 );
+                 previewFrames.push(cloudPPath);
+                 await fs.remove(localPPath); // Cleanup local frame
+             }
+         } catch (videoError) {
+             console.warn("Video preview generation failed:", videoError);
+         }
       }
       else if (mimetype === 'application/pdf') {
          thumbnailRelativePath = await generatePdfThumbnail(tempPath, thumbnailDir);
@@ -76,14 +104,14 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
       thumbnailRelativePath = null;
     }
 
-    // 3. Upload ORIGINAL to Supabase
+    // D. Upload ORIGINAL to Supabase
     const cloudOriginalPath = await uploadToSupabase(
       tempPath, 
       `originals/${filename}`, 
       mimetype
     );
 
-    // 4. Upload THUMBNAIL to Supabase
+    // E. Upload THUMBNAIL to Supabase
     let cloudThumbnailPath = null;
     if (thumbnailRelativePath) {
        const localThumbPath = path.join(__dirname, '../../uploads/', thumbnailRelativePath);
@@ -97,7 +125,7 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
        await fs.remove(localThumbPath);
     }
     
-    // 5. Initial Save to Database
+    // F. Save to Database
     const asset = await prisma.asset.create({
       data: {
         filename,
@@ -106,12 +134,13 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
         size,
         path: cloudOriginalPath,
         thumbnailPath: cloudThumbnailPath,
+        previewFrames: previewFrames, // ✅ Save the frames array
         userId: userId!, 
         aiData: JSON.stringify(initialAiData),
       },
     });
 
-    // 6. Trigger AI Analysis
+    // G. Trigger AI Analysis
     const aiOptions = { creativity, specificity };
     
     try {
@@ -138,7 +167,7 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
         await fs.remove(tempPath).catch(e => console.error("Cleanup error:", e));
     }
 
-    // 7. SAFETY RESTORE: Merge User Link
+    // H. Merge AI Data back into DB record (if frontend provided some)
     let finalAsset = await prisma.asset.findUnique({ where: { id: asset.id } });
 
     if (req.body.aiData && finalAsset) {
@@ -160,6 +189,7 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
     });
 
   } catch (error) {
+    // Emergency Cleanup
     if (await fs.pathExists(tempPath)) {
         await fs.remove(tempPath).catch(() => {});
     }
@@ -168,7 +198,9 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// --- TRACK CLICKS ---
+// ==========================================
+// 2. TRACK CLICKS (Analytics)
+// ==========================================
 export const trackAssetClick = async (req: Request, res: Response): Promise<void> => {
   try {
     const { assetId, query, position } = req.body;
@@ -183,19 +215,20 @@ export const trackAssetClick = async (req: Request, res: Response): Promise<void
   }
 };
 
-// --- GET ASSETS (Optimized V5.0) ---
+// ==========================================
+// 3. GET ASSETS (Optimized V5.0)
+// ==========================================
 export const getAssets = async (req: Request, res: Response): Promise<void> => {
   try {
     const { search, type, color, page = 1, limit = 50 } = req.query;
     
-    // Parse pagination
     const pageNum = Math.max(1, Number(page));
-    const limitNum = Math.max(1, Math.min(100, Number(limit))); // Cap at 100
+    const limitNum = Math.max(1, Math.min(100, Number(limit))); 
     const skip = (pageNum - 1) * limitNum;
 
     const cleanSearch = String(search || '').trim().toLowerCase();
     
-    // 1. REUSABLE FILTER LOGIC
+    // A. Reusable Filter Logic
     const buildFilters = () => {
         const filters: any = {};
         if (type && type !== 'all') {
@@ -211,8 +244,7 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
 
     const activeFilters = buildFilters();
 
-    // 2. LIGHTWEIGHT SELECT (Crucial for Speed)
-    // We strictly exclude 'embedding' and big unused fields
+    // B. Lightweight Select (Include previewFrames)
     const lightweightSelect = {
         id: true,
         filename: true,
@@ -220,6 +252,7 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
         mimeType: true,
         path: true,
         thumbnailPath: true,
+        previewFrames: true, // ✅ Return frames to frontend
         aiData: true, 
         uploadedBy: { select: { name: true } }
     };
@@ -233,11 +266,10 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
                 orderBy: { createdAt: 'desc' },
                 take: limitNum,
                 skip: skip,
-                select: lightweightSelect, // ⚡ Optimization
+                select: lightweightSelect, 
             })
         ]);
 
-        // Fix Thumbnail paths if missing
         const fixedAssets = assets.map(asset => ({
             ...asset,
             thumbnailPath: asset.thumbnailPath || asset.path 
@@ -254,9 +286,7 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
 
     // --- MODE B: SEARCH (Optimized) ---
     const scoredMap = new Map<string, { asset: any, score: number }>();
-
     let searchTerms: string[] = [cleanSearch];
-    // (Optional: add expansion logic here if needed)
 
     const keywordWhere: any = { 
         AND: [ activeFilters ] 
@@ -271,13 +301,14 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
       });
     }
 
-    // Fetch potential matches (Limit 200 to save RAM)
+    // Fetch Candidates
     const keywordAssets = await prisma.asset.findMany({
       where: keywordWhere,
-      select: lightweightSelect, // ⚡ Optimization
+      select: lightweightSelect, 
       take: 200, 
     });
 
+    // Score Candidates
     keywordAssets.forEach(asset => {
         let score = 0;
         const lowerName = (asset.originalName || '').toLowerCase();
@@ -294,7 +325,6 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
         .sort((a, b) => b.score - a.score)
         .map(item => item.asset);
 
-    // Manual Pagination for Search Results
     const totalSearch = finalResults.length;
     const paginatedResults = finalResults.slice(skip, skip + limitNum);
 
@@ -306,7 +336,7 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
             where: activeFilters,
             orderBy: { createdAt: 'desc' },
             take: limitNum,
-            select: lightweightSelect // ⚡ Optimization
+            select: lightweightSelect
         });
         
         const fixedFallback = fallbackAssets.map(asset => ({
@@ -337,7 +367,9 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// --- GET ONE ---
+// ==========================================
+// 4. GET SINGLE ASSET
+// ==========================================
 export const getAssetById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -356,151 +388,116 @@ export const getAssetById = async (req: Request, res: Response): Promise<void> =
   }
 };
 
-// --- RECOMMENDATIONS (Strict Filtering + Search Scoring V4.1) ---
+// ==========================================
+// 5. GET RELATED ASSETS (Recommendations)
+// ==========================================
 export const getRelatedAssets = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
-    
-    // 1. Fetch Target Asset Info to determine Type and Keywords
-    const targetAsset = await prisma.asset.findUnique({
-        where: { id },
-        select: { id: true, originalName: true, aiData: true, mimeType: true }
-    });
-
-    if (!targetAsset) {
-        res.json([]);
-        return;
-    }
-
-    // 2. CONSTRUCT STRICT TYPE FILTER
-    // "If image only images, if video only videos"
-    let typeFilter: any = {};
-    if (targetAsset.mimeType.startsWith('image/')) {
-        typeFilter = { mimeType: { startsWith: 'image/' } };
-    } else if (targetAsset.mimeType.startsWith('video/')) {
-        typeFilter = { mimeType: { startsWith: 'video/' } };
-    } else if (targetAsset.mimeType === 'application/pdf') {
-        typeFilter = { mimeType: 'application/pdf' };
-    }
-
-    // 3. CONSTRUCT SEARCH QUERY (The "Query")
-    // A. Define Stop Words (Noise Filter)
-    const stopWords = new Set([
-        'image', 'img', 'pic', 'picture', 'photo', 'screenshot', 'screen', 'shot',
-        'copy', 'final', 'draft', 'upload', 'new', 'old', 'backup', 
-        'ds', 'store', 'frame', 'rectangle', 'group', 'vector',
-        'untitled', 'design', 'migration', 'import', 'jpg', 'png', 'mp4'
-    ]);
-
-    // B. Extract Keywords
-    const rawName = targetAsset.originalName || '';
-    const nameKeywords = rawName
-        .split(/[\s_\-\.\/]+/)
-        .map(w => w.toLowerCase())
-        .filter(w => w.length > 3 && !/^\d+$/.test(w) && !stopWords.has(w));
-
-    let tagKeywords: string[] = [];
     try {
-        const parsed = JSON.parse(targetAsset.aiData || '{}');
-        if (Array.isArray(parsed.tags)) tagKeywords = parsed.tags;
-        if (typeof parsed.keywords === 'string') tagKeywords = parsed.keywords.split(',');
-    } catch (e) {}
+        const { id } = req.params;
+        const targetAsset = await prisma.asset.findUnique({
+            where: { id },
+            select: { id: true, originalName: true, aiData: true, mimeType: true }
+        });
 
-    // Combine into unique search terms
-    const searchTerms = [...new Set([...tagKeywords, ...nameKeywords])].slice(0, 10);
+        if (!targetAsset) {
+            res.json([]);
+            return;
+        }
 
-    // 4. FALLBACK: If no keywords, return Recent (WITH TYPE FILTER)
-    if (searchTerms.length === 0) {
-        const recent = await prisma.asset.findMany({
+        let typeFilter: any = {};
+        if (targetAsset.mimeType.startsWith('image/')) {
+            typeFilter = { mimeType: { startsWith: 'image/' } };
+        } else if (targetAsset.mimeType.startsWith('video/')) {
+            typeFilter = { mimeType: { startsWith: 'video/' } };
+        } else if (targetAsset.mimeType === 'application/pdf') {
+            typeFilter = { mimeType: 'application/pdf' };
+        }
+
+        const stopWords = new Set(['image', 'img', 'pic', 'picture', 'photo', 'screenshot', 'screen', 'shot', 'copy', 'final', 'draft', 'upload', 'new', 'old', 'backup', 'ds', 'store', 'frame', 'rectangle', 'group', 'vector', 'untitled', 'design', 'migration', 'import', 'jpg', 'png', 'mp4']);
+        
+        const rawName = targetAsset.originalName || '';
+        const nameKeywords = rawName.split(/[\s_\-\.\/]+/).map(w => w.toLowerCase()).filter(w => w.length > 3 && !/^\d+$/.test(w) && !stopWords.has(w));
+        
+        let tagKeywords: string[] = [];
+        try {
+            const parsed = JSON.parse(targetAsset.aiData || '{}');
+            if (Array.isArray(parsed.tags)) tagKeywords = parsed.tags;
+            if (typeof parsed.keywords === 'string') tagKeywords = parsed.keywords.split(',');
+        } catch (e) {}
+
+        const searchTerms = [...new Set([...tagKeywords, ...nameKeywords])].slice(0, 10);
+
+        // Fallback: Recent items of same type
+        if (searchTerms.length === 0) {
+            const recent = await prisma.asset.findMany({
+                where: { id: { not: id }, ...typeFilter },
+                orderBy: { createdAt: 'desc' },
+                take: 20,
+                select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true, previewFrames: true } 
+            });
+            res.json(recent);
+            return;
+        }
+
+        // Search Candidates
+        const candidates = await prisma.asset.findMany({
             where: { 
-                id: { not: id },
-                ...typeFilter // ✅ Apply Strict Type Filter
+                id: { not: id }, 
+                ...typeFilter, 
+                OR: [ 
+                    ...searchTerms.map(t => ({ originalName: { contains: t, mode: Prisma.QueryMode.insensitive } })), 
+                    ...searchTerms.map(t => ({ aiData: { contains: t, mode: Prisma.QueryMode.insensitive } })) 
+                ] 
             },
-            orderBy: { createdAt: 'desc' },
-            take: 20,
-            select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true }
+            take: 100,
+            select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true, previewFrames: true } 
         });
-        res.json(recent);
-        return;
+
+        // Score Candidates
+        const scoredAssets = candidates.map(asset => {
+            let score = 0;
+            const lowerName = (asset.originalName || '').toLowerCase();
+            const lowerAI = (String(asset.aiData) || '').toLowerCase();
+            searchTerms.forEach(term => {
+                const lowerTerm = term.toLowerCase();
+                if (lowerName.includes(lowerTerm)) score += 50;
+                if (lowerAI.includes(lowerTerm)) score += 30;
+                if (lowerName === lowerTerm) score += 50;
+            });
+            return { asset, score };
+        });
+
+        const finalResults = scoredAssets.filter(item => item.score > 0).sort((a, b) => b.score - a.score).slice(0, 20).map(item => item.asset);
+
+        // Fallback if scoring returned nothing
+        if (finalResults.length === 0) {
+            const recent = await prisma.asset.findMany({
+                where: { id: { not: id }, ...typeFilter },
+                orderBy: { createdAt: 'desc' },
+                take: 20,
+                select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true, previewFrames: true }
+            });
+            res.json(recent);
+            return;
+        }
+        res.json(finalResults);
+
+    } catch (error) {
+        console.error("Related Error:", error);
+        res.status(500).json({ message: 'Error' });
     }
-
-    // 5. RUN SEARCH ENGINE (Exact logic from getAssets)
-    // We search across ALL candidates that match the type filter
-    const candidates = await prisma.asset.findMany({
-        where: {
-            id: { not: id },
-            ...typeFilter, // ✅ Apply Strict Type Filter
-            OR: [
-                ...searchTerms.map(t => ({ originalName: { contains: t, mode: Prisma.QueryMode.insensitive } })),
-                ...searchTerms.map(t => ({ aiData: { contains: t, mode: Prisma.QueryMode.insensitive } }))
-            ]
-        },
-        take: 100, // Fetch pool of candidates
-        select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true }
-    });
-
-    // 6. SCORING ALGORITHM (The Magic) 🪄
-    const scoredAssets = candidates.map(asset => {
-        let score = 0;
-        const lowerName = (asset.originalName || '').toLowerCase();
-        const lowerAI = (String(asset.aiData) || '').toLowerCase();
-
-        searchTerms.forEach(term => {
-            const lowerTerm = term.toLowerCase();
-            // High score for Name match
-            if (lowerName.includes(lowerTerm)) score += 50;
-            // Medium score for Tag/AI match
-            if (lowerAI.includes(lowerTerm)) score += 30;
-            // Exact match bonus
-            if (lowerName === lowerTerm) score += 50;
-        });
-
-        return { asset, score };
-    });
-
-    // Sort by Score DESC
-    const finalResults = scoredAssets
-        .filter(item => item.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 20)
-        .map(item => item.asset);
-
-    // 7. EMPTY RESULT FALLBACK
-    // If scoring filtered everything out, show recent (WITH TYPE FILTER)
-    if (finalResults.length === 0) {
-        const recent = await prisma.asset.findMany({
-            where: { 
-                id: { not: id },
-                ...typeFilter // ✅ Apply Strict Type Filter
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 20,
-            select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true }
-        });
-        res.json(recent);
-        return;
-    }
-
-    res.json(finalResults);
-
-  } catch (error) {
-    console.error("Related Error:", error);
-    res.status(500).json({ message: 'Error' });
-  }
 };
 
-// --- UPDATE ---
+// ==========================================
+// 6. UPDATE ASSET
+// ==========================================
 export const updateAsset = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const { originalName, aiData } = req.body;
-
     const asset = await prisma.asset.update({
       where: { id },
-      data: {
-        originalName,
-        aiData: typeof aiData === 'object' ? JSON.stringify(aiData) : aiData,
-      },
+      data: { originalName, aiData: typeof aiData === 'object' ? JSON.stringify(aiData) : aiData },
     });
     res.json(asset);
   } catch (error) {
@@ -509,7 +506,9 @@ export const updateAsset = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// --- ROBUST DELETE (Safe for all relation types) ---
+// ==========================================
+// 7. DELETE ASSET (Robust)
+// ==========================================
 export const deleteAsset = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -518,7 +517,6 @@ export const deleteAsset = async (req: Request, res: Response): Promise<void> =>
 
     console.log(`\n🗑️ [DELETE] Deleting Asset ID: ${id}`);
 
-    // 1. Permission Check
     const asset = await prisma.asset.findUnique({ where: { id } });
     if (!asset) {
         res.status(404).json({ message: 'Asset not found' });
@@ -529,40 +527,30 @@ export const deleteAsset = async (req: Request, res: Response): Promise<void> =>
         return;
     }
 
-    // 2. CLEANUP RELATIONS (The Fix)
-    // We use a try/catch block for the collections specifically
-    // in case the model name differs, so it doesn't crash the whole request.
-    console.log("   🔗 removing relations...");
-    
+    // A. Clean up Relations (Soft handling)
     try {
-        // Try deleting from 'AssetOnCollection' (Standard Name)
-        // @ts-ignore - Ignores error if model doesn't exist in types
-        if (prisma.assetOnCollection) {
-            await (prisma as any).assetOnCollection.deleteMany({ where: { assetId: id } });
-        }
-        
-        // Try deleting from 'CollectionAsset' (Alternative Name)
-        // @ts-ignore
-        if (prisma.collectionAsset) {
-            await (prisma as any).collectionAsset.deleteMany({ where: { assetId: id } });
-        }
-    } catch (e) {
-        console.log("   ⚠️ Note: Collection cleanup warning (ignoring)", e);
-    }
+        if ((prisma as any).assetOnCollection) await (prisma as any).assetOnCollection.deleteMany({ where: { assetId: id } });
+        if ((prisma as any).collectionAsset) await (prisma as any).collectionAsset.deleteMany({ where: { assetId: id } });
+    } catch (e) { console.log("Collection cleanup warning", e); }
 
-    // 3. EXECUTE DELETE
+    // B. Database Delete
     await prisma.$transaction([
-        prisma.assetClick.deleteMany({ where: { assetId: id } }),     // Analytics
-        prisma.assetOnCategory.deleteMany({ where: { assetId: id } }), // Categories
-        prisma.asset.delete({ where: { id } })                        // The Asset
+        prisma.assetClick.deleteMany({ where: { assetId: id } }), 
+        prisma.assetOnCategory.deleteMany({ where: { assetId: id } }),
+        prisma.asset.delete({ where: { id } })
     ]);
     
-    console.log("   ✅ DB Records Deleted");
-
-    // 4. Cloud Cleanup
+    // C. Storage Cleanup (Original + Thumb + Previews)
     try {
         if (asset.path) await deleteFromSupabase(asset.path);
         if (asset.thumbnailPath) await deleteFromSupabase(asset.thumbnailPath);
+        
+        // ✅ Cleanup Video Previews
+        if (asset.previewFrames && asset.previewFrames.length > 0) {
+            for (const frame of asset.previewFrames) {
+                await deleteFromSupabase(frame);
+            }
+        }
     } catch (e) { /* ignore storage errors */ }
 
     res.json({ message: 'Asset deleted successfully' });

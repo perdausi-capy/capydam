@@ -19,6 +19,7 @@ interface Asset {
   path: string;
   uploadedBy: { name: string };
   aiData?: string;
+  previewFrames?: string[];
   isSkeleton?: boolean; // New flag for loading state
 }
 
@@ -88,6 +89,7 @@ const AssetCard = React.memo(({
                             <AssetThumbnail 
                                 mimeType={asset.mimeType} 
                                 thumbnailPath={asset.thumbnailPath || asset.path} 
+                                previewFrames={asset.previewFrames}
                                 className="w-full h-auto"
                                 // @ts-ignore 
                                 loading="lazy" 
@@ -135,7 +137,9 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
-  const [filterType, setFilterType] = useState<FilterType>('image');
+  
+  // ✅ CHANGED: Default filter is now 'all'
+  const [filterType, setFilterType] = useState<FilterType>('all');
 
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
@@ -179,7 +183,6 @@ const Dashboard = () => {
       const realAssets = data?.pages.flatMap(page => page.results) || [];
       
       // If we are fetching more, append 10 "Skeleton" items
-      // This lets Masonry layout them in the columns naturally
       if (isFetchingNextPage) {
           const skeletons = Array.from({ length: 10 }).map((_, i) => ({
               id: `skeleton-${i}`,
@@ -213,7 +216,7 @@ const Dashboard = () => {
       if (entries[0].isIntersecting && hasNextPage) {
         fetchNextPage();
       }
-    }, { rootMargin: '200px' }); // Load 200px before reaching bottom
+    }, { rootMargin: '200px' });
     if (node) observer.current.observe(node);
   }, [assetsLoading, isFetchingNextPage, hasNextPage, fetchNextPage]);
 
@@ -234,7 +237,7 @@ const Dashboard = () => {
   }, [isFallback, assetError, debouncedSearch]);
 
   const handleAssetClick = useCallback((assetId: string, index: number) => {
-    if (assetId.startsWith('skeleton')) return; // Ignore skeleton clicks
+    if (assetId.startsWith('skeleton')) return;
     if (debouncedSearch) {
         client.post('/assets/track-click', { assetId, query: debouncedSearch, position: index + 1 }).catch(() => {});
     }
@@ -295,7 +298,6 @@ const Dashboard = () => {
 
       <div className="px-4 lg:px-8 mt-6 max-w-[2000px] mx-auto w-full">
         {assetsLoading ? (
-            // Initial Full Page Loading Skeleton
             <div className="w-full overflow-hidden">
                 <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-6" columnClassName="pl-6 bg-clip-padding">
                     {Array.from({ length: 15 }).map((_, i) => <SkeletonCard key={i} />)}
@@ -305,19 +307,18 @@ const Dashboard = () => {
             <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/10 p-16 text-center mt-8 opacity-60">
                 <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-full mb-4"><ImageIcon size={32} className="text-gray-400 dark:text-gray-500" /></div>
                 <p className="text-lg font-medium text-gray-600 dark:text-gray-300">No assets found</p>
-                <button onClick={() => { handleSearchChange(''); setFilterType('image'); setSelectedColor(null); }} className="text-blue-600 dark:text-blue-400 font-medium hover:underline mt-2">Clear all filters</button>
+                {/* ✅ CHANGED: Reset to 'all' instead of 'image' */}
+                <button onClick={() => { handleSearchChange(''); setFilterType('all'); setSelectedColor(null); }} className="text-blue-600 dark:text-blue-400 font-medium hover:underline mt-2">Clear all filters</button>
             </div>
         ) : (
             <div className="w-full overflow-hidden">
                 <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-6" columnClassName="pl-6 bg-clip-padding">
                     {assets.map((asset, index) => {
-                        // Check if item is a Skeleton
                         if (asset.isSkeleton) {
                             return <SkeletonCard key={asset.id} />;
                         }
 
-                        // Attach ref to the last REAL element to trigger fetch
-                        if (index === assets.length - 11) { // Trigger slightly before end (10 skeletons + 1)
+                        if (index === assets.length - 11) {
                              return (
                                 <div ref={lastAssetRef} key={asset.id}>
                                     <AssetCard asset={asset} index={index} onClick={handleAssetClick} onDownload={handleDownload} onAddToCollection={openCollectionModal} />

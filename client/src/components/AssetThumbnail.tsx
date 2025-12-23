@@ -1,40 +1,60 @@
 import React from 'react';
-import { FileText, Film, Music, File } from 'lucide-react';
+import { FileText, Film, Music, File, Image as ImageIcon } from 'lucide-react';
+import VideoThumbnail from './VideoThumbnail';
 
-// ✅ 1. Allow this component to accept standard <img> props (onLoad, loading, etc.)
+// ✅ 1. Props Interface: Includes standard <img> props + our custom ones
 interface Props extends React.ImgHTMLAttributes<HTMLImageElement> {
   mimeType: string;
   thumbnailPath: string | null;
+  previewFrames?: string[]; // ✅ Added for video scrubbing support
   className?: string;
 }
 
 const AssetThumbnail: React.FC<Props> = ({ 
     mimeType, 
     thumbnailPath, 
+    previewFrames, 
     className = "", 
-    ...imgProps // ✅ 2. Capture extra props here
+    ...imgProps // ✅ Capture extra props (alt, onLoad, etc.)
 }) => {
   
-  // 3. If we have a thumbnail, show it
+  // ---------------------------------------------
+  // 1. VIDEO HANDLING (With Scrubbing)
+  // ---------------------------------------------
+  if (mimeType.startsWith('video/') && thumbnailPath) {
+    return (
+      <VideoThumbnail 
+        mainThumbnail={thumbnailPath} 
+        previewFrames={previewFrames} 
+        alt={imgProps.alt?.toString() || "Video thumbnail"} // Use the alt from props
+        className={className} 
+      />
+    );
+  }
+
+  // ---------------------------------------------
+  // 2. STANDARD THUMBNAIL (Images, PDFs with thumbs)
+  // ---------------------------------------------
   if (thumbnailPath) {
     return (
         <img
           src={thumbnailPath}
-          alt="Thumbnail"
-          // Merge your classNames with the passed ones
+          // Merge classNames
           className={`block w-full h-auto object-cover ${className}`} 
           
-          // Defaults (can be overridden by imgProps)
+          // Defaults
           loading="lazy"
           decoding="async"
           
-          // ✅ 4. Spread the extra props (like onLoad) onto the actual img tag
+          // ✅ Spread extra props (onLoad, etc.)
           {...imgProps}
         />
     );
   }
 
-  // 4. If no thumbnail, show a nice icon based on type
+  // ---------------------------------------------
+  // 3. FALLBACK ICONS (If no thumbnail exists)
+  // ---------------------------------------------
   let Icon = File;
   let colorClass = "bg-gray-100 text-gray-500";
 
@@ -47,17 +67,18 @@ const AssetThumbnail: React.FC<Props> = ({
   } else if (mimeType.includes('pdf')) {
     Icon = FileText;
     colorClass = "bg-orange-50 text-orange-500";
+  } else if (mimeType.startsWith('image/')) {
+    Icon = ImageIcon;
+    colorClass = "bg-blue-50 text-blue-500";
   }
 
-  // Note: We don't spread imgProps here because this isn't an <img> tag.
   return (
     <div 
       className={`
         flex w-full items-center justify-center 
         ${colorClass} 
         ${className}
-        h-56            // Force a nice height for icons
-        lg:h-64         // Taller on desktop
+        h-56 lg:h-64  // Preserving your requested height styles for icons
       `}
     >
       <div className="flex flex-col items-center gap-2">
