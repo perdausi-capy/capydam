@@ -20,7 +20,8 @@ import {
   Compass,
   HelpCircle,
   MessageSquare,
-  TrendingUp
+  TrendingUp,
+  Trash2
 } from 'lucide-react';
 import FloatingThemeToggle from './FloatingThemeToggle';
 
@@ -183,6 +184,15 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 label="Analytics" 
                 isCollapsed={isCollapsed} 
                 active={isActive('/admin/analytics')} 
+                onClick={handleNavClick} 
+              />
+
+                <NavItem 
+                to="/admin/recycle-bin" 
+                icon={<Trash2 size={20} />} 
+                label="Analytics" 
+                isCollapsed={isCollapsed} 
+                active={isActive('/admin/recycle-bin')} 
                 onClick={handleNavClick} 
               />
             </>

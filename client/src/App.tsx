@@ -23,6 +23,7 @@ import Profile from './pages/Profile';
 import Support from './pages/Support';
 import AdminFeedback from './pages/AdminFeedback'; 
 import AdminAnalytics from './pages/AdminAnalytics';
+import RecycleBin from './pages/RecycleBin';
 
 // --- WRAPPERS ---
 
@@ -79,6 +80,8 @@ function App() {
               <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
               <Route path="/admin/feedback" element={<AdminRoute><AdminFeedback /></AdminRoute>} />
               <Route path="/admin/analytics" element={<AdminRoute><AdminAnalytics /></AdminRoute>} />
+              <Route path="/admin/recycle-bin" element={<AdminRoute><RecycleBin /></AdminRoute>} />
+              
               
               {/* Fallback */}
               <Route path="*" element={<Navigate to="/" />} />

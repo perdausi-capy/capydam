@@ -2,11 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
-    ArrowLeft, Download, Trash2, 
-    Calendar, HardDrive, FileText, 
-    FolderPlus, Hash, ExternalLink, Check, 
-    Layout, Link as LinkIcon, Plus, X,
-    Edit2, Search, Loader2, Share2
+  ArrowLeft, Download, Trash2, 
+  Calendar, HardDrive, FileText, 
+  FolderPlus, Hash, ExternalLink, Check, 
+  Layout, Link as LinkIcon, Plus, X,
+  Edit2, Search, Loader2, Share2, AlertTriangle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -28,6 +28,7 @@ interface Asset {
   userId: string;
   uploadedBy: { name: string };
   aiData: string;
+  deletedAt?: string | null; // ✅ Added this field
 }
 
 interface CollectionSimple { id: string; name: string; }
@@ -117,18 +118,13 @@ const AssetDetail = () => {
   const [parsedAi, setParsedAi] = useState<any>({});
   const queryClient = useQueryClient();
 
-  // ✅ 1. PERMISSION LOGIC SPLIT
+  // ✅ 1. PERMISSION LOGIC
   const isOwner = user?.id === asset?.userId;
   const isAdmin = user?.role === 'admin';
   const isEditor = user?.role === 'editor';
 
-  // Editors can manage Metadata (Rename, Tags, Links)
   const canManageAsset = isAdmin || isEditor || isOwner;
-  
-  // 🛑 Editors CANNOT Delete (Only Admin or Owner)
   const canDelete = isAdmin || isOwner;
-
-  // Add to Topic (Editor/Admin)
   const canAddToTopic = isAdmin || isEditor;
 
   useEffect(() => {
@@ -196,9 +192,12 @@ const AssetDetail = () => {
     if (!asset) return;
     setIsDeleting(true);
     try {
+      // ✅ This now triggers a Soft Delete (Move to Trash) on the backend
       await client.delete(`/assets/${asset.id}`);
       await queryClient.resetQueries({ queryKey: ['assets'] });
-      toast.success("Asset deleted");
+      
+      // ✅ Updated Toast Message
+      toast.success("Moved to Recycle Bin");
       navigate(-1);
     } catch (error) {
       toast.error("Failed to delete asset");
@@ -312,12 +311,12 @@ const AssetDetail = () => {
                       <Share2 size={16} /> Share
                   </button>
 
-                  {/* ✅ DELETE BUTTON: Visible only to Owners or Admins */}
+                  {/* DELETE BUTTON */}
                   {canDelete && (
                       <button 
                         onClick={() => setShowDeleteConfirm(true)} 
                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                        title="Delete Asset"
+                        title="Move to Recycle Bin"
                       >
                           <Trash2 size={20} />
                       </button>
@@ -391,7 +390,6 @@ const AssetDetail = () => {
                               <h1 className="text-2xl font-bold text-gray-900 dark:text-white leading-tight break-words break-all line-clamp-3" title={asset.originalName || asset.filename}>
                                   {asset.originalName || asset.filename}
                               </h1>
-                              {/* Editors CAN rename, so we use canManageAsset */}
                               {canManageAsset && (
                                   <button onClick={() => setIsRenaming(true)} className="shrink-0 ml-1 p-1.5 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Rename Asset">
                                       <Edit2 size={16} />
@@ -606,7 +604,17 @@ const AssetDetail = () => {
           </div>
       )}
 
-      <ConfirmModal isOpen={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} onConfirm={handleDelete} title="Delete Asset" message="This action cannot be undone." confirmText="Delete Forever" isDangerous={true} isLoading={isDeleting} />
+      {/* ✅ UPDATED DELETE MODAL for Soft Delete */}
+      <ConfirmModal 
+        isOpen={showDeleteConfirm} 
+        onClose={() => setShowDeleteConfirm(false)} 
+        onConfirm={handleDelete} 
+        title="Move to Trash" 
+        message="Are you sure you want to move this asset to the Recycle Bin? You can restore it later." 
+        confirmText="Move to Trash" 
+        isDangerous={true} 
+        isLoading={isDeleting} 
+      />
     </div>
   );
 };

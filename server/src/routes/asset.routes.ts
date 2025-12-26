@@ -12,6 +12,15 @@ import {
     trackAssetClick 
 } from '../controllers/asset.controller';
 
+// ✅ IMPORT TRASH CONTROLLERS
+// Ensure you renamed the file to 'trash.controller.ts' to match your style
+import { 
+    getTrash, 
+    restoreAsset, 
+    forceDeleteAsset, 
+    emptyTrash 
+} from '../controllers/trash.controller';
+
 const router = Router();
 
 // --- MULTER CONFIG ---
@@ -33,23 +42,28 @@ const upload = multer({
 
 // --- ROUTES ---
 
-// 1. STATIC & ACTION ROUTES (Must come first)
-// Upload
-router.post('/upload', verifyJWT, upload.single('file'), uploadAsset);
+// 1. TRASH ROUTES (⚠️ Must come BEFORE generic /:id routes)
+// Ideally, add an 'isAdmin' middleware here if you have one
+router.get('/trash', verifyJWT, getTrash);             // GET /api/assets/trash
+router.delete('/trash/empty', verifyJWT, emptyTrash);  // DELETE /api/assets/trash/empty
 
-// Analytics
+// 2. STATIC & ACTION ROUTES
+router.post('/upload', verifyJWT, upload.single('file'), uploadAsset);
 router.post('/track-click', verifyJWT, trackAssetClick);
 
-// Search / Browse
+// 3. SEARCH / BROWSE
 router.get('/', verifyJWT, getAssets);
 
-// 2. SPECIFIC ID ROUTES (Must come BEFORE generic /:id)
-// ✅ FIX: This guarantees 'related' is matched before 'getAssetById' tries to grab it
+// 4. SPECIFIC ID ROUTES (Must come BEFORE generic /:id)
 router.get('/:id/related', verifyJWT, getRelatedAssets);
 
-// 3. GENERIC ID ROUTES (Catch-all for IDs)
+// ✅ TRASH ITEM ACTIONS
+router.post('/:id/restore', verifyJWT, restoreAsset);    // POST /api/assets/:id/restore
+router.delete('/:id/force', verifyJWT, forceDeleteAsset); // DELETE /api/assets/:id/force
+
+// 5. GENERIC ID ROUTES (Catch-all for IDs)
 router.get('/:id', verifyJWT, getAssetById);
 router.patch('/:id', verifyJWT, updateAsset);
-router.delete('/:id', verifyJWT, deleteAsset);
+router.delete('/:id', verifyJWT, deleteAsset); // Soft Delete
 
 export default router;

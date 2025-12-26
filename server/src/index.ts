@@ -11,10 +11,12 @@ import assetRoutes from './routes/asset.routes';
 import userRoutes from './routes/user.routes';
 import collectionRoutes from './routes/collection.routes';
 import categoryRoutes from './routes/category.routes'; 
-// ✅ 1. NEW IMPORT
 import feedbackRoutes from './routes/feedback.routes';
 import adminRoutes from './routes/admin.routes';
 import analyticsRoutes from './routes/analytics.routes';
+
+// ✅ 1. IMPORT CRON SERVICE
+import { initCronJobs } from './services/cron.service';
 
 const app: Express = express();
 const PORT = process.env.PORT || 5000;
@@ -22,7 +24,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors({
   origin: [
     'http://localhost:5173', 
-    process.env.CLIENT_URL || "" // Automatically allows your prod domain
+    process.env.CLIENT_URL || "" 
   ],
   credentials: true 
 }));
@@ -38,11 +40,9 @@ app.use('/api/collections', collectionRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
-
-// ✅ 2. REGISTER FEEDBACK ROUTE
 app.use('/api/feedback', feedbackRoutes);
 
-// Debug Route to verify server is alive
+// Debug Route
 app.get('/', (req: Request, res: Response) => {
   res.send('Capydam API is running 🐹');
 });
@@ -52,5 +52,9 @@ app.listen(PORT, () => {
   console.log(`   - Auth Routes: /api/auth`);
   console.log(`   - Asset Routes: /api/assets`);
   console.log(`   - Category Routes: /api/categories`);
-  console.log(`   - Feedback Routes: /api/feedback`); // ✅ Added log
+  console.log(`   - Feedback Routes: /api/feedback`);
+
+  // ✅ 2. INITIALIZE CRON JOBS
+  // This starts the daily check for expired trash
+  initCronJobs();
 });

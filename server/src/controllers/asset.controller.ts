@@ -216,7 +216,7 @@ export const trackAssetClick = async (req: Request, res: Response): Promise<void
 };
 
 // ==========================================
-// 3. GET ASSETS (Optimized V5.0)
+// 3. GET ASSETS (Optimized V5.0) - with Soft Delete Support
 // ==========================================
 export const getAssets = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -230,7 +230,11 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
     
     // A. Reusable Filter Logic
     const buildFilters = () => {
-        const filters: any = {};
+        const filters: any = {
+            // ✅ CRITICAL: Only show assets that are NOT in the trash
+            deletedAt: null
+        };
+
         if (type && type !== 'all') {
             if (type === 'image') filters.mimeType = { startsWith: 'image/' };
             else if (type === 'video') filters.mimeType = { startsWith: 'video/' };
@@ -288,6 +292,7 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
     const scoredMap = new Map<string, { asset: any, score: number }>();
     let searchTerms: string[] = [cleanSearch];
 
+    // Ensure activeFilters (including deletedAt: null) are applied to search
     const keywordWhere: any = { 
         AND: [ activeFilters ] 
     };
@@ -333,7 +338,7 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
     if (paginatedResults.length === 0 && pageNum === 1) {
         isFallback = true;
         const fallbackAssets = await prisma.asset.findMany({
-            where: activeFilters,
+            where: activeFilters, // Still ensures deletedAt: null
             orderBy: { createdAt: 'desc' },
             take: limitNum,
             select: lightweightSelect
@@ -507,7 +512,7 @@ export const updateAsset = async (req: Request, res: Response): Promise<void> =>
 };
 
 // ==========================================
-// 7. DELETE ASSET (Robust)
+// 7. DELETE ASSET (Soft Delete / Move to Trash)
 // ==========================================
 export const deleteAsset = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -515,48 +520,33 @@ export const deleteAsset = async (req: Request, res: Response): Promise<void> =>
     const userId = (req as any).user?.id;
     const userRole = (req as any).user?.role;
 
-    console.log(`\n🗑️ [DELETE] Deleting Asset ID: ${id}`);
+    console.log(`\n🗑️ [SOFT DELETE] Moving Asset ID to Trash: ${id}`);
 
+    // 1. Find the Asset
     const asset = await prisma.asset.findUnique({ where: { id } });
+    
     if (!asset) {
         res.status(404).json({ message: 'Asset not found' });
         return;
     }
+
+    // 2. Permission Check (Owner or Admin)
     if (userRole !== 'admin' && asset.userId !== userId) {
         res.status(403).json({ message: 'Access denied' });
         return;
     }
 
-    // A. Clean up Relations (Soft handling)
-    try {
-        if ((prisma as any).assetOnCollection) await (prisma as any).assetOnCollection.deleteMany({ where: { assetId: id } });
-        if ((prisma as any).collectionAsset) await (prisma as any).collectionAsset.deleteMany({ where: { assetId: id } });
-    } catch (e) { console.log("Collection cleanup warning", e); }
-
-    // B. Database Delete
-    await prisma.$transaction([
-        prisma.assetClick.deleteMany({ where: { assetId: id } }), 
-        prisma.assetOnCategory.deleteMany({ where: { assetId: id } }),
-        prisma.asset.delete({ where: { id } })
-    ]);
+    // 3. Perform Soft Delete (Update deletedAt)
+    // We DO NOT delete files or relations yet. That happens in forceDelete.
+    await prisma.asset.update({
+        where: { id },
+        data: { deletedAt: new Date() }
+    });
     
-    // C. Storage Cleanup (Original + Thumb + Previews)
-    try {
-        if (asset.path) await deleteFromSupabase(asset.path);
-        if (asset.thumbnailPath) await deleteFromSupabase(asset.thumbnailPath);
-        
-        // ✅ Cleanup Video Previews
-        if (asset.previewFrames && asset.previewFrames.length > 0) {
-            for (const frame of asset.previewFrames) {
-                await deleteFromSupabase(frame);
-            }
-        }
-    } catch (e) { /* ignore storage errors */ }
-
-    res.json({ message: 'Asset deleted successfully' });
+    res.json({ message: 'Asset moved to recycle bin' });
 
   } catch (error) {
-    console.error("🔥 DELETE ERROR:", error);
+    console.error("🔥 SOFT DELETE ERROR:", error);
     res.status(500).json({ message: 'Server error', error: String(error) });
   }
 };

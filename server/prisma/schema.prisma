@@ -88,6 +88,9 @@ model Asset {
   updatedAt      DateTime @updatedAt
   collections    AssetOnCollection[]
   previewFrames String[]  @default([])
+
+  deletedAt      DateTime?
+  @@index([deletedAt])
 }
 
 model Collection {
