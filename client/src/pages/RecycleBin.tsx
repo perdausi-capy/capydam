@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
-  Trash2, RotateCcw, AlertTriangle, ArrowLeft, Ban, Eraser, Check 
+  Trash2, RotateCcw, ArrowLeft, Ban, Eraser, Check 
 } from 'lucide-react';
 import Masonry from 'react-masonry-css';
 import { toast } from 'react-toastify';
@@ -59,7 +59,7 @@ const TrashGridItem = React.memo(({
 }) => {
     
     // Prevent clicking the card to go to details page (since it's deleted)
-    const handleCardClick = (id: string) => {
+    const handleCardClick = (_id: string) => {
         toast.info("Restore this asset to view details.");
     };
 
