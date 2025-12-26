@@ -1,12 +1,15 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import client from '../api/client';
 import { 
   HardDrive, Users, FileVideo, FileImage, Activity, 
-  Terminal, Globe, Lock, Wifi, X
+  Terminal, Globe, Lock, Wifi, X, ExternalLink
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+// ✅ Import the Context Hook
+import { useTerminal } from '../context/TerminalContext';
 
 // --- TYPES ---
 interface AnalyticsData {
@@ -15,6 +18,22 @@ interface AnalyticsData {
   breakdown: { images: number; videos: number; audio: number; docs: number; others: number };
   recentActivity: Array<{ id: string; originalName: string; size: number; createdAt: string; uploadedBy: { name: string } }>;
   recentUsers: Array<{ id: string; name: string; role: string; email: string; updatedAt: string }>;
+}
+
+interface CyberCardProps {
+    label: string;
+    value: string | number;
+    icon: React.ReactElement;
+    sub: string;
+    color?: string;
+    onClick?: () => void;
+}
+
+interface CyberBarProps {
+    label: string;
+    count: number;
+    total: number;
+    color?: string;
 }
 
 // --- HELPER: FORMAT BYTES ---
@@ -27,6 +46,10 @@ const formatBytes = (bytes: number) => {
 };
 
 const AdminAnalytics = () => {
+  const navigate = useNavigate();
+  // ✅ Access the Global Terminal Context
+  const { registerCommand, unregisterCommand, addLog } = useTerminal();
+
   const { data, isLoading } = useQuery<AnalyticsData>({
     queryKey: ['admin-analytics'],
     queryFn: async () => {
@@ -36,7 +59,7 @@ const AdminAnalytics = () => {
     refetchInterval: 10000 
   });
 
-  // --- MODULE STATE ---
+  // --- MODULE VISIBILITY STATE ---
   const [modules, setModules] = useState({
     stats: false,     
     storage: false,   
@@ -44,90 +67,54 @@ const AdminAnalytics = () => {
     activity: false,  
   });
 
-  // --- TERMINAL STATE ---
-  const [terminalInput, setTerminalInput] = useState('');
-  const [logs, setLogs] = useState<string[]>([
-    '> KERNEL_INIT...', 
-    '> SECURE_SHELL_ESTABLISHED', 
-    '> TYPE "help" FOR COMMAND LIST'
-  ]);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [logs]);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  // --- COMMAND PARSER ---
-  const handleCommand = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      const rawCmd = terminalInput.trim().toLowerCase();
-      addLog(`root@capydam:~$ ${rawCmd}`);
-      
-      const args = rawCmd.split(' ');
-      const cmd = args[0];
-      const target = args[1];
-
-      switch(cmd) {
-        case 'help':
-          addLog('AVAILABLE COMMANDS:');
-          addLog('  sys_status    :: Show system metric cards');
-          addLog('  ls users      :: List active personnel');
-          addLog('  ls storage    :: Mount storage partition graphs');
-          addLog('  ls activity   :: Tail upload logs');
-          addLog('  init          :: Boot full GUI interface');
-          addLog('  clear         :: Clear console and hide UI');
-          break;
-
-        case 'ls':
-          if (target === 'users' || target === 'access') {
-            toggleModule('users', true);
-            addLog('> FETCHING PERSONNEL RECORDS... [DONE]');
-          } else if (target === 'storage') {
-            toggleModule('storage', true);
-            addLog('> MOUNTING STORAGE DRIVES... [MOUNTED]');
-          } else if (target === 'activity' || target === 'logs') {
-            toggleModule('activity', true);
-            addLog('> OPENING LOG STREAM... [OPEN]');
-          } else {
-            addLog('> ERROR: TARGET NOT FOUND. TRY "users", "storage", "activity"');
-          }
-          break;
-
-        case 'sys_status':
-          toggleModule('stats', true);
-          addLog('> ANALYZING SYSTEM METRICS... [OK]');
-          break;
-
-        case 'init':
-          setModules({ stats: true, storage: true, users: true, activity: true });
-          addLog('> EXECUTING BOOT SEQUENCE... ALL SYSTEMS GO.');
-          break;
-
-        case 'clear':
-          setModules({ stats: false, storage: false, users: false, activity: false });
-          setLogs(['> CONSOLE CLEARED']);
-          break;
-
-        case 'whoami':
-          addLog('> root (admin privileges)');
-          break;
-
-        default:
-          if (rawCmd !== '') addLog(`> BASH: command not found: ${cmd}`);
-      }
-      setTerminalInput('');
-    }
-  };
-
-  const addLog = (msg: string) => setLogs(prev => [...prev, msg]);
+  // Helper to toggle modules
   const toggleModule = (key: keyof typeof modules, state: boolean) => {
     setModules(prev => ({ ...prev, [key]: state }));
   };
+
+  // ✅ REGISTER PAGE COMMANDS ON MOUNT
+  useEffect(() => {
+    // 1. Define 'ls' command handler
+    const handleLs = (args: string[]) => {
+        const target = args[0];
+        if (target === 'users' || target === 'access') {
+            toggleModule('users', true);
+            addLog('> FETCHING PERSONNEL RECORDS... [DONE]');
+        } else if (target === 'storage') {
+            toggleModule('storage', true);
+            addLog('> MOUNTING STORAGE DRIVES... [MOUNTED]');
+        } else if (target === 'activity' || target === 'logs') {
+            toggleModule('activity', true);
+            addLog('> OPENING LOG STREAM... [OPEN]');
+        } else {
+            addLog('> ERROR: TARGET NOT FOUND. TRY "users", "storage", "activity"');
+        }
+    };
+
+    // 2. Define 'init' command handler
+    const handleInit = () => {
+        setModules({ stats: true, storage: true, users: true, activity: true });
+        addLog('> EXECUTING BOOT SEQUENCE... ALL SYSTEMS GO.');
+    };
+
+    // 3. Define 'sys_status' handler
+    const handleSysStatus = () => {
+        toggleModule('stats', true);
+        addLog('> ANALYZING SYSTEM METRICS... [OK]');
+    };
+
+    // Register them
+    registerCommand('ls', handleLs);
+    registerCommand('init', handleInit);
+    registerCommand('sys_status', handleSysStatus);
+
+    // ✅ CLEANUP: Unregister when leaving page so they don't pollute other pages
+    return () => {
+        unregisterCommand('ls');
+        unregisterCommand('init');
+        unregisterCommand('sys_status');
+    };
+  }, [registerCommand, unregisterCommand, addLog]);
 
   if (isLoading || !data) return (
     <div className="min-h-screen bg-gray-50 dark:bg-black flex items-center justify-center font-mono text-gray-800 dark:text-green-500">
@@ -136,10 +123,8 @@ const AdminAnalytics = () => {
   );
 
   return (
-    <div 
-      className="min-h-screen bg-gray-50 dark:bg-[#050505] text-gray-800 dark:text-green-500 font-mono p-4 lg:p-8 relative overflow-hidden transition-colors duration-500" 
-      onClick={() => inputRef.current?.focus()} 
-    >
+    <div className="min-h-screen bg-gray-50 dark:bg-[#050505] text-gray-800 dark:text-green-500 font-mono p-4 lg:p-8 relative overflow-hidden transition-colors duration-500">
+      
       {/* --- CRT SCANLINES (Dark Mode Only) --- */}
       <div className="hidden dark:block absolute inset-0 z-50 pointer-events-none" 
            style={{ background: 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06))', backgroundSize: '100% 2px, 3px 100%' }} />
@@ -170,12 +155,34 @@ const AdminAnalytics = () => {
                initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
                className="lg:col-span-12 grid grid-cols-1 md:grid-cols-4 gap-4 mb-4"
             >
-               <CyberCard label="STORAGE" value={formatBytes(data.storage.totalBytes)} icon={<HardDrive />} sub={data.storage.totalAssets + " ITEMS"} />
-               <CyberCard label="USERS" value={data.users.total} icon={<Users />} sub={data.users.admins + " ADMINS"} />
-               
-               {/* ✅ FIXED: Added Image Card, Removed 'Health' Card */}
-               <CyberCard label="IMAGES" value={data.breakdown.images} icon={<FileImage />} sub="MAIN ASSETS" color="text-blue-600 dark:text-cyan-500" />
-               <CyberCard label="VIDEO_LOAD" value={data.breakdown.videos} icon={<FileVideo />} sub="HEAVY MEDIA" color="text-red-600 dark:text-red-500" />
+               <CyberCard 
+                    label="STORAGE" 
+                    value={formatBytes(data.storage.totalBytes)} 
+                    icon={<HardDrive />} 
+                    sub={data.storage.totalAssets + " ITEMS"}
+                    onClick={() => navigate('/library')} 
+               />
+               <CyberCard 
+                    label="USERS" 
+                    value={data.users.total} 
+                    icon={<Users />} 
+                    sub={data.users.admins + " ADMINS"}
+                    onClick={() => navigate('/users')}
+               />
+               <CyberCard 
+                    label="IMAGES" 
+                    value={data.breakdown.images} 
+                    icon={<FileImage />} 
+                    sub="MAIN ASSETS" 
+                    color="text-blue-600 dark:text-cyan-500" 
+               />
+               <CyberCard 
+                    label="VIDEO_LOAD" 
+                    value={data.breakdown.videos} 
+                    icon={<FileVideo />} 
+                    sub="HEAVY MEDIA" 
+                    color="text-red-600 dark:text-red-500" 
+               />
             </motion.div>
           )}
         </AnimatePresence>
@@ -248,37 +255,9 @@ const AdminAnalytics = () => {
 
       </div>
 
-      {/* =========================================================================
-           THE CLI TERMINAL (Always Dark for Aesthetics)
-          ========================================================================= */}
-      <div 
-        className="fixed bottom-0 left-0 right-0 h-[30vh] bg-[#1a1a1a] dark:bg-[#050505]/95 border-t border-gray-400 dark:border-green-500 p-4 flex flex-col font-mono text-sm shadow-[0_-5px_20px_rgba(0,0,0,0.1)] dark:shadow-[0_-5px_20px_rgba(0,255,65,0.1)] z-40"
-        onClick={(e) => e.stopPropagation()}
-      >
-          <div className="absolute top-0 left-0 bg-gray-600 dark:bg-green-500 text-white dark:text-black px-2 text-xs font-bold uppercase tracking-widest">
-             Bash Terminal
-          </div>
-          
-          <div ref={scrollRef} className="flex-1 overflow-y-auto mb-2 custom-scrollbar">
-             {logs.map((log, i) => (
-                <div key={i} className="text-gray-300 dark:text-green-400/90 whitespace-pre-wrap leading-tight font-medium">{log}</div>
-             ))}
-          </div>
-
-          <div className="flex items-center gap-2">
-             <span className="font-bold shrink-0 text-white dark:text-green-500">root@capydam:~$</span>
-             <input 
-                ref={inputRef}
-                type="text" 
-                value={terminalInput}
-                onChange={(e) => setTerminalInput(e.target.value)}
-                onKeyDown={handleCommand}
-                className="w-full bg-transparent border-none outline-none text-white dark:text-green-100 font-mono caret-white dark:caret-green-500"
-                autoFocus
-                spellCheck={false}
-             />
-          </div>
-      </div>
+      {/* ❌ TERMINAL REMOVED FROM HERE 
+          It now lives in App.tsx via GlobalTerminal.tsx 
+      */}
 
     </div>
   );
@@ -286,13 +265,20 @@ const AdminAnalytics = () => {
 
 // --- SUB COMPONENTS ---
 
-const CyberCard = ({ label, value, icon, sub, color }: any) => {
-  // Use passed color for icons, default to gray/green for text
+const CyberCard: React.FC<CyberCardProps> = ({ label, value, icon, sub, color, onClick }) => {
   const iconColor = color || "text-gray-400 dark:text-green-400";
   
   return (
-    <div className="border border-gray-300 dark:border-green-900 bg-white dark:bg-green-900/10 p-4 relative overflow-hidden shadow-sm dark:shadow-none transition-colors">
-      <div className={`absolute -right-2 -top-2 opacity-10 ${iconColor}`}>{React.cloneElement(icon, { size: 60 })}</div>
+    <div 
+        onClick={onClick}
+        className={`border border-gray-300 dark:border-green-900 bg-white dark:bg-green-900/10 p-4 relative overflow-hidden shadow-sm dark:shadow-none transition-all ${onClick ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-green-900/20 active:scale-[0.98]' : ''}`}
+    >
+      <div className={`absolute -right-2 -top-2 opacity-10 ${iconColor}`}>
+        {React.cloneElement(icon as React.ReactElement<any>, { size: 60 })}
+      </div>
+      
+      {onClick && <ExternalLink size={12} className="absolute top-2 right-2 text-gray-400 dark:text-green-600" />}
+
       <p className="text-[10px] font-bold text-gray-500 dark:text-green-700 uppercase mb-1">{label}</p>
       <div className={`text-2xl font-black text-gray-900 dark:text-white`}>{value}</div>
       <div className={`text-xs text-gray-400 dark:text-green-600 opacity-80 mt-1`}>&gt; {sub}</div>
@@ -300,7 +286,7 @@ const CyberCard = ({ label, value, icon, sub, color }: any) => {
   );
 };
 
-const CyberBar = ({ label, count, total, color = "bg-green-500" }: any) => {
+const CyberBar: React.FC<CyberBarProps> = ({ label, count, total, color = "bg-green-500" }) => {
    const pct = total > 0 ? (count / total) * 100 : 0;
    return (
       <div className="bg-white dark:bg-green-900/10 p-2 border border-gray-300 dark:border-green-900/30 shadow-sm dark:shadow-none">

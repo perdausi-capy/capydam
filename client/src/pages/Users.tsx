@@ -30,7 +30,7 @@ interface User {
   status: string;
   avatar: string | null;
   createdAt: string;
-  updatedAt: string; // ✅ ADDED TYPE
+  updatedAt: string;
 }
 
 interface UserResponse {
@@ -180,6 +180,43 @@ const UsersPage = () => {
     );
   };
 
+  // ✅ NEW: SKELETON ROW COMPONENT
+  const TableSkeleton = () => (
+    <>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <tr key={i} className="animate-pulse border-b border-gray-100 dark:border-white/5">
+          <td className="px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-white/10" />
+              <div className="space-y-2">
+                <div className="h-4 w-32 bg-gray-200 dark:bg-white/10 rounded" />
+                <div className="h-3 w-20 bg-gray-200 dark:bg-white/10 rounded" />
+              </div>
+            </div>
+          </td>
+          <td className="px-6 py-4">
+            <div className="h-6 w-20 bg-gray-200 dark:bg-white/10 rounded-full" />
+          </td>
+          <td className="px-6 py-4">
+            <div className="h-6 w-16 bg-gray-200 dark:bg-white/10 rounded-full" />
+          </td>
+          <td className="px-6 py-4">
+            <div className="h-4 w-24 bg-gray-200 dark:bg-white/10 rounded" />
+          </td>
+          <td className="px-6 py-4">
+            <div className="h-4 w-24 bg-gray-200 dark:bg-white/10 rounded" />
+          </td>
+          <td className="px-6 py-4 text-right">
+            <div className="flex justify-end gap-2">
+              <div className="h-8 w-8 bg-gray-200 dark:bg-white/10 rounded-lg" />
+              <div className="h-8 w-8 bg-gray-200 dark:bg-white/10 rounded-lg" />
+            </div>
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] p-4 lg:p-8 pb-24">
       
@@ -232,155 +269,153 @@ const UsersPage = () => {
 
       {/* USERS TABLE */}
       <div className="bg-white dark:bg-[#15171B] rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm overflow-hidden">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center p-20 text-gray-400">
-            <Loader2 className="animate-spin mb-2 text-blue-600" size={32} />
-            <p>Loading team members...</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-gray-50/50 dark:bg-white/5 border-b border-gray-100 dark:border-white/5">
+        
+        {/* ✅ CHANGED: We now render the table structure immediately, avoiding layout shift */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-gray-50/50 dark:bg-white/5 border-b border-gray-100 dark:border-white/5">
+              <tr>
+                <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">User</th>
+                <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Role</th>
+                <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Joined</th>
+                <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Last Access</th>
+                <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+              
+              {/* ✅ LOGIC: If loading, show skeletons. Else if empty, show message. Else show data. */}
+              {isLoading ? (
+                <TableSkeleton />
+              ) : data?.data.length === 0 ? (
                 <tr>
-                  <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">User</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Role</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Joined</th>
-                  {/* ✅ ADDED LAST ACCESS HEADER */}
-                  <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Last Access</th>
-                  <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Actions</th>
+                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                    No users found matching your criteria.
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                {data?.data.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
-                      No users found matching your criteria.
-                    </td>
-                  </tr>
-                ) : (
-                  data?.data.map((user) => (
-                    <tr key={user.id} className="group hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
-                      
-                      {/* USER INFO */}
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden shrink-0 border border-gray-100 dark:border-white/10">
-                            {user.avatar ? (
-                              <img src={user.avatar} alt="" className="h-full w-full object-cover" />
-                            ) : (
-                              <span className="font-bold text-gray-500 text-sm uppercase">{user.name?.charAt(0) || user.email.charAt(0)}</span>
-                            )}
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900 dark:text-white text-sm">{user.name || 'Unnamed'}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* STATUS */}
-                      <td className="px-6 py-4">
-                        <StatusBadge status={user.status} />
-                      </td>
-
-                      {/* ROLE */}
-                      <td className="px-6 py-4">
-                        {editingUserId === user.id ? (
-                          <select
-                            autoFocus
-                            value={user.role}
-                            onChange={(e) => updateRoleMutation.mutate({ id: user.id, role: e.target.value })}
-                            onBlur={() => setEditingUserId(null)}
-                            className="bg-white dark:bg-[#1A1D21] border border-blue-500 rounded-lg px-2 py-1 text-sm outline-none text-gray-900 dark:text-white shadow-sm"
-                          >
-                            <option value="admin">Admin</option>
-                            <option value="editor">Editor</option>
-                            <option value="viewer">Viewer</option>
-                          </select>
-                        ) : (
-                          <div 
-                            onClick={() => user.id !== currentUser?.id && setEditingUserId(user.id)} 
-                            className={`inline-block ${user.id !== currentUser?.id ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
-                            title={user.id !== currentUser?.id ? "Click to change role" : ""}
-                          >
-                            <RoleBadge role={user.role} />
-                          </div>
-                        )}
-                      </td>
-
-                      {/* JOINED DATE */}
-                      <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {new Date(user.createdAt).toLocaleDateString()}
-                      </td>
-
-                      {/* ✅ LAST ACCESS COLUMN */}
-                      <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {user.updatedAt ? new Date(user.updatedAt).toLocaleDateString() : '-'}
-                      </td>
-
-                      {/* ACTIONS */}
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          
-                          {/* PENDING ACTIONS */}
-                          {user.status === 'PENDING' ? (
-                            <>
-                              <button 
-                                onClick={() => approveUserMutation.mutate(user.id)}
-                                className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors" 
-                                title="Approve"
-                              >
-                                <CheckCircle2 size={18} />
-                              </button>
-                              <button 
-                                onClick={() => deleteUserMutation.mutate(user.id)}
-                                className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                                title="Reject"
-                              >
-                                <XCircle size={18} />
-                              </button>
-                            </>
+              ) : (
+                data?.data.map((user) => (
+                  <tr key={user.id} className="group hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                    
+                    {/* USER INFO */}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center overflow-hidden shrink-0 border border-gray-100 dark:border-white/10">
+                          {user.avatar ? (
+                            <img src={user.avatar} alt="" className="h-full w-full object-cover" />
                           ) : (
-                            // ACTIVE USERS ACTIONS
-                            user.id !== currentUser?.id && (
-                                <>
-                                <Link 
-                                    to={`/profile/${user.id}`}
-                                    className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                                    title="View Profile"
-                                >
-                                    <UserIcon size={18} />
-                                </Link>
-                                <button 
-                                    onClick={() => setEditingUserId(user.id)}
-                                    className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                                    title="Edit Role"
-                                >
-                                    <Shield size={18} />
-                                </button>
-                                <button 
-                                    onClick={() => setUserToDelete(user)}
-                                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                                    title="Delete User"
-                                >
-                                    <Trash2 size={18} />
-                                </button>
-                                </>
-                            )
+                            <span className="font-bold text-gray-500 text-sm uppercase">{user.name?.charAt(0) || user.email.charAt(0)}</span>
                           )}
                         </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-white text-sm">{user.name || 'Unnamed'}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* STATUS */}
+                    <td className="px-6 py-4">
+                      <StatusBadge status={user.status} />
+                    </td>
+
+                    {/* ROLE */}
+                    <td className="px-6 py-4">
+                      {editingUserId === user.id ? (
+                        <select
+                          autoFocus
+                          value={user.role}
+                          onChange={(e) => updateRoleMutation.mutate({ id: user.id, role: e.target.value })}
+                          onBlur={() => setEditingUserId(null)}
+                          className="bg-white dark:bg-[#1A1D21] border border-blue-500 rounded-lg px-2 py-1 text-sm outline-none text-gray-900 dark:text-white shadow-sm"
+                        >
+                          <option value="admin">Admin</option>
+                          <option value="editor">Editor</option>
+                          <option value="viewer">Viewer</option>
+                        </select>
+                      ) : (
+                        <div 
+                          onClick={() => user.id !== currentUser?.id && setEditingUserId(user.id)} 
+                          className={`inline-block ${user.id !== currentUser?.id ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+                          title={user.id !== currentUser?.id ? "Click to change role" : ""}
+                        >
+                          <RoleBadge role={user.role} />
+                        </div>
+                      )}
+                    </td>
+
+                    {/* JOINED DATE */}
+                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                      {new Date(user.createdAt).toLocaleDateString()}
+                    </td>
+
+                    {/* LAST ACCESS */}
+                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                      {user.updatedAt ? new Date(user.updatedAt).toLocaleDateString() : '-'}
+                    </td>
+
+                    {/* ACTIONS */}
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        
+                        {/* PENDING ACTIONS */}
+                        {user.status === 'PENDING' ? (
+                          <>
+                            <button 
+                              onClick={() => approveUserMutation.mutate(user.id)}
+                              className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors" 
+                              title="Approve"
+                            >
+                              <CheckCircle2 size={18} />
+                            </button>
+                            <button 
+                              onClick={() => deleteUserMutation.mutate(user.id)}
+                              className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                              title="Reject"
+                            >
+                              <XCircle size={18} />
+                            </button>
+                          </>
+                        ) : (
+                          // ACTIVE USERS ACTIONS
+                          user.id !== currentUser?.id && (
+                              <>
+                              <Link 
+                                  to={`/profile/${user.id}`}
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                                  title="View Profile"
+                              >
+                                  <UserIcon size={18} />
+                              </Link>
+                              <button 
+                                  onClick={() => setEditingUserId(user.id)}
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                                  title="Edit Role"
+                              >
+                                  <Shield size={18} />
+                              </button>
+                              <button 
+                                  onClick={() => setUserToDelete(user)}
+                                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                  title="Delete User"
+                              >
+                                  <Trash2 size={18} />
+                              </button>
+                              </>
+                          )
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
         {/* PAGINATION FOOTER */}
-        {data && data.meta.total > 0 && (
+        {data && data.meta.total > 0 && !isLoading && (
           <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-black/20">
             <span className="text-xs text-gray-500 dark:text-gray-400 hidden sm:inline">
               Showing <span className="font-bold">{((page - 1) * data.meta.limit) + 1}</span> to <span className="font-bold">{Math.min(page * data.meta.limit, data.meta.total)}</span> of <span className="font-bold">{data.meta.total}</span> users

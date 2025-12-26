@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Search, Image as ImageIcon, Film, Grid, Sparkles, X } from 'lucide-react';
 
-export type FilterType = 'all' | 'image' | 'video' ;
+export type FilterType = 'all' | 'image' | 'video';
 
 interface DashboardHeaderProps {
   assetsCount: number;
@@ -13,20 +13,18 @@ interface DashboardHeaderProps {
   setSelectedColor: (color: string | null) => void;
 }
 
-// 🎨 EXPANDED PREMIUM PALETTE (13 Colors)
-// Added: Brown, Teal, Navy, Gray
 const COLORS = [
   { name: 'Red', class: 'bg-rose-500', border: 'border-rose-200' },
   { name: 'Orange', class: 'bg-orange-500', border: 'border-orange-200' },
-  { name: 'Brown', class: 'bg-amber-800', border: 'border-amber-600' }, // ✅ New
+  { name: 'Brown', class: 'bg-amber-800', border: 'border-amber-600' },
   { name: 'Yellow', class: 'bg-yellow-400', border: 'border-yellow-200' },
   { name: 'Green', class: 'bg-emerald-500', border: 'border-emerald-200' },
-  { name: 'Teal', class: 'bg-teal-500', border: 'border-teal-200' },    // ✅ New
+  { name: 'Teal', class: 'bg-teal-500', border: 'border-teal-200' },
   { name: 'Blue', class: 'bg-sky-500', border: 'border-sky-200' },
-  { name: 'Navy', class: 'bg-blue-900', border: 'border-blue-700' },    // ✅ New
+  { name: 'Navy', class: 'bg-blue-900', border: 'border-blue-700' },
   { name: 'Purple', class: 'bg-violet-500', border: 'border-violet-200' },
   { name: 'Pink', class: 'bg-pink-500', border: 'border-pink-200' },
-  { name: 'Gray', class: 'bg-gray-500', border: 'border-gray-300' },    // ✅ New
+  { name: 'Gray', class: 'bg-gray-500', border: 'border-gray-300' },
   { name: 'Black', class: 'bg-zinc-900', border: 'border-zinc-700' },
   { name: 'White', class: 'bg-white', border: 'border-gray-200' },
 ];
@@ -43,18 +41,30 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = React.memo(({
   
   const [isScrolled, setIsScrolled] = useState(false);
 
-  // Optimized Scroll Listener
+  // ✅ FIXED: Scroll Listener with Hysteresis
   useEffect(() => {
     let ticking = false;
     const handleScroll = () => {
       if (!ticking) {
         window.requestAnimationFrame(() => {
-          setIsScrolled(window.scrollY > 10);
+          const currentScroll = window.scrollY;
+          
+          setIsScrolled((prev) => {
+            // Collapse header only after scrolling down a bit (50px)
+            if (currentScroll > 50) return true;
+            // Expand header only when really close to top (10px)
+            if (currentScroll < 10) return false;
+            // Otherwise, stay as is (prevents flickering)
+            return prev;
+          });
+
           ticking = false;
         });
         ticking = true;
       }
     };
+
+    handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -119,7 +129,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = React.memo(({
             </div>
           </div>
 
-          {/* 3. RIGHT: Color Filter (Premium 13-Color Palette) */}
+          {/* 3. RIGHT: Color Filter */}
           <div className={`transition-all duration-300 ${isScrolled ? 'scale-95 origin-right' : 'scale-100'}`}>
               <div className="flex items-center gap-3 overflow-x-auto max-w-full pb-1 md:pb-0 no-scrollbar px-1">
                 {selectedColor && (

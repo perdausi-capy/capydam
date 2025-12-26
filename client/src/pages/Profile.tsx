@@ -3,11 +3,26 @@ import { useAuth } from '../context/AuthContext';
 import client from '../api/client';
 import { toast } from 'react-toastify';
 import { 
-    User, Camera, Loader2, Mail, Shield, Check, 
-    ArrowLeft, Sparkles, HardDrive, Folder, Calendar, Clock
+  User, Camera, Loader2, Mail, Shield, Check, 
+  ArrowLeft, Sparkles, HardDrive, Folder, Calendar, Clock
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
-import ConfirmModal from '../components/ConfirmModal'; // ✅ Import Modal
+import ConfirmModal from '../components/ConfirmModal';
+
+// --- TYPES ---
+interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  avatar: string | null;
+  createdAt: string;
+  updatedAt: string;
+  _count?: {
+    assets: number;
+    collections: number;
+  };
+}
 
 const Profile = () => {
   const { user: currentUser, login } = useAuth();
@@ -19,7 +34,7 @@ const Profile = () => {
   const isAdminView = currentUser?.role === 'admin' && !isOwnProfile;
 
   // --- STATE ---
-  const [profileData, setProfileData] = useState<any>(null);
+  const [profileData, setProfileData] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -32,7 +47,7 @@ const Profile = () => {
   // Admin Actions (Others)
   const [role, setRole] = useState('');
   
-  // ✅ DELETE MODAL STATE
+  // Delete Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -42,12 +57,12 @@ const Profile = () => {
         setIsLoading(true);
         try {
             if (isOwnProfile) {
-                // Load Me
-                setProfileData(currentUser);
-                setName(currentUser?.name || '');
-                setAvatarPreview(currentUser?.avatar || null);
+                if (currentUser) {
+                    setProfileData(currentUser as unknown as UserProfile);
+                    setName(currentUser.name || '');
+                    setAvatarPreview(currentUser.avatar || null);
+                }
             } else {
-                // Load Them
                 const { data } = await client.get(`/users/${id}`);
                 setProfileData(data);
                 setName(data.name || '');
@@ -61,11 +76,11 @@ const Profile = () => {
             setIsLoading(false);
         }
     };
+    
     if (currentUser) loadData();
   }, [id, currentUser, isOwnProfile, navigate]);
 
   // --- 2. ACTIONS ---
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
           const file = e.target.files[0];
@@ -87,27 +102,32 @@ const Profile = () => {
           });
 
           const token = localStorage.getItem('token') || '';
-          login(token, updatedUser); // Update Context
+          login(token, updatedUser);
           toast.success("Profile updated!");
           setAvatarFile(null);
-      } catch (error) { toast.error("Failed to update profile"); } 
-      finally { setIsSaving(false); }
+      } catch (error) { 
+          toast.error("Failed to update profile"); 
+      } finally { 
+          setIsSaving(false); 
+      }
   };
 
   const handleAdminRoleUpdate = async () => {
       if (!profileData || isSaving) return;
       setIsSaving(true);
       try {
-          await client.put(`/users/${profileData.id}/role`, { role }); // Changed patch to put to match Users page logic if needed
+          await client.put(`/users/${profileData.id}/role`, { role }); 
           toast.success("User role updated");
-          // Update local state to reflect change
           setProfileData({ ...profileData, role });
-      } catch (e) { toast.error("Failed to update role"); }
-      finally { setIsSaving(false); }
+      } catch (e) { 
+          toast.error("Failed to update role"); 
+      } finally { 
+          setIsSaving(false); 
+      }
   };
 
-  // ✅ 3. EXECUTE DELETE (Called by Modal)
   const handleExecuteDelete = async () => {
+      if (!profileData) return;
       setIsDeleting(true);
       try {
           await client.delete(`/users/${profileData.id}`);
@@ -121,9 +141,37 @@ const Profile = () => {
       }
   };
 
+  // ✅ NEW: SKELETON LOADER
   if (isLoading || !profileData) return (
-    <div className="flex h-screen items-center justify-center dark:bg-[#0B0D0F]">
-        <Loader2 className="animate-spin text-blue-600" size={32} />
+    <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-5xl mx-auto animate-pulse">
+            <div className="h-8 w-24 bg-gray-200 dark:bg-white/5 rounded-lg mb-6"></div>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* Left Skeleton */}
+                <div className="lg:col-span-4 space-y-6">
+                    <div className="bg-white dark:bg-[#1A1D21] rounded-3xl p-6 h-[400px] border border-gray-200 dark:border-white/5 flex flex-col items-center">
+                        <div className="w-32 h-32 rounded-full bg-gray-200 dark:bg-white/5 mb-4"></div>
+                        <div className="h-6 w-32 bg-gray-200 dark:bg-white/5 rounded mb-2"></div>
+                        <div className="h-4 w-48 bg-gray-200 dark:bg-white/5 rounded mb-6"></div>
+                        <div className="w-full h-px bg-gray-100 dark:bg-white/5 mb-4"></div>
+                        <div className="w-full space-y-3">
+                            <div className="h-4 w-full bg-gray-200 dark:bg-white/5 rounded"></div>
+                            <div className="h-4 w-full bg-gray-200 dark:bg-white/5 rounded"></div>
+                        </div>
+                    </div>
+                </div>
+                {/* Right Skeleton */}
+                <div className="lg:col-span-8">
+                    <div className="bg-white dark:bg-[#1A1D21] rounded-3xl p-8 h-[300px] border border-gray-200 dark:border-white/5">
+                        <div className="h-8 w-48 bg-gray-200 dark:bg-white/5 rounded mb-6"></div>
+                        <div className="grid grid-cols-2 gap-6">
+                            <div className="h-12 bg-gray-200 dark:bg-white/5 rounded-xl"></div>
+                            <div className="h-12 bg-gray-200 dark:bg-white/5 rounded-xl"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
   );
 
@@ -143,7 +191,7 @@ const Profile = () => {
             <div className="lg:col-span-4 space-y-6">
                 <div className="bg-white dark:bg-[#1A1D21] rounded-3xl shadow-sm border border-gray-200 dark:border-white/5 overflow-hidden p-6 text-center relative">
                     
-                    {/* Role Badge (Top Right) */}
+                    {/* Role Badge */}
                     <div className="absolute top-4 right-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase border ${
                             profileData.role === 'admin' 
@@ -163,7 +211,6 @@ const Profile = () => {
                                 <span className="text-4xl font-bold text-gray-400">{profileData.name?.charAt(0).toUpperCase()}</span>
                             )}
                         </div>
-                        {/* Camera Icon (Only for Self) */}
                         {isOwnProfile && (
                             <button 
                                 onClick={() => fileInputRef.current?.click()} 
@@ -188,7 +235,6 @@ const Profile = () => {
                                 {profileData.createdAt ? new Date(profileData.createdAt).toLocaleDateString() : 'N/A'}
                             </span>
                         </div>
-                        {/* ✅ ADDED LAST ACCESS */}
                         <div className="flex items-center justify-between px-4">
                             <span className="flex items-center gap-2"><Clock size={12}/> Last Active</span>
                             <span className="font-medium text-gray-700 dark:text-gray-300">
@@ -262,7 +308,6 @@ const Profile = () => {
                         </div>
 
                         <div className="space-y-8">
-                            {/* Role Changer */}
                             <div className="p-4 bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-white/5">
                                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-3">Change System Role</label>
                                 <div className="flex flex-col sm:flex-row gap-3">
@@ -277,7 +322,6 @@ const Profile = () => {
                                 </div>
                             </div>
 
-                            {/* Danger Zone */}
                             <div>
                                 <h3 className="text-sm font-bold text-red-600 mb-2 flex items-center gap-2"><Shield size={14}/> Danger Zone</h3>
                                 <div className="p-4 rounded-xl border border-red-100 dark:border-red-900/30 bg-red-50/50 dark:bg-red-900/10 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -285,7 +329,7 @@ const Profile = () => {
                                         Deleting a user will permanently remove <strong>all their uploads</strong> and <strong>collections</strong>. This cannot be undone.
                                     </p>
                                     <button 
-                                        onClick={() => setIsDeleteModalOpen(true)} // ✅ Opens Modal
+                                        onClick={() => setIsDeleteModalOpen(true)}
                                         className="shrink-0 px-4 py-2 bg-white dark:bg-transparent border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 font-bold text-sm rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shadow-sm"
                                     >
                                         Delete User
@@ -300,13 +344,13 @@ const Profile = () => {
         </div>
       </div>
 
-      {/* ✅ CONFIRM DELETE MODAL */}
+      {/* CONFIRM DELETE MODAL */}
       <ConfirmModal 
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleExecuteDelete}
         title="Delete User?"
-        message={`Are you sure you want to permanently delete ${profileData.name}? This action will wipe all their data and cannot be undone.`}
+        message={`Are you sure you want to permanently delete ${profileData?.name}? This action will wipe all their data and cannot be undone.`}
         confirmText="Yes, Delete User"
         isDangerous={true}
         isLoading={isDeleting}
