@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, type ReactNode, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, type ReactNode, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { useTheme } from './ThemeContext';
