@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallba
 import { 
   Trash2, Edit2, X, Hash, Plus, Settings, Search, Users, 
   MoreHorizontal, Loader2, MessageCircle, Lock, UserPlus, Info, UserMinus, AlertTriangle, 
-  FileText, Download, Smile, MessageSquare 
+  FileText, Download, Smile, MessageSquare, Bell 
 } from 'lucide-react';
-// import { useAuth } from '../context/AuthContext';
-import { useChat, type Channel, type ActiveDM, type UserData } from '../hooks/useChat'; 
+import { useAuth } from '../context/AuthContext'; 
+// ✅ Ensure Notification type is imported
+import { useChat, type Message, type Channel, type ActiveDM, type UserData, type Notification } from '../hooks/useChat'; 
 import RichLinkPreview from '../components/RichLinkPreview';
 import ChatInput from '../components/ChatInput'; 
 import { renderMessageContent } from '../utils/messageRenderer';
@@ -13,7 +14,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import EmojiPicker, { Theme, type EmojiClickData } from 'emoji-picker-react'; 
 import 'react-toastify/dist/ReactToastify.css';
 
-// --- OPTIMIZED HELPERS ---
+// --- HELPERS ---
 const formatTime = (isoString?: string) => {
     if (!isoString) return '';
     return new Date(isoString).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -97,6 +98,7 @@ const MessageBubble = React.memo(({
     const isSequence = !showDateDivider && prevMsg && prevMsg.userId === msg.userId && (new Date(msg.createdAt!).getTime() - new Date(prevMsg.createdAt!).getTime() < 5 * 60 * 1000);
     const isMe = msg.userId === user.id;
     
+    // Memoize calculations
     const reactionCounts = useMemo(() => msg.reactions?.reduce((acc: any, r: any) => {
         acc[r.emoji] = (acc[r.emoji] || 0) + 1;
         return acc;
@@ -109,6 +111,7 @@ const MessageBubble = React.memo(({
             {showDateDivider && <div className="relative flex items-center justify-center my-6"><div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200 dark:border-white/10"></div></div><span className="relative z-10 px-4 text-xs font-semibold text-gray-500 bg-white dark:bg-[#0B0D0F]">{getDateLabel(msg.createdAt!)}</span></div>}
             
             <div className={`group relative flex items-start gap-4 px-2 py-1 hover:bg-gray-50 dark:hover:bg-white/5 -mx-2 rounded-lg transition-colors ${isSequence ? 'mt-0.5' : 'mt-4'}`}>
+                {/* Avatar Column */}
                 <div className="w-[40px] shrink-0 flex flex-col items-center">
                     {!isSequence ? (
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold shadow-sm overflow-hidden">
@@ -117,6 +120,7 @@ const MessageBubble = React.memo(({
                     ) : <div className="text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 mt-1.5 select-none">{formatTime(msg.createdAt)}</div>}
                 </div>
 
+                {/* Content Column */}
                 <div className="flex-1 min-w-0">
                     {!isSequence && <div className="flex items-center gap-2 mb-1"><span className="font-bold text-gray-900 dark:text-white cursor-pointer hover:underline">{msg.user.name}</span><span className="text-xs text-gray-500 dark:text-gray-400">{formatTime(msg.createdAt)}</span></div>}
                     
@@ -197,7 +201,11 @@ const Chat = () => {
     joinRoom, switchToDM, startDM, createChannel, createGroup, deleteChannel,
     addMember, kickMember, sendMessage, sendTyping, deleteMessage, editMessage,
     addReaction, removeReaction,
-    activeThread, openThread, closeThread, sendThreadMessage
+    activeThread, openThread, closeThread, sendThreadMessage,
+    // ✅ Ensure these are destructured from the hook
+    notifications = [], 
+    unreadMentionCount = 0, 
+    markNotificationsRead = () => {}
   } = useChat();
 
   const [showMembers, setShowMembers] = useState(true);
@@ -208,12 +216,12 @@ const Chat = () => {
   const [isCreatingGroup, setIsCreatingGroup] = useState(false); 
   const [isAddingMember, setIsAddingMember] = useState(false); 
   const [isViewingMembers, setIsViewingMembers] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   
   const [memberToKick, setMemberToKick] = useState<{ id: string, name: string } | null>(null);
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
   const [channelToDeleteId, setChannelToDeleteId] = useState<string | null>(null); 
-  const [_isKickingLoading, setIsKickingLoading] = useState(false);
-  // ✅ NEW: Loader State for Deleting
+  const [isKickingLoading, setIsKickingLoading] = useState(false);
   const [isDeletingLoading, setIsDeletingLoading] = useState(false);
   
   const [reactingToMessageId, setReactingToMessageId] = useState<string | null>(null);
@@ -229,23 +237,30 @@ const Chat = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [prevScrollHeight, setPrevScrollHeight] = useState(0);
   const reactionPickerRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
   const hasInitialScrolled = useRef(false);
 
+  // Derived Data
   const parentMessage = useMemo(() => messages.find(msg => msg.id === activeThread?.id), [messages, activeThread]);
   const publicChannels = useMemo(() => channels.filter(c => c.type === 'channel'), [channels]);
   const privateGroups = useMemo(() => channels.filter(c => c.type === 'group'), [channels]);
   const currentGroup = useMemo(() => privateGroups.find(g => g.name === activeRoom), [privateGroups, activeRoom]);
 
+  // Handle outside clicks
   useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
           if (reactionPickerRef.current && !reactionPickerRef.current.contains(event.target as Node)) {
               setReactingToMessageId(null);
+          }
+          if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+              setShowNotifications(false);
           }
       };
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Auto Scroll logic
   useEffect(() => { hasInitialScrolled.current = false; }, [activeRoom]);
   useEffect(() => { 
       if (!scrollRef.current || messages.length === 0) return;
@@ -271,6 +286,7 @@ const Chat = () => {
       }
   }, [messages, isFetchingHistory, prevScrollHeight]);
 
+  // Handlers
   const handleCreateChannel = () => { createChannel(newChannelName); setIsCreatingChannel(false); setNewChannelName(''); };
   const handleCreateGroup = () => { createGroup(newGroupName); setIsCreatingGroup(false); setNewGroupName(''); };
   
@@ -292,12 +308,10 @@ const Chat = () => {
   
   const handleDeleteChannelClick = useCallback((e: React.MouseEvent, id: string) => { e.stopPropagation(); setChannelToDeleteId(id); }, []);
   
-  // ✅ UPDATED: Delete with Loader
   const confirmDeleteChannel = () => { 
       if (channelToDeleteId) { 
           setIsDeletingLoading(true);
           deleteChannel(channelToDeleteId); 
-          // Optimistic close delay
           setTimeout(() => {
               setChannelToDeleteId(null); 
               setIsDeletingLoading(false);
@@ -308,12 +322,11 @@ const Chat = () => {
   
   const handleDeleteMessage = useCallback((id: string) => setMessageToDelete(id), []);
   const confirmDeleteMessage = () => { if (messageToDelete) { deleteMessage(messageToDelete); setMessageToDelete(null); }};
-//   const handleSaveEdit = () => { if(editingMessageId) editMessage(editingMessageId, editText); setEditingMessageId(null); };
-// ✅ This ensures handleSaveEdit doesn't change on every render
-    const handleSaveEdit = useCallback(() => { 
-        if(editingMessageId) editMessage(editingMessageId, editText); 
-        setEditingMessageId(null); 
-    }, [editingMessageId, editText, editMessage]);
+  
+  const handleSaveEdit = useCallback(() => { 
+      if(editingMessageId) editMessage(editingMessageId, editText); 
+      setEditingMessageId(null); 
+  }, [editingMessageId, editText, editMessage]);
 
   const handleOpenReaction = useCallback((e: React.MouseEvent, msgId: string) => {
       const rect = e.currentTarget.getBoundingClientRect();
@@ -335,6 +348,17 @@ const Chat = () => {
       if (hasReacted) removeReaction(msgId, emoji); else addReaction(msgId, emoji);
   }, [messages, user, addReaction, removeReaction]);
 
+  // ✅ Notification Handlers
+  const toggleNotifications = () => {
+      if (!showNotifications) markNotificationsRead();
+      setShowNotifications(!showNotifications);
+  };
+
+  const handleNotificationClick = (notif: Notification) => {
+      joinRoom(notif.roomName || notif.roomId);
+      setShowNotifications(false);
+  };
+
   const getSidebarMembers = useMemo(() => {
       const baseList = currentGroup && currentGroup.members ? currentGroup.members : allUsers;
       const online: UserData[] = [], offline: UserData[] = [];
@@ -352,10 +376,62 @@ const Chat = () => {
 
       {/* 1. SIDEBAR */}
       <div className="w-64 bg-gray-50 dark:bg-[#15171B] flex flex-col shrink-0 hidden md:flex border-r border-gray-200 dark:border-white/5">
-         <div className="h-16 flex items-center justify-between px-5 border-b border-gray-200 dark:border-white/5">
-             <h1 className="font-bold text-gray-900 dark:text-white truncate tracking-tight">CapyDAM HQ</h1>
-             <Settings size={18} className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors" />
+         
+         {/* HEADER WITH BELL ICON */}
+         <div className="h-16 flex items-center px-5 border-b border-gray-200 dark:border-white/5 relative z-20">
+             <h1 className="absolute left-1/2 -translate-x-1/2 font-bold text-gray-900 dark:text-white truncate tracking-tight text-lg">CapyChat</h1>
+             
+             {/* Bell Icon & Dropdown */}
+             <div className="ml-auto relative" ref={notificationRef}>
+                 <button 
+                    onClick={toggleNotifications} 
+                    className={`p-2 rounded-full transition-colors ${showNotifications ? 'bg-blue-100 text-blue-600 dark:bg-white/10 dark:text-white' : 'text-gray-400 hover:text-blue-600 dark:hover:text-blue-400'}`}
+                 >
+                     <Bell size={20} />
+                     {unreadMentionCount > 0 && (
+                         <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                         </span>
+                     )}
+                 </button>
+
+                 {/* Dropdown Menu */}
+                 {showNotifications && (
+                     <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-[#1E1F22] rounded-xl shadow-2xl border border-gray-200 dark:border-white/10 overflow-hidden animate-in fade-in slide-in-from-top-2 z-50">
+                         <div className="p-3 border-b border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-[#15171B]">
+                             <h3 className="text-xs font-bold text-gray-500 uppercase">Mentions & Updates</h3>
+                         </div>
+                         <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                             {notifications.length === 0 ? (
+                                 <div className="p-8 text-center text-gray-400 text-sm">No new mentions</div>
+                             ) : (
+                                 notifications.map((notif, i) => (
+                                     <div 
+                                        key={i} 
+                                        onClick={() => handleNotificationClick(notif)}
+                                        className="p-3 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer border-b border-gray-100 dark:border-white/5 last:border-0 transition-colors"
+                                     >
+                                         <div className="flex items-center gap-2 mb-1">
+                                             <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-[10px] text-white font-bold">
+                                                 {notif.senderName.charAt(0)}
+                                             </div>
+                                             <span className="font-bold text-sm text-gray-900 dark:text-white">{notif.senderName}</span>
+                                             <span className="text-xs text-gray-400">in #{notif.roomName}</span>
+                                         </div>
+                                         <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 pl-7">
+                                             {notif.text}
+                                         </p>
+                                         <div className="text-[10px] text-gray-400 pl-7 mt-1">{new Date(notif.createdAt).toLocaleTimeString()}</div>
+                                     </div>
+                                 ))
+                             )}
+                         </div>
+                     </div>
+                 )}
+             </div>
          </div>
+
          <div className="flex-1 overflow-y-auto p-3 space-y-6 custom-scrollbar">
              {/* CHANNELS */}
              <div>
@@ -427,7 +503,7 @@ const Chat = () => {
                      />
                  ))}
 
-                 {/* 🚀 NEW: GHOST MESSAGE LOADER (Shows while sending) */}
+                 {/* GHOST MESSAGE LOADER */}
                  {isSending && (
                      <div className="flex flex-col mt-4 animate-pulse px-2">
                          <div className="flex items-start gap-4">
@@ -477,7 +553,6 @@ const Chat = () => {
          
          {memberToKick && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"><div className="w-full max-w-sm bg-white dark:bg-[#1A1D21] border border-red-200 dark:border-red-900/50 rounded-xl shadow-2xl p-6 animate-in fade-in zoom-in-95"><div className="flex flex-col items-center text-center mb-6"><div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center text-red-600 mb-4"><AlertTriangle size={24} /></div><h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Remove Member?</h3><p className="text-sm text-gray-500 dark:text-gray-400">Remove <span className="font-bold text-gray-800 dark:text-gray-200">{memberToKick.name}</span>?</p></div><div className="flex gap-3"><button onClick={() => setMemberToKick(null)} className="flex-1 py-2 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-white rounded-lg">Cancel</button><button onClick={handleKickAction} className="flex-1 py-2 bg-red-600 text-white rounded-lg flex items-center justify-center gap-2 hover:bg-red-700 transition-colors">Remove</button></div></div></div>}
          
-         {/* ✅ UPDATED: Delete Modal with Loader */}
          {channelToDeleteId && (
              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
                  <div className="w-full max-w-sm bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl p-6 animate-in zoom-in-95">
@@ -523,8 +598,8 @@ const Chat = () => {
       {/* 4. MEMBER LIST (Standard) */}
       {!activeThread && showMembers && (
           <div className="w-64 bg-white dark:bg-[#15171B] hidden lg:flex flex-col border-l border-gray-200 dark:border-white/5 p-4 overflow-y-auto">
-                {onlineMembersList.length > 0 && <div className="mb-6"><h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 px-2">Online — {onlineMembersList.length}</h3>{onlineMembersList.map((u) => (<div key={u.id} onClick={() => startDM(u.id)} className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition-colors group"><div className="relative"><div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold overflow-hidden">{u.avatar ? <img src={u.avatar} className="w-full h-full object-cover"/> : u.name.charAt(0)}</div><div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full"></div></div><div className="min-w-0"><div className="font-bold text-gray-900 dark:text-white text-sm truncate">{u.name}</div>{u.id === user?.id && <div className="text-xs text-blue-600 font-medium">You</div>}</div></div>))}</div>}
-                {offlineMembersList.length > 0 && <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 px-2">Offline — {offlineMembersList.length}</h3>{offlineMembersList.map((u) => (<div key={u.id} onClick={() => startDM(u.id)} className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition-colors group opacity-60 hover:opacity-100"><div className="relative"><div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-white text-xs font-bold overflow-hidden">{u.avatar ? <img src={u.avatar} className="w-full h-full object-cover"/> : u.name.charAt(0)}</div></div><div className="min-w-0"><div className="font-bold text-gray-900 dark:text-white text-sm truncate">{u.name}</div>{u.id === user?.id && <div className="text-xs text-blue-600 font-medium">You</div>}</div></div>))}</div>}
+                {onlineMembersList.length > 0 && <div className="mb-6"><h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 px-2">Online — {onlineMembersList.length}</h3>{onlineMembersList.map((u) => (<div key={u.id} onClick={() => startDM(u)} className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition-colors group"><div className="relative"><div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold overflow-hidden">{u.avatar ? <img src={u.avatar} className="w-full h-full object-cover"/> : u.name.charAt(0)}</div><div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full"></div></div><div className="min-w-0"><div className="font-bold text-gray-900 dark:text-white text-sm truncate">{u.name}</div>{u.id === user?.id && <div className="text-xs text-blue-600 font-medium">You</div>}</div></div>))}</div>}
+                {offlineMembersList.length > 0 && <div><h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 px-2">Offline — {offlineMembersList.length}</h3>{offlineMembersList.map((u) => (<div key={u.id} onClick={() => startDM(u)} className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition-colors group opacity-60 hover:opacity-100"><div className="relative"><div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-white text-xs font-bold overflow-hidden">{u.avatar ? <img src={u.avatar} className="w-full h-full object-cover"/> : u.name.charAt(0)}</div></div><div className="min-w-0"><div className="font-bold text-gray-900 dark:text-white text-sm truncate">{u.name}</div>{u.id === user?.id && <div className="text-xs text-blue-600 font-medium">You</div>}</div></div>))}</div>}
           </div>
       )}
     </div>

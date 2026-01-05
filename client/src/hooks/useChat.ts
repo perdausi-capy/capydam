@@ -10,6 +10,16 @@ export interface Reaction {
     user: { id: string; name: string; };
 }
 
+export interface Notification {
+    id: string;
+    text: string;
+    roomId: string;
+    roomName: string;
+    senderName: string;
+    createdAt: string;
+    read: boolean;
+}
+
 export interface Message {
   id: string; content: string; userId: string;
   user: { name: string; avatar?: string; };
@@ -49,7 +59,9 @@ export const useChat = () => {
 
   const [channels, setChannels] = useState<Channel[]>([]);
   
-  // CACHING STATE
+  // NOTIFICATIONS & CACHE
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadMentionCount, setUnreadMentionCount] = useState(0);
   const [messageCache, setMessageCache] = useState<Record<string, Message[]>>({});
   const [hasMoreCache, setHasMoreCache] = useState<Record<string, boolean>>({});
 
@@ -65,17 +77,22 @@ export const useChat = () => {
   const [isSending, setIsSending] = useState(false);
 
   // Refs
+  const userRef = useRef(user); 
   const onlineUsersRef = useRef<OnlineUser[]>([]);
-  const allUsersRef = useRef<UserData[]>([]); // ✅ FIXED: Added this missing ref
+  const allUsersRef = useRef<UserData[]>([]); 
   const activeRoomRef = useRef(activeRoom);
+  const activeDMRef = useRef(activeDM); 
   const channelsRef = useRef(channels);
-//   const processedMessageIds = useRef<Set<string>>(new Set());
+  const processedMessageIds = useRef<Set<string>>(new Set());
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Sync Refs
+  useEffect(() => { userRef.current = user; }, [user]);
   useEffect(() => { onlineUsersRef.current = onlineUsers; }, [onlineUsers]);
   useEffect(() => { allUsersRef.current = allUsers; }, [allUsers]);
   useEffect(() => { activeRoomRef.current = activeRoom; }, [activeRoom]);
+  useEffect(() => { activeDMRef.current = activeDM; }, [activeDM]);
   useEffect(() => { channelsRef.current = channels; }, [channels]);
 
   // Derived State
@@ -96,7 +113,6 @@ export const useChat = () => {
           const isValidDM = activeDMs.some(dm => dm.roomId === activeRoom) || (activeDM && activeDM.roomId === activeRoom);
 
           if (activeRoom && !isValidChannel && !isValidDM) {
-              console.warn(`Redirecting from invalid room "${activeRoom}"`);
               const firstChannel = channels.find(c => c.type === 'channel');
               if (firstChannel) setActiveRoom(firstChannel.name);
               else setActiveRoom('');
@@ -104,30 +120,36 @@ export const useChat = () => {
       }
   }, [channels, activeDMs, activeDM, isLoadingChannels, activeRoom]);
 
+  // ✅ FORCE USER REGISTRATION (Fixes Incognito Issue)
+  useEffect(() => {
+      if (socket && user?.id) {
+          // console.log("🔄 Registering User with Socket:", user.name);
+          socket.emit('register_user', { userId: user.id, name: user.name, avatar: user.avatar });
+          socket.emit('fetch_all_users');
+      }
+  }, [socket, user]);
+
   // Room Switching Logic
   useEffect(() => {
       if (socket && activeRoom && !isLoadingChannels) {
-          console.log(`🔌 Switching to: ${activeRoom}`);
+          // console.log(`🔌 Switching to: ${activeRoom}`);
           setIsThreadOpen(false);
           setActiveThread(null);
 
-          // Only show loader if we don't have cached messages
           if (!messageCache[activeRoom] || messageCache[activeRoom].length === 0) {
               setIsLoadingMessages(true);
           } else {
               setIsLoadingMessages(false);
           }
-
           socket.emit('join_room', activeRoom);
       }
-  }, [socket, activeRoom, isLoadingChannels]); // removed messageCache dep
+  }, [socket, activeRoom, isLoadingChannels]); 
 
+  // --- SOCKET LISTENERS ---
   useEffect(() => {
     if (!socket || !user) return;
 
-    socket.emit('register_user', { userId: user.id, name: user.name, avatar: user.avatar });
-    socket.emit('fetch_all_users'); 
-    
+    // Handlers
     const handleUpdateChannelList = (list: Channel[]) => {
         setChannels(prevChannels => list.map(newChannel => {
             const localChannel = prevChannels.find(c => c.id === newChannel.id);
@@ -139,36 +161,81 @@ export const useChat = () => {
         setIsLoadingChannels(false);
     };
 
-    const isMessageForCurrentRoom = (msgRoomId: string) => {
+    const isMessageForCurrentRoom = (msgRoomId: string, msgUserId: string) => {
         const current = activeRoomRef.current;
         if (current === msgRoomId) return true;
+        
         const channel = channelsRef.current.find(c => c.name === current);
         if (channel && channel.id === msgRoomId) return true;
+
+        // ✅ FIX DM MATCHING
+        if (current.startsWith('dm_') && activeDMRef.current) {
+            // If the message is from me or the person I'm DMing, it belongs here
+            // even if the roomId (UUID) doesn't match the temp ID (dm_A_B)
+            if (msgUserId === userRef.current?.id || msgUserId === activeDMRef.current.userId) {
+                return true;
+            }
+        }
         return false;
     };
 
     const handleReceiveMessage = (message: Message) => {
-        if (!isMessageForCurrentRoom(message.roomId)) {
+        const currentUser = userRef.current;
+        const isForCurrentRoom = isMessageForCurrentRoom(message.roomId, message.userId);
+        const channelName = channelsRef.current.find(c => c.id === message.roomId)?.name || 'chat';
+
+        // ✅ MENTION DETECTION
+        if (currentUser && message.userId !== currentUser.id && currentUser.name) {
+            const content = message.content.toLowerCase();
+            const fullName = currentUser.name.toLowerCase();
+            const firstName = fullName.split(' ')[0];
+
+            if (content.includes(`@${fullName}`) || content.includes(`@${firstName}`)) {
+                // console.log(`🔔 Mention DETECTED for ${currentUser.name}`);
+                const newNotification: Notification = {
+                    id: message.id,
+                    text: message.content,
+                    roomId: message.roomId,
+                    roomName: channelName,
+                    senderName: message.user.name,
+                    createdAt: message.createdAt || new Date().toISOString(),
+                    read: false
+                };
+                setNotifications(prev => [newNotification, ...prev]);
+                setUnreadMentionCount(prev => prev + 1);
+                toast.info(`@${message.user.name} mentioned you!`);
+            }
+        }
+
+        // ✅ Unread Counts
+        if (!isForCurrentRoom) {
             setChannels(prev => prev.map(c => {
                 if (c.id === message.roomId || c.name === message.roomId) {
-                    const currentCount = c.unreadCount || 0;
-                    return { ...c, unreadCount: currentCount + 1 };
+                    return { ...c, unreadCount: (c.unreadCount || 0) + 1 };
                 }
                 return c;
             }));
         }
 
-        if (message.userId === user.id) {
+        // ✅ Stop Loader
+        if (currentUser && message.userId === currentUser.id) {
             setIsSending(false);
             if (sendingTimeoutRef.current) clearTimeout(sendingTimeoutRef.current);
         }
 
+        if (processedMessageIds.current.has(message.id)) return;
+        processedMessageIds.current.add(message.id);
+
         setTypingUsers((prev) => { const s = new Set(prev); s.delete(message.user.name); return s; });
 
-        // Update Cache
-        const channelName = channelsRef.current.find(c => c.id === message.roomId)?.name;
+        // ✅ Cache Update (Handle both UUID and DM_String)
         const keysToUpdate = [message.roomId];
         if (channelName) keysToUpdate.push(channelName);
+        
+        // If it's for the current room but we didn't find a channel name (likely a new DM)
+        if (!channelName && isForCurrentRoom) {
+            keysToUpdate.push(activeRoomRef.current);
+        }
 
         setMessageCache(prev => {
             const next = { ...prev };
@@ -187,18 +254,19 @@ export const useChat = () => {
         
         const msgRoomId = history[0].roomId;
         const channelName = channelsRef.current.find(c => c.id === msgRoomId)?.name;
-        const activeKey = activeRoomRef.current;
         
-        if (activeKey === msgRoomId || activeKey === channelName) setIsLoadingMessages(false);
+        const activeKey = activeRoomRef.current;
+        const isMatch = activeKey === msgRoomId || activeKey === channelName || (activeKey.startsWith('dm_') && history.length > 0);
+        
+        if (isMatch) setIsLoadingMessages(false);
 
         setMessageCache(prev => {
             const next = { ...prev };
             const keys = [msgRoomId];
             if (channelName) keys.push(channelName);
+            if (isMatch && !keys.includes(activeKey)) keys.push(activeKey);
 
-            keys.forEach(key => {
-                next[key] = history;
-            });
+            keys.forEach(key => { next[key] = history; });
             return next;
         });
 
@@ -207,6 +275,7 @@ export const useChat = () => {
             const hasMore = history.length === 50;
             if (channelName) next[channelName] = hasMore;
             next[msgRoomId] = hasMore;
+            if (isMatch) next[activeKey] = hasMore; 
             return next;
         });
     };
@@ -222,6 +291,7 @@ export const useChat = () => {
             const next = { ...prev };
             const keys = [msgRoomId];
             if (channelName) keys.push(channelName);
+            if (activeRoomRef.current.startsWith('dm_')) keys.push(activeRoomRef.current);
 
             keys.forEach(key => {
                 const current = next[key] || [];
@@ -236,6 +306,7 @@ export const useChat = () => {
             const hasMore = olderMessages.length === 50;
             if (channelName) next[channelName] = hasMore;
             next[msgRoomId] = hasMore;
+            if (activeRoomRef.current.startsWith('dm_')) next[activeRoomRef.current] = hasMore;
             return next;
         });
     };
@@ -244,18 +315,48 @@ export const useChat = () => {
     const handleReceiveAllUsers = (users: UserData[]) => setAllUsers(users);
 
     const handleDMStarted = (data: { roomId: string, otherUser?: OnlineUser, targetUserId?: string }) => {
+        // ✅ FIX: Migration Logic for DMs
+        // When server confirms the DM room (UUID), swap from local 'dm_A_B' to 'UUID'
+        // AND move any cached messages so the chat doesn't clear.
+        
         let target = data.otherUser;
         if (!target && data.targetUserId) {
              const online = onlineUsersRef.current.find(u => u.userId === data.targetUserId);
              target = online || allUsersRef.current.find(u => u.id === data.targetUserId) as any;
         }
         if (!target) return;
-        const newDM: ActiveDM = { roomId: data.roomId, userId: target.userId || (target as any).id, name: target.name, avatar: target.avatar };
-        setActiveDMs(prev => { if (prev.some(dm => dm.roomId === newDM.roomId)) return prev; return [...prev, newDM]; });
-        setActiveRoom(newDM.roomId); setActiveDM(newDM); 
+
+        const realRoomId = data.roomId;
+        const tempRoomId = activeRoomRef.current.startsWith('dm_') ? activeRoomRef.current : null;
+
+        // Update State
+        const newDM: ActiveDM = { roomId: realRoomId, userId: target.userId || (target as any).id, name: target.name, avatar: target.avatar };
         
-        if (!messageCache[newDM.roomId]) setIsLoadingMessages(true);
-        socket.emit('join_room', data.roomId);
+        setActiveDMs(prev => { 
+            // Remove temp, add real
+            const filtered = prev.filter(dm => dm.roomId !== tempRoomId && dm.roomId !== realRoomId);
+            return [...filtered, newDM]; 
+        });
+        
+        setActiveRoom(realRoomId); 
+        setActiveDM(newDM); 
+
+        // MIGRATE CACHE if needed
+        if (tempRoomId) {
+            setMessageCache(prev => {
+                const msgs = prev[tempRoomId] || [];
+                if (msgs.length > 0) {
+                    return { ...prev, [realRoomId]: msgs }; // Move messages to new key
+                }
+                return prev;
+            });
+        }
+        
+        if (!messageCache[realRoomId] && (!tempRoomId || !messageCache[tempRoomId])) {
+            setIsLoadingMessages(true);
+        }
+        
+        socket.emit('join_room', realRoomId);
     };
 
     const handleKicked = (data: { roomId: string, name: string }) => {
@@ -273,7 +374,6 @@ export const useChat = () => {
             });
             return next;
         });
-
         setActiveThread(prev => {
             if (!prev) return null;
             if (prev.id === updatedMsg.id) return { ...prev, ...updatedMsg, replies: prev.replies };
@@ -316,9 +416,7 @@ export const useChat = () => {
     socket.on('message_deleted', (id) => {
         setMessageCache(prev => {
             const next = { ...prev };
-            Object.keys(next).forEach(key => {
-                if (next[key]) next[key] = next[key].filter(m => m.id !== id);
-            });
+            Object.keys(next).forEach(key => { if (next[key]) next[key] = next[key].filter(m => m.id !== id); });
             return next;
         });
     });
@@ -338,7 +436,7 @@ export const useChat = () => {
     };
   }, [socket, user, activeRoom]); 
 
-  // --- ACTIONS (MEMOIZED) ---
+  // --- ACTIONS ---
   const joinRoom = useCallback((roomName: string) => {
       if (!socket) return;
       setChannels(prev => prev.map(c => c.name === roomName ? { ...c, unreadCount: 0 } : c));
@@ -354,17 +452,31 @@ export const useChat = () => {
 
   const loadMoreMessages = useCallback(() => {
       if (!socket || !activeRoomRef.current || isFetchingHistory || !hasMoreCache[activeRoomRef.current]) return;
-      
       const currentMsgs = messageCache[activeRoomRef.current] || [];
       if (currentMsgs.length === 0) return;
-
       setIsFetchingHistory(true);
       socket.emit('fetch_history', { roomId: activeRoomRef.current, cursor: currentMsgs[0].id });
   }, [socket, isFetchingHistory, messageCache, hasMoreCache]);
 
-  const startDM = useCallback((targetUserId: string) => { 
-      if (socket && user && targetUserId !== user.id) socket.emit('start_dm', targetUserId); 
-  }, [socket, user]);
+  const startDM = useCallback((targetUser: UserData | string) => { 
+      if (!socket || !user) return;
+      const targetUserId = typeof targetUser === 'string' ? targetUser : targetUser.id;
+      if (targetUserId === user.id) return;
+
+      if (typeof targetUser !== 'string') {
+          const ids = [user.id, targetUser.id].sort();
+          const roomId = `dm_${ids[0]}_${ids[1]}`;
+          setActiveRoom(roomId);
+          setActiveDMs(prev => {
+              if (prev.some(dm => dm.roomId === roomId)) return prev;
+              return [...prev, { roomId, userId: targetUser.id, name: targetUser.name, avatar: targetUser.avatar }];
+          });
+          setActiveDM({ roomId, userId: targetUser.id, name: targetUser.name, avatar: targetUser.avatar });
+          // Optimistically load (or empty if new)
+          if (!messageCache[roomId]) setIsLoadingMessages(true);
+      }
+      socket.emit('start_dm', targetUserId); 
+  }, [socket, user, messageCache]);
 
   const createChannel = useCallback((name: string) => { 
       if (!name.trim() || !socket) return; 
@@ -407,7 +519,6 @@ export const useChat = () => {
 
   const sendMessage = useCallback(async (content: string, file?: File) => {
     if (!socket || !user || !activeRoomRef.current) return;
-    
     setIsSending(true);
     if (sendingTimeoutRef.current) clearTimeout(sendingTimeoutRef.current);
     sendingTimeoutRef.current = setTimeout(() => setIsSending(false), 5000);
@@ -458,12 +569,18 @@ export const useChat = () => {
       setActiveThread(null); 
   }, [socket, activeThread]);
 
+  const markNotificationsRead = useCallback(() => {
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadMentionCount(0);
+  }, []);
+
   return {
     user, activeRoom, activeDM, channels, activeDMs, messages, 
     onlineUsers, allUsers, isLoadingChannels, isLoadingMessages, isSending, typingUsers,
     isFetchingHistory, hasMore, loadMoreMessages,
     joinRoom, switchToDM, startDM, createChannel, createGroup, deleteChannel,
     addMember, kickMember, sendMessage, sendTyping, deleteMessage, editMessage,
-    addReaction, removeReaction, activeThread, isThreadOpen, openThread, closeThread, sendThreadMessage
+    addReaction, removeReaction, activeThread, isThreadOpen, openThread, closeThread, sendThreadMessage,
+    notifications, unreadMentionCount, markNotificationsRead
   };
 };
