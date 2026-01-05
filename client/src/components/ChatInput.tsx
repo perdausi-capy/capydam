@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+// import { createPortal } from 'react-dom';
 import { 
   Smile, Send, 
   Bold, Italic, Underline, Strikethrough, Code, Link as LinkIcon, List, 
-  X, AtSign, File as FileIcon, Image as ImageIcon, Loader2, Plus, Sparkles, Mic, Video, CheckCircle,
+  X, AtSign, Image as ImageIcon, Loader2, Plus, Sparkles, Mic, Video, CheckCircle,
   Heading1, Heading2, Quote, Type, ChevronDown 
 } from 'lucide-react';
 import EmojiPicker, { Theme, type EmojiClickData } from 'emoji-picker-react';

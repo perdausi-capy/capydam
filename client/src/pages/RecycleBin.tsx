@@ -2,8 +2,8 @@ import React, { useState, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
-  Trash2, RotateCcw, AlertTriangle, ArrowLeft, Ban, Eraser, 
-  Check, Clock, Search, Loader2, ScanLine
+  Trash2, RotateCcw, ArrowLeft, Eraser, 
+  Check, Clock, Loader2, ScanLine
 } from 'lucide-react';
 import Masonry from 'react-masonry-css';
 import { toast } from 'react-toastify';

@@ -7,7 +7,7 @@ import {
   FolderPlus, Hash, ExternalLink, Check, 
   Layout, Link as LinkIcon, Plus, X,
   Edit2, Search, Loader2, Share2,
-  MessageSquare, MessageCircle // ✅ Added MessageCircle for the button
+  MessageCircle // ✅ Added MessageCircle for the button
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';

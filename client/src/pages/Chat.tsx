@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { 
-  Trash2, Edit2, X, Hash, Plus, Settings, Search, Users, 
+  Trash2, Edit2, X, Hash, Plus,  Search, Users, 
   MoreHorizontal, Loader2, MessageCircle, Lock, UserPlus, Info, UserMinus, AlertTriangle, 
-  FileText, Download, Smile, MessageSquare, ArrowLeft 
+  FileText, Download, Smile, MessageSquare 
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+// import { useAuth } from '../context/AuthContext';
 import { useChat, type Message } from '../hooks/useChat'; 
 import RichLinkPreview from '../components/RichLinkPreview';
 import ChatInput from '../components/ChatInput'; 
@@ -64,7 +64,7 @@ const Chat = () => {
   // ✅ NEW: State for Channel Deletion Modal
   const [channelToDeleteId, setChannelToDeleteId] = useState<string | null>(null); 
   
-  const [isKickingLoading, setIsKickingLoading] = useState(false);
+  const [_setIsKickingLoading, setIsKickingLoading] = useState(false);
   
   // Picker State
   const [reactingToMessageId, setReactingToMessageId] = useState<string | null>(null);
