@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { 
-  Trash2, Edit2, X, Hash, Plus, Settings, Search, Users, 
+  Trash2, Edit2, X, Hash, Plus, Search, Users, 
   MoreHorizontal, Loader2, MessageCircle, Lock, UserPlus, Info, UserMinus, AlertTriangle, 
   FileText, Download, Smile, MessageSquare, Bell 
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext'; 
+// import { useAuth } from '../context/AuthContext'; 
 // ✅ Ensure Notification type is imported
-import { useChat, type Message, type Channel, type ActiveDM, type UserData, type Notification } from '../hooks/useChat'; 
+import { useChat, type Channel, type ActiveDM, type UserData, type Notification } from '../hooks/useChat'; 
 import RichLinkPreview from '../components/RichLinkPreview';
 import ChatInput from '../components/ChatInput'; 
 import { renderMessageContent } from '../utils/messageRenderer';
@@ -221,7 +221,7 @@ const Chat = () => {
   const [memberToKick, setMemberToKick] = useState<{ id: string, name: string } | null>(null);
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
   const [channelToDeleteId, setChannelToDeleteId] = useState<string | null>(null); 
-  const [isKickingLoading, setIsKickingLoading] = useState(false);
+  const [_isKickingLoading, setIsKickingLoading] = useState(false);
   const [isDeletingLoading, setIsDeletingLoading] = useState(false);
   
   const [reactingToMessageId, setReactingToMessageId] = useState<string | null>(null);
