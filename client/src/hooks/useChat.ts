@@ -69,7 +69,7 @@ export const useChat = () => {
   const allUsersRef = useRef<UserData[]>([]); // ✅ FIXED: Added this missing ref
   const activeRoomRef = useRef(activeRoom);
   const channelsRef = useRef(channels);
-  const processedMessageIds = useRef<Set<string>>(new Set());
+//   const processedMessageIds = useRef<Set<string>>(new Set());
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
