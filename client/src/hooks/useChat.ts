@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -36,31 +36,37 @@ export const useChat = () => {
 
   // 1. STATE
   const [activeRoom, setActiveRoom] = useState<string>(() => localStorage.getItem('capychat_activeRoom') || '');
+  
   const [activeDM, setActiveDM] = useState<ActiveDM | null>(() => {
       const saved = localStorage.getItem('capychat_activeDM');
       return saved ? JSON.parse(saved) : null;
   });
+
   const [activeDMs, setActiveDMs] = useState<ActiveDM[]>(() => {
       const saved = localStorage.getItem('capychat_activeDM');
       return saved ? [JSON.parse(saved)] : [];
   });
 
   const [channels, setChannels] = useState<Channel[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
   
+  // CACHING STATE
+  const [messageCache, setMessageCache] = useState<Record<string, Message[]>>({});
+  const [hasMoreCache, setHasMoreCache] = useState<Record<string, boolean>>({});
+
   const [activeThread, setActiveThread] = useState<Thread | null>(null);
   const [isThreadOpen, setIsThreadOpen] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const [allUsers, setAllUsers] = useState<UserData[]>([]);
-  const [hasMore, setHasMore] = useState(true);
+  
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [isLoadingChannels, setIsLoadingChannels] = useState(true);
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false); 
   const [isSending, setIsSending] = useState(false);
 
+  // Refs
   const onlineUsersRef = useRef<OnlineUser[]>([]);
-  const allUsersRef = useRef<UserData[]>([]);
+  const allUsersRef = useRef<UserData[]>([]); // ✅ FIXED: Added this missing ref
   const activeRoomRef = useRef(activeRoom);
   const channelsRef = useRef(channels);
   const processedMessageIds = useRef<Set<string>>(new Set());
@@ -72,25 +78,16 @@ export const useChat = () => {
   useEffect(() => { activeRoomRef.current = activeRoom; }, [activeRoom]);
   useEffect(() => { channelsRef.current = channels; }, [channels]);
 
+  // Derived State
+  const messages = useMemo(() => messageCache[activeRoom] || [], [messageCache, activeRoom]);
+  const hasMore = useMemo(() => hasMoreCache[activeRoom] ?? true, [hasMoreCache, activeRoom]);
+
   // Persistence
   useEffect(() => {
       localStorage.setItem('capychat_activeRoom', activeRoom);
       if (activeDM) localStorage.setItem('capychat_activeDM', JSON.stringify(activeDM));
       else localStorage.removeItem('capychat_activeDM');
   }, [activeRoom, activeDM]);
-
-  // Join Logic
-  useEffect(() => {
-      if (socket && activeRoom && !isLoadingChannels) {
-          setMessages([]);
-          processedMessageIds.current.clear();
-          setIsLoadingMessages(true);
-          setIsThreadOpen(false);
-          setActiveThread(null);
-          console.log(`🔌 Joining Room: ${activeRoom}`);
-          socket.emit('join_room', activeRoom);
-      }
-  }, [socket, activeRoom, isLoadingChannels]); 
 
   // Self Healing
   useEffect(() => {
@@ -102,11 +99,28 @@ export const useChat = () => {
               console.warn(`Redirecting from invalid room "${activeRoom}"`);
               const firstChannel = channels.find(c => c.type === 'channel');
               if (firstChannel) setActiveRoom(firstChannel.name);
-              else if (channels.length > 0) setActiveRoom(channels[0].name);
               else setActiveRoom('');
           }
       }
   }, [channels, activeDMs, activeDM, isLoadingChannels, activeRoom]);
+
+  // Room Switching Logic
+  useEffect(() => {
+      if (socket && activeRoom && !isLoadingChannels) {
+          console.log(`🔌 Switching to: ${activeRoom}`);
+          setIsThreadOpen(false);
+          setActiveThread(null);
+
+          // Only show loader if we don't have cached messages
+          if (!messageCache[activeRoom] || messageCache[activeRoom].length === 0) {
+              setIsLoadingMessages(true);
+          } else {
+              setIsLoadingMessages(false);
+          }
+
+          socket.emit('join_room', activeRoom);
+      }
+  }, [socket, activeRoom, isLoadingChannels]); // removed messageCache dep
 
   useEffect(() => {
     if (!socket || !user) return;
@@ -142,38 +156,88 @@ export const useChat = () => {
                 }
                 return c;
             }));
-            return; 
         }
 
-        if (processedMessageIds.current.has(message.id)) return;
-        processedMessageIds.current.add(message.id);
-        setMessages((prev) => [...prev, message]);
-        
         if (message.userId === user.id) {
             setIsSending(false);
             if (sendingTimeoutRef.current) clearTimeout(sendingTimeoutRef.current);
         }
 
         setTypingUsers((prev) => { const s = new Set(prev); s.delete(message.user.name); return s; });
+
+        // Update Cache
+        const channelName = channelsRef.current.find(c => c.id === message.roomId)?.name;
+        const keysToUpdate = [message.roomId];
+        if (channelName) keysToUpdate.push(channelName);
+
+        setMessageCache(prev => {
+            const next = { ...prev };
+            keysToUpdate.forEach(key => {
+                const currentList = next[key] || [];
+                if (!currentList.some(m => m.id === message.id)) {
+                    next[key] = [...currentList, message];
+                }
+            });
+            return next;
+        });
     };
 
     const handleLoadHistory = (history: Message[]) => {
         if (history.length === 0) { setIsLoadingMessages(false); return; }
-        if (!isMessageForCurrentRoom(history[0].roomId)) return;
-        processedMessageIds.current.clear();
-        history.forEach(m => processedMessageIds.current.add(m.id));
-        setMessages(history);
-        setIsLoadingMessages(false);
-        setHasMore(history.length === 50);
+        
+        const msgRoomId = history[0].roomId;
+        const channelName = channelsRef.current.find(c => c.id === msgRoomId)?.name;
+        const activeKey = activeRoomRef.current;
+        
+        if (activeKey === msgRoomId || activeKey === channelName) setIsLoadingMessages(false);
+
+        setMessageCache(prev => {
+            const next = { ...prev };
+            const keys = [msgRoomId];
+            if (channelName) keys.push(channelName);
+
+            keys.forEach(key => {
+                next[key] = history;
+            });
+            return next;
+        });
+
+        setHasMoreCache(prev => {
+            const next = { ...prev };
+            const hasMore = history.length === 50;
+            if (channelName) next[channelName] = hasMore;
+            next[msgRoomId] = hasMore;
+            return next;
+        });
     };
 
     const handleHistoryChunk = (olderMessages: Message[]) => {
-        if (olderMessages.length === 0) { setHasMore(false); setIsFetchingHistory(false); return; }
-        if (!isMessageForCurrentRoom(olderMessages[0].roomId)) return;
-        olderMessages.forEach(m => processedMessageIds.current.add(m.id));
-        setMessages(prev => [...olderMessages, ...prev]);
         setIsFetchingHistory(false);
-        if (olderMessages.length < 50) setHasMore(false);
+        if (olderMessages.length === 0) return;
+
+        const msgRoomId = olderMessages[0].roomId;
+        const channelName = channelsRef.current.find(c => c.id === msgRoomId)?.name;
+
+        setMessageCache(prev => {
+            const next = { ...prev };
+            const keys = [msgRoomId];
+            if (channelName) keys.push(channelName);
+
+            keys.forEach(key => {
+                const current = next[key] || [];
+                const uniqueNew = olderMessages.filter(nm => !current.some(cm => cm.id === nm.id));
+                next[key] = [...uniqueNew, ...current];
+            });
+            return next;
+        });
+
+        setHasMoreCache(prev => {
+            const next = { ...prev };
+            const hasMore = olderMessages.length === 50;
+            if (channelName) next[channelName] = hasMore;
+            next[msgRoomId] = hasMore;
+            return next;
+        });
     };
 
     const handleUpdateOnlineUsers = (users: OnlineUser[]) => setOnlineUsers(Array.from(new Map(users.map(u => [u.userId, u])).values()));
@@ -188,19 +252,28 @@ export const useChat = () => {
         if (!target) return;
         const newDM: ActiveDM = { roomId: data.roomId, userId: target.userId || (target as any).id, name: target.name, avatar: target.avatar };
         setActiveDMs(prev => { if (prev.some(dm => dm.roomId === newDM.roomId)) return prev; return [...prev, newDM]; });
-        setActiveRoom(newDM.roomId); setActiveDM(newDM); setIsLoadingMessages(true); setMessages([]); processedMessageIds.current.clear();
-        setHasMore(true);
+        setActiveRoom(newDM.roomId); setActiveDM(newDM); 
+        
+        if (!messageCache[newDM.roomId]) setIsLoadingMessages(true);
         socket.emit('join_room', data.roomId);
     };
 
     const handleKicked = (data: { roomId: string, name: string }) => {
         toast.error(`You have been removed from ${data.name}`, { position: 'top-right' });
         setActiveRoom(prev => (prev === data.name || prev === data.roomId) ? '' : prev);
-        if (activeRoom === data.name) setMessages([]);
     };
 
     const handleMessageUpdated = (updatedMsg: Message) => {
-        setMessages(prev => prev.map(m => m.id === updatedMsg.id ? updatedMsg : m));
+        setMessageCache(prev => {
+            const next = { ...prev };
+            Object.keys(next).forEach(key => {
+                if (next[key]) {
+                    next[key] = next[key].map(m => m.id === updatedMsg.id ? updatedMsg : m);
+                }
+            });
+            return next;
+        });
+
         setActiveThread(prev => {
             if (!prev) return null;
             if (prev.id === updatedMsg.id) return { ...prev, ...updatedMsg, replies: prev.replies };
@@ -220,7 +293,15 @@ export const useChat = () => {
     };
 
     const handleThreadUpdated = (data: { parentId: string, count: number }) => {
-        setMessages(prev => prev.map(m => m.id === data.parentId ? { ...m, _count: { replies: data.count } } : m));
+        setMessageCache(prev => {
+            const next = { ...prev };
+            Object.keys(next).forEach(key => {
+                if (next[key]) {
+                    next[key] = next[key].map(m => m.id === data.parentId ? { ...m, _count: { replies: data.count } } : m);
+                }
+            });
+            return next;
+        });
     };
 
     socket.on('update_channel_list', handleUpdateChannelList);
@@ -232,7 +313,15 @@ export const useChat = () => {
     socket.on('dm_started', handleDMStarted);
     socket.on('kicked_from_room', handleKicked);
     socket.on('user_typing', (data) => setTypingUsers(p => new Set(p).add(data.name)));
-    socket.on('message_deleted', (id) => setMessages(p => p.filter(m => m.id !== id)));
+    socket.on('message_deleted', (id) => {
+        setMessageCache(prev => {
+            const next = { ...prev };
+            Object.keys(next).forEach(key => {
+                if (next[key]) next[key] = next[key].filter(m => m.id !== id);
+            });
+            return next;
+        });
+    });
     socket.on('message_updated', handleMessageUpdated);
     socket.on('load_thread_messages', handleLoadThreadMessages);
     socket.on('receive_thread_message', handleReceiveThreadMessage);
@@ -249,7 +338,7 @@ export const useChat = () => {
     };
   }, [socket, user, activeRoom]); 
 
-  // --- ACTIONS (ALL MEMOIZED NOW) ---
+  // --- ACTIONS (MEMOIZED) ---
   const joinRoom = useCallback((roomName: string) => {
       if (!socket) return;
       setChannels(prev => prev.map(c => c.name === roomName ? { ...c, unreadCount: 0 } : c));
@@ -264,10 +353,14 @@ export const useChat = () => {
   }, [socket]);
 
   const loadMoreMessages = useCallback(() => {
-      if (!socket || !activeRoomRef.current || isFetchingHistory || !hasMore || messages.length === 0) return;
+      if (!socket || !activeRoomRef.current || isFetchingHistory || !hasMoreCache[activeRoomRef.current]) return;
+      
+      const currentMsgs = messageCache[activeRoomRef.current] || [];
+      if (currentMsgs.length === 0) return;
+
       setIsFetchingHistory(true);
-      socket.emit('fetch_history', { roomId: activeRoomRef.current, cursor: messages[0].id });
-  }, [socket, isFetchingHistory, hasMore, messages]);
+      socket.emit('fetch_history', { roomId: activeRoomRef.current, cursor: currentMsgs[0].id });
+  }, [socket, isFetchingHistory, messageCache, hasMoreCache]);
 
   const startDM = useCallback((targetUserId: string) => { 
       if (socket && user && targetUserId !== user.id) socket.emit('start_dm', targetUserId); 
@@ -286,7 +379,6 @@ export const useChat = () => {
   const deleteChannel = useCallback((channelId: string) => {
       if (!socket) return;
       socket.emit('delete_channel', channelId);
-      // Optimistic handling done in component via listener
   }, [socket]);
 
   const addMember = useCallback((roomId: string, userId: string) => {
