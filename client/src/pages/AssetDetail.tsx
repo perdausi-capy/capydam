@@ -6,7 +6,8 @@ import {
   Calendar, HardDrive, FileText, 
   FolderPlus, Hash, ExternalLink, Check, 
   Layout, Link as LinkIcon, Plus, X,
-  Edit2, Search, Loader2, Share2
+  Edit2, Search, Loader2, Share2,
+  MessageSquare, MessageCircle // ✅ Added MessageCircle for the button
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -14,6 +15,10 @@ import ConfirmModal from '../components/ConfirmModal';
 import Masonry from 'react-masonry-css';
 import AssetThumbnail from '../components/AssetThumbnail';
 import { useQueryClient } from '@tanstack/react-query';
+
+// ✅ IMPORT SOCKET CONTEXT & CHAT PANEL
+import { useSocket } from '../context/SocketContext';
+import AssetChatPanel from '../components/AssetChatPanel';
 
 // --- TYPES ---
 interface Asset {
@@ -28,7 +33,7 @@ interface Asset {
   userId: string;
   uploadedBy: { name: string };
   aiData: string;
-  deletedAt?: string | null; // ✅ Added this field
+  deletedAt?: string | null;
 }
 
 interface CollectionSimple { id: string; name: string; }
@@ -88,6 +93,7 @@ const AssetDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { socket } = useSocket(); // ✅ Get Socket Instance
 
   const [asset, setAsset] = useState<Asset | null>(null);
   const [relatedAssets, setRelatedAssets] = useState<Asset[]>([]);
@@ -118,7 +124,7 @@ const AssetDetail = () => {
   const [parsedAi, setParsedAi] = useState<any>({});
   const queryClient = useQueryClient();
 
-  // ✅ 1. PERMISSION LOGIC
+  // PERMISSION LOGIC
   const isOwner = user?.id === asset?.userId;
   const isAdmin = user?.role === 'admin';
   const isEditor = user?.role === 'editor';
@@ -188,15 +194,30 @@ const AssetDetail = () => {
     toast.success("Link copied to clipboard!");
   };
 
+  // ✅ NEW: Share to Global Chat Feature
+  const handleDiscussInChat = () => {
+    if (!socket || !asset || !user) return;
+    
+    // Create a message linking to this asset
+    const assetLink = `${window.location.origin}/assets/${asset.id}`;
+    const messageContent = `Check out this asset: ${assetLink}`;
+    
+    const messageData = {
+        content: messageContent,
+        userId: user.id,
+        roomId: 'global', // Explicitly target Global Room
+    };
+
+    socket.emit('send_message', messageData);
+    toast.success("Shared to Community Chat!");
+  };
+
   const handleDelete = async () => {
     if (!asset) return;
     setIsDeleting(true);
     try {
-      // ✅ This now triggers a Soft Delete (Move to Trash) on the backend
       await client.delete(`/assets/${asset.id}`);
       await queryClient.resetQueries({ queryKey: ['assets'] });
-      
-      // ✅ Updated Toast Message
       toast.success("Moved to Recycle Bin");
       navigate(-1);
     } catch (error) {
@@ -303,6 +324,15 @@ const AssetDetail = () => {
               </button>
               
               <div className="flex items-center gap-3">
+                  
+                  {/* ✅ NEW: DISCUSS BUTTON */}
+                  <button 
+                    onClick={handleDiscussInChat}
+                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-blue-700 transition-colors"
+                  >
+                      <MessageCircle size={16} /> Discuss
+                  </button>
+
                   <button onClick={handleDownload} className="flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-black px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:scale-105 transition-transform">
                       <Download size={16} /> Download
                   </button>
@@ -328,10 +358,11 @@ const AssetDetail = () => {
       {loading || !asset ? (
           <DetailSkeleton />
       ) : (
-          <div className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
               
-              {/* LEFT: PREVIEW */}
+              {/* LEFT: PREVIEW & RELATED (Scrollable) */}
               <div className="lg:col-span-2 space-y-12">
+                  {/* MEDIA PREVIEW */}
                   <div className="rounded-3xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] border border-gray-200 dark:border-white/5 shadow-sm">
                       {asset.mimeType.startsWith('image/') ? (
                           <img src={asset.path} alt={asset.originalName} className="w-full h-auto object-contain max-h-[80vh]" />
@@ -368,8 +399,8 @@ const AssetDetail = () => {
                   )}
               </div>
 
-              {/* RIGHT: INFO PANEL */}
-              <div className="space-y-6 min-w-0">
+              {/* RIGHT: INFO PANEL & CHAT (Sticky) */}
+              <div className="space-y-6 min-w-0 lg:sticky lg:top-24">
                   
                   {/* 1. TITLE & RENAME */}
                   <div className="group min-w-0">
@@ -529,6 +560,13 @@ const AssetDetail = () => {
                       </div>
                   </div>
 
+                  {/* ✅ 6. CHAT PANEL */}
+                  <div className="mt-8 pt-6 border-t border-gray-200 dark:border-white/10">
+                      <div className="h-[500px] rounded-2xl overflow-hidden border border-gray-200 dark:border-white/10 shadow-sm bg-white dark:bg-[#1A1D21]">
+                           <AssetChatPanel assetId={asset.id} />
+                      </div>
+                  </div>
+
               </div>
           </div>
       )}
@@ -604,7 +642,7 @@ const AssetDetail = () => {
           </div>
       )}
 
-      {/* ✅ UPDATED DELETE MODAL for Soft Delete */}
+      {/* CONFIRM DELETE MODAL */}
       <ConfirmModal 
         isOpen={showDeleteConfirm} 
         onClose={() => setShowDeleteConfirm(false)} 

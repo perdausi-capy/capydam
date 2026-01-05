@@ -27,6 +27,13 @@ model User {
   
   // ✅ RELATION TO FEEDBACK
   feedbacks   Feedback[]
+  messages  Message[]
+  rooms    ChatRoom[] @relation("RoomMembers")
+
+  // ✅ UPDATED: Link to Membership instead of ChatRoom directly
+  memberships Membership[]
+
+  reactions     Reaction[]
 }
 
 // ✅ FEEDBACK MODEL
@@ -132,4 +139,76 @@ model AssetClick {
   position    Int      
   userId      String?
   createdAt   DateTime @default(now())
+}
+
+// ✅ CHAT MODELS
+model ChatRoom {
+  id        String    @id @default(uuid())
+  name      String
+  type      String    @default("global") // 'global', 'private', 'asset'
+  createdAt DateTime  @default(now())
+  messages  Message[]
+
+  // ✅ UPDATED: Link to Membership instead of User directly
+  memberships Membership[]
+
+  members   User[]    @relation("RoomMembers")
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  content   String
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  
+  roomId    String
+  room      ChatRoom @relation(fields: [roomId], references: [id])
+  
+  createdAt DateTime @default(now())
+  
+  // ✅ ATTACHMENT FIELDS
+  attachmentUrl  String?  // Path to file in storage
+  attachmentType String?  // 'image/png', 'application/pdf', etc.
+  attachmentName String?  // 'project_specs.pdf' (For UI display) 
+
+  // ✅ NEW: Thread Support
+  parentId      String?
+  parent        Message?  @relation("Thread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies       Message[] @relation("Thread")
+
+  reactions     Reaction[]  
+}
+
+// ✅ NEW MODEL: The link between Users and Rooms
+model Membership {
+  id        String   @id @default(cuid())
+  
+  role      String   @default("MEMBER") // 'ADMIN', 'MEMBER'
+  lastReadAt DateTime @default(now()) // <--- THE MAGIC FIELD FOR NOTIFICATIONS
+  joinedAt  DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  roomId    String
+  room      ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roomId]) // A user can only join a room once
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  emoji     String   // The emoji character itself (e.g., "👍")
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+
+  // Ensure a user can't react with the same emoji twice on the same message
+  @@unique([userId, messageId, emoji])
 }

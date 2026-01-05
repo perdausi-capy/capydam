@@ -21,7 +21,8 @@ import {
   HelpCircle,
   MessageSquare,
   TrendingUp,
-  Trash2
+  Trash2,
+  Hash // ✅ Added Hash icon for a distinct Community look
 } from 'lucide-react';
 import FloatingThemeToggle from './FloatingThemeToggle';
 
@@ -116,7 +117,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         <div className="flex h-16 items-center border-b border-gray-100 dark:border-white/5 shrink-0 transition-colors">
            <Link 
              to="/" 
-             // ✅ UPDATED: Removed logic, always center justify
              className="flex items-center w-full h-full justify-center transition-all duration-300"
            >
                {isCollapsed ? (
@@ -151,6 +151,17 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           )}
           
           <NavItem to="/collections" icon={<Folder size={20} />} label="Collections" isCollapsed={isCollapsed} active={isActive('/collections')} onClick={handleNavClick} />
+          
+          {/* ✅ NEW COMMUNITY/CHAT LINK (Visible to ALL) */}
+          <NavItem 
+            to="/chat" 
+            icon={<Hash size={20} />} 
+            label="Community" 
+            isCollapsed={isCollapsed} 
+            active={isActive('/chat')} 
+            onClick={handleNavClick} 
+          />
+
           <NavItem to="/support" icon={<HelpCircle size={20} />} label="Support" isCollapsed={isCollapsed} active={isActive('/support')} onClick={handleNavClick} />
 
           {/* Admin Section */}
@@ -190,7 +201,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 <NavItem 
                 to="/admin/recycle-bin" 
                 icon={<Trash2 size={20} />} 
-                label="Analytics" 
+                label="Bin" 
                 isCollapsed={isCollapsed} 
                 active={isActive('/admin/recycle-bin')} 
                 onClick={handleNavClick} 

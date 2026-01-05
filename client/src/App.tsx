@@ -25,6 +25,10 @@ import AdminFeedback from './pages/AdminFeedback';
 import AdminAnalytics from './pages/AdminAnalytics';
 import RecycleBin from './pages/RecycleBin';
 
+// ✅ NEW CHAT PAGE IMPORT
+import { SocketProvider } from './context/SocketContext'; 
+import Chat from './pages/Chat'; // 1. Full Page Chat (Replaces floating widget)
+
 // --- WRAPPERS ---
 
 // 1. Standard Protected Route (Any logged-in user)
@@ -48,50 +52,58 @@ function App() {
   return (
     <AuthProvider>
       <ThemeProvider>
-        <Router>
-          {/* ✅ 2. Wrap Routes in TerminalProvider so pages can access the command line */}
-          <TerminalProvider>
-            
-            <Routes>
-              {/* --- Public Routes --- */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/request-account" element={<RequestAccount />} />
+        {/* ✅ SOCKET PROVIDER (Needs Auth first) */}
+        <SocketProvider>
+          <Router>
+            {/* ✅ TERMINAL PROVIDER (Can be anywhere inside Router) */}
+            <TerminalProvider>
               
-              {/* --- Protected Routes (All Users) --- */}
-              
-              {/* 1. Exploration (Home) */}
-              <Route path="/" element={<ProtectedRoute><Categories /></ProtectedRoute>} />
-              <Route path="/categories/:id" element={<ProtectedRoute><CategoryDetail /></ProtectedRoute>} />
+              <Routes>
+                {/* --- Public Routes --- */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/request-account" element={<RequestAccount />} />
+                
+                {/* --- Protected Routes (All Users) --- */}
+                
+                {/* 1. Exploration (Home) */}
+                <Route path="/" element={<ProtectedRoute><Categories /></ProtectedRoute>} />
+                <Route path="/categories/:id" element={<ProtectedRoute><CategoryDetail /></ProtectedRoute>} />
 
-              {/* 2. Asset Library */}
-              <Route path="/library" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-              <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
-              <Route path="/assets/:id" element={<ProtectedRoute><AssetDetail /></ProtectedRoute>} />
-              
-              {/* 3. Support & Collections */}
-              <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
-              <Route path="/collections" element={<ProtectedRoute><Collections /></ProtectedRoute>} />
-              <Route path="/collections/:id" element={<ProtectedRoute><CollectionDetail /></ProtectedRoute>} />
-              
-              {/* 4. Profile */}
-              <Route path="/profile/:id?" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                {/* 2. Asset Library */}
+                <Route path="/library" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
+                <Route path="/assets/:id" element={<ProtectedRoute><AssetDetail /></ProtectedRoute>} />
+                
+                {/* 3. Support & Collections */}
+                <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
+                <Route path="/collections" element={<ProtectedRoute><Collections /></ProtectedRoute>} />
+                <Route path="/collections/:id" element={<ProtectedRoute><CollectionDetail /></ProtectedRoute>} />
+                
+                {/* 4. Profile */}
+                <Route path="/profile/:id?" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
-              {/* --- Admin Routes (Restricted) --- */}
-              <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
-              <Route path="/admin/feedback" element={<AdminRoute><AdminFeedback /></AdminRoute>} />
-              <Route path="/admin/analytics" element={<AdminRoute><AdminAnalytics /></AdminRoute>} />
-              <Route path="/admin/recycle-bin" element={<AdminRoute><RecycleBin /></AdminRoute>} />
-              
-              
-              {/* Fallback */}
-              <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
+                {/* 5. ✅ NEW CHAT ROUTE (Discord-style Page) */}
+                <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
 
-            {/* ✅ 3. Place GlobalTerminal OUTSIDE of Routes so it persists across pages */}
-            <GlobalTerminal />
+                {/* --- Admin Routes (Restricted) --- */}
+                <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
+                <Route path="/admin/feedback" element={<AdminRoute><AdminFeedback /></AdminRoute>} />
+                <Route path="/admin/analytics" element={<AdminRoute><AdminAnalytics /></AdminRoute>} />
+                <Route path="/admin/recycle-bin" element={<AdminRoute><RecycleBin /></AdminRoute>} />
+                
+                
+                {/* Fallback */}
+                <Route path="*" element={<Navigate to="/" />} />
+              </Routes>
 
-          </TerminalProvider>
-        </Router>
+              {/* ✅ GLOBAL COMPONENTS (Persist across pages) */}
+              <GlobalTerminal />
+              
+              {/* 🗑️ REMOVED: <GlobalChat /> (Floating widget no longer needed) */}
+
+            </TerminalProvider>
+          </Router>
+        </SocketProvider>
       </ThemeProvider>
     </AuthProvider>
   );
