@@ -4,8 +4,8 @@ import {
   MoreHorizontal, Loader2, MessageCircle, Lock, UserPlus, Info, UserMinus, AlertTriangle, 
   FileText, Download, Smile, MessageSquare 
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { useChat, type Message, type Channel, type ActiveDM, type UserData } from '../hooks/useChat'; 
+// import { useAuth } from '../context/AuthContext';
+import { useChat, type Channel, type ActiveDM, type UserData } from '../hooks/useChat'; 
 import RichLinkPreview from '../components/RichLinkPreview';
 import ChatInput from '../components/ChatInput'; 
 import { renderMessageContent } from '../utils/messageRenderer';
@@ -212,7 +212,7 @@ const Chat = () => {
   const [memberToKick, setMemberToKick] = useState<{ id: string, name: string } | null>(null);
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
   const [channelToDeleteId, setChannelToDeleteId] = useState<string | null>(null); 
-  const [isKickingLoading, setIsKickingLoading] = useState(false);
+  const [_isKickingLoading, setIsKickingLoading] = useState(false);
   // ✅ NEW: Loader State for Deleting
   const [isDeletingLoading, setIsDeletingLoading] = useState(false);
   
