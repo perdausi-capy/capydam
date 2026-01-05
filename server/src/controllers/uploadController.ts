@@ -9,14 +9,16 @@ export const uploadFile = (req: Request, res: Response) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    // Construct the URL
-    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    // ✅ FIX: Return a relative path. 
+    // The frontend will treat this as relative to the current domain (https://dam.capy-dev.com)
+    // Nginx will catch the /uploads/ request and serve the file securely.
+    const fileUrl = `/uploads/${req.file.filename}`;
     
     console.log("✅ [Upload Controller] Success!");
     console.log(`   - Filename: ${req.file.originalname}`);
     console.log(`   - Saved as: ${req.file.filename}`);
     console.log(`   - Size: ${(req.file.size / 1024).toFixed(2)} KB`);
-    console.log(`   - Returning URL: ${fileUrl}`);
+    console.log(`   - Returning Relative Path: ${fileUrl}`);
 
     res.status(200).json({
       url: fileUrl,

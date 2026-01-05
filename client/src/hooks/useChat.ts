@@ -325,13 +325,24 @@ export const useChat = () => {
   };
 
   const uploadFile = async (file: File) => {
-      const formData = new FormData(); formData.append('file', file);
-      try {
-          const res = await fetch('http://localhost:5000/api/upload', { method: 'POST', body: formData });
-          if (!res.ok) throw new Error('Upload failed');
-          return await res.json(); 
-      } catch (error) { toast.error("Failed to upload file"); return null; }
-  };
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        // ✅ FIX: Use relative path. This automatically uses https://dam.capy-dev.com in prod
+        const res = await fetch('/api/upload', { 
+            method: 'POST', 
+            body: formData 
+        });
+        
+        if (!res.ok) throw new Error('Upload failed');
+        return await res.json(); 
+    } catch (error) {
+        console.error("Upload error:", error);
+        toast.error("Failed to upload file");
+        return null;
+    }
+};
 
   const sendMessage = async (content: string, file?: File) => {
     if (!socket || !user || !activeRoom) return;
