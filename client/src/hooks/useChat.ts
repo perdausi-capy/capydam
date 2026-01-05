@@ -69,6 +69,7 @@ export const useChat = () => {
   const channelsRef = useRef(channels);
   const processedMessageIds = useRef<Set<string>>(new Set());
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sendingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // ✅ NEW: Safety for loader
 
   useEffect(() => { onlineUsersRef.current = onlineUsers; }, [onlineUsers]);
   useEffect(() => { allUsersRef.current = allUsers; }, [allUsers]);
@@ -100,7 +101,6 @@ export const useChat = () => {
 
   // 4. ROOM JOINING (Dependent on validation)
   useEffect(() => {
-      // ✅ FIX: Don't join until channels are loaded so we know the room is valid
       if (socket && activeRoom && !isLoadingChannels) {
           setMessages([]);
           processedMessageIds.current.clear();
@@ -142,24 +142,29 @@ export const useChat = () => {
     };
 
     const handleReceiveMessage = (message: Message) => {
-        // ✅ Check if the message belongs to the current room
+        // ✅ 1. Unread Counts (Global)
         if (!isMessageForCurrentRoom(message.roomId)) {
             setChannels(prev => prev.map(c => {
-                // Check match by ID or Name (to be safe)
                 if (c.id === message.roomId || c.name === message.roomId) {
-                    // ✅ FIX: Ensure we handle undefined/null cleanly
                     const currentCount = c.unreadCount || 0;
                     return { ...c, unreadCount: currentCount + 1 };
                 }
                 return c;
             }));
-            return; // Stop processing (don't add to current message list)
+            return; 
         }
 
+        // ✅ 2. Update Messages (Local)
         if (processedMessageIds.current.has(message.id)) return;
         processedMessageIds.current.add(message.id);
         setMessages((prev) => [...prev, message]);
-        setIsSending(false);
+        
+        // ✅ 3. Stop Loader (Only if it's OUR message)
+        if (message.userId === user.id) {
+            setIsSending(false);
+            if (sendingTimeoutRef.current) clearTimeout(sendingTimeoutRef.current);
+        }
+
         setTypingUsers((prev) => { const s = new Set(prev); s.delete(message.user.name); return s; });
     };
 
@@ -325,28 +330,33 @@ export const useChat = () => {
   };
 
   const uploadFile = async (file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    try {
-        // ✅ FIX: Use relative path. This automatically uses https://dam.capy-dev.com in prod
-        const res = await fetch('/api/upload', { 
-            method: 'POST', 
-            body: formData 
-        });
-        
-        if (!res.ok) throw new Error('Upload failed');
-        return await res.json(); 
-    } catch (error) {
-        console.error("Upload error:", error);
-        toast.error("Failed to upload file");
-        return null;
-    }
-};
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+          // ✅ FIX: Use relative path. This automatically uses https://dam.capy-dev.com in prod
+          const res = await fetch('/api/upload', { 
+              method: 'POST', 
+              body: formData 
+          });
+          
+          if (!res.ok) throw new Error('Upload failed');
+          return await res.json(); 
+      } catch (error) {
+          console.error("Upload error:", error);
+          toast.error("Failed to upload file");
+          return null;
+      }
+  };
 
   const sendMessage = async (content: string, file?: File) => {
     if (!socket || !user || !activeRoom) return;
-    setIsSending(true); socket.emit('stop_typing', activeRoom);
+    
+    setIsSending(true); // ✅ Start Loader
+    if (sendingTimeoutRef.current) clearTimeout(sendingTimeoutRef.current);
+    sendingTimeoutRef.current = setTimeout(() => setIsSending(false), 5000); // Safety timeout
+
+    socket.emit('stop_typing', activeRoom);
     let attachmentData = {};
     if (file) {
         const uploadResult = await uploadFile(file);
@@ -355,7 +365,7 @@ export const useChat = () => {
     }
     socket.emit('send_message', { content, userId: user.id, roomId: activeRoom, ...attachmentData });
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    setIsSending(false);
+    // ❌ REMOVED setIsSending(false) - waiting for receive_message
   };
 
   const sendThreadMessage = async (content: string, parentId: string, file?: File) => {
