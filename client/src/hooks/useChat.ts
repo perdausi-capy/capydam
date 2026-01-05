@@ -35,15 +35,11 @@ export const useChat = () => {
   const { user } = useAuth();
 
   // 1. STATE
-  const [activeRoom, setActiveRoom] = useState<string>(() => {
-      return localStorage.getItem('capychat_activeRoom') || '';
-  });
-  
+  const [activeRoom, setActiveRoom] = useState<string>(() => localStorage.getItem('capychat_activeRoom') || '');
   const [activeDM, setActiveDM] = useState<ActiveDM | null>(() => {
       const saved = localStorage.getItem('capychat_activeDM');
       return saved ? JSON.parse(saved) : null;
   });
-
   const [activeDMs, setActiveDMs] = useState<ActiveDM[]>(() => {
       const saved = localStorage.getItem('capychat_activeDM');
       return saved ? [JSON.parse(saved)] : [];
@@ -69,21 +65,34 @@ export const useChat = () => {
   const channelsRef = useRef(channels);
   const processedMessageIds = useRef<Set<string>>(new Set());
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const sendingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // ✅ NEW: Safety for loader
+  const sendingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { onlineUsersRef.current = onlineUsers; }, [onlineUsers]);
   useEffect(() => { allUsersRef.current = allUsers; }, [allUsers]);
   useEffect(() => { activeRoomRef.current = activeRoom; }, [activeRoom]);
   useEffect(() => { channelsRef.current = channels; }, [channels]);
 
-  // 2. PERSISTENCE
+  // Persistence
   useEffect(() => {
       localStorage.setItem('capychat_activeRoom', activeRoom);
       if (activeDM) localStorage.setItem('capychat_activeDM', JSON.stringify(activeDM));
       else localStorage.removeItem('capychat_activeDM');
   }, [activeRoom, activeDM]);
 
-  // 3. SELF-HEALING (Run BEFORE joining)
+  // Join Logic
+  useEffect(() => {
+      if (socket && activeRoom && !isLoadingChannels) {
+          setMessages([]);
+          processedMessageIds.current.clear();
+          setIsLoadingMessages(true);
+          setIsThreadOpen(false);
+          setActiveThread(null);
+          console.log(`🔌 Joining Room: ${activeRoom}`);
+          socket.emit('join_room', activeRoom);
+      }
+  }, [socket, activeRoom, isLoadingChannels]); 
+
+  // Self Healing
   useEffect(() => {
       if (!isLoadingChannels && channels.length > 0) {
           const isValidChannel = channels.some(c => c.name === activeRoom || c.id === activeRoom);
@@ -99,21 +108,6 @@ export const useChat = () => {
       }
   }, [channels, activeDMs, activeDM, isLoadingChannels, activeRoom]);
 
-  // 4. ROOM JOINING (Dependent on validation)
-  useEffect(() => {
-      if (socket && activeRoom && !isLoadingChannels) {
-          setMessages([]);
-          processedMessageIds.current.clear();
-          setIsLoadingMessages(true);
-          
-          setIsThreadOpen(false);
-          setActiveThread(null);
-
-          console.log(`🔌 Joining Room: ${activeRoom}`);
-          socket.emit('join_room', activeRoom);
-      }
-  }, [socket, activeRoom, isLoadingChannels]); 
-
   useEffect(() => {
     if (!socket || !user) return;
 
@@ -121,15 +115,13 @@ export const useChat = () => {
     socket.emit('fetch_all_users'); 
     
     const handleUpdateChannelList = (list: Channel[]) => {
-        setChannels(prevChannels => {
-            return list.map(newChannel => {
-                const localChannel = prevChannels.find(c => c.id === newChannel.id);
-                if (localChannel?.members && (!newChannel.members || newChannel.members.length === 0)) {
-                    return { ...newChannel, members: localChannel.members };
-                }
-                return newChannel;
-            });
-        });
+        setChannels(prevChannels => list.map(newChannel => {
+            const localChannel = prevChannels.find(c => c.id === newChannel.id);
+            if (localChannel?.members && (!newChannel.members || newChannel.members.length === 0)) {
+                return { ...newChannel, members: localChannel.members };
+            }
+            return newChannel;
+        }));
         setIsLoadingChannels(false);
     };
 
@@ -142,7 +134,6 @@ export const useChat = () => {
     };
 
     const handleReceiveMessage = (message: Message) => {
-        // ✅ 1. Unread Counts (Global)
         if (!isMessageForCurrentRoom(message.roomId)) {
             setChannels(prev => prev.map(c => {
                 if (c.id === message.roomId || c.name === message.roomId) {
@@ -154,12 +145,10 @@ export const useChat = () => {
             return; 
         }
 
-        // ✅ 2. Update Messages (Local)
         if (processedMessageIds.current.has(message.id)) return;
         processedMessageIds.current.add(message.id);
         setMessages((prev) => [...prev, message]);
         
-        // ✅ 3. Stop Loader (Only if it's OUR message)
         if (message.userId === user.id) {
             setIsSending(false);
             if (sendingTimeoutRef.current) clearTimeout(sendingTimeoutRef.current);
@@ -169,16 +158,8 @@ export const useChat = () => {
     };
 
     const handleLoadHistory = (history: Message[]) => {
-        if (history.length === 0) {
-            setIsLoadingMessages(false);
-            return;
-        }
-        const msgRoomId = history[0].roomId;
-        if (!isMessageForCurrentRoom(msgRoomId)) {
-            console.log("Discarding history packet for wrong room:", msgRoomId);
-            return;
-        }
-
+        if (history.length === 0) { setIsLoadingMessages(false); return; }
+        if (!isMessageForCurrentRoom(history[0].roomId)) return;
         processedMessageIds.current.clear();
         history.forEach(m => processedMessageIds.current.add(m.id));
         setMessages(history);
@@ -187,14 +168,8 @@ export const useChat = () => {
     };
 
     const handleHistoryChunk = (olderMessages: Message[]) => {
-        if (olderMessages.length === 0) {
-            setHasMore(false);
-            setIsFetchingHistory(false);
-            return;
-        }
-        const msgRoomId = olderMessages[0].roomId;
-        if (!isMessageForCurrentRoom(msgRoomId)) return;
-
+        if (olderMessages.length === 0) { setHasMore(false); setIsFetchingHistory(false); return; }
+        if (!isMessageForCurrentRoom(olderMessages[0].roomId)) return;
         olderMessages.forEach(m => processedMessageIds.current.add(m.id));
         setMessages(prev => [...olderMessages, ...prev]);
         setIsFetchingHistory(false);
@@ -274,72 +249,61 @@ export const useChat = () => {
     };
   }, [socket, user, activeRoom]); 
 
-  // --- ACTIONS ---
-  const joinRoom = (roomName: string) => {
+  // --- ACTIONS (ALL MEMOIZED NOW) ---
+  const joinRoom = useCallback((roomName: string) => {
       if (!socket) return;
       setChannels(prev => prev.map(c => c.name === roomName ? { ...c, unreadCount: 0 } : c));
       setActiveRoom(roomName); 
       setActiveDM(null);
-  };
+  }, [socket]);
 
-  const switchToDM = (dm: ActiveDM) => {
+  const switchToDM = useCallback((dm: ActiveDM) => {
       if (!socket) return;
       setActiveRoom(dm.roomId); 
       setActiveDM(dm);
-  };
+  }, [socket]);
 
   const loadMoreMessages = useCallback(() => {
-      if (!socket || !activeRoom || isFetchingHistory || !hasMore || messages.length === 0) return;
+      if (!socket || !activeRoomRef.current || isFetchingHistory || !hasMore || messages.length === 0) return;
       setIsFetchingHistory(true);
-      socket.emit('fetch_history', { roomId: activeRoom, cursor: messages[0].id });
-  }, [socket, activeRoom, isFetchingHistory, hasMore, messages]);
+      socket.emit('fetch_history', { roomId: activeRoomRef.current, cursor: messages[0].id });
+  }, [socket, isFetchingHistory, hasMore, messages]);
 
-  const startDM = (targetUserId: string) => { if (socket && user && targetUserId !== user.id) socket.emit('start_dm', targetUserId); };
-  const createChannel = (name: string) => { if (!name.trim() || !socket) return; socket.emit('create_channel', name.toLowerCase().replace(/\s+/g, '-')); };
-  const createGroup = (name: string) => { if (!name.trim() || !socket) return; socket.emit('create_group', { name }); };
+  const startDM = useCallback((targetUserId: string) => { 
+      if (socket && user && targetUserId !== user.id) socket.emit('start_dm', targetUserId); 
+  }, [socket, user]);
+
+  const createChannel = useCallback((name: string) => { 
+      if (!name.trim() || !socket) return; 
+      socket.emit('create_channel', name.toLowerCase().replace(/\s+/g, '-')); 
+  }, [socket]);
+
+  const createGroup = useCallback((name: string) => { 
+      if (!name.trim() || !socket) return; 
+      socket.emit('create_group', { name }); 
+  }, [socket]);
   
-  const deleteChannel = (channelId: string) => {
+  const deleteChannel = useCallback((channelId: string) => {
       if (!socket) return;
       socket.emit('delete_channel', channelId);
-      const ch = channels.find(c => c.id === channelId);
-      if (activeRoom === ch?.name) { setActiveRoom(''); setMessages([]); }
-  };
+      // Optimistic handling done in component via listener
+  }, [socket]);
 
-  const addMember = (roomId: string, userId: string) => {
+  const addMember = useCallback((roomId: string, userId: string) => {
       if (!socket) return;
       socket.emit('add_member_to_group', { roomId, userId });
-      const userToAdd = allUsers.find(u => u.id === userId);
-      if (userToAdd) {
-          setChannels(prev => prev.map(ch => {
-              if (ch.id === roomId) {
-                  const currentMembers = ch.members || [];
-                  if (!currentMembers.some(m => m.id === userId)) return { ...ch, members: [...currentMembers, userToAdd] };
-              }
-              return ch;
-          }));
-      }
-  };
+  }, [socket]);
 
-  const kickMember = (roomId: string, userId: string) => {
+  const kickMember = useCallback((roomId: string, userId: string) => {
       if (!socket) return;
       socket.emit('kick_member', { roomId, userId });
-      setChannels(prev => prev.map(ch => {
-          if (ch.id === roomId) return { ...ch, members: ch.members?.filter(m => m.id !== userId) };
-          return ch;
-      }));
-  };
+  }, [socket]);
 
   const uploadFile = async (file: File) => {
       const formData = new FormData();
       formData.append('file', file);
-      
       try {
-          // ✅ FIX: Use relative path. This automatically uses https://dam.capy-dev.com in prod
-          const res = await fetch('/api/upload', { 
-              method: 'POST', 
-              body: formData 
-          });
-          
+          const res = await fetch('/api/upload', { method: 'POST', body: formData });
           if (!res.ok) throw new Error('Upload failed');
           return await res.json(); 
       } catch (error) {
@@ -349,49 +313,58 @@ export const useChat = () => {
       }
   };
 
-  const sendMessage = async (content: string, file?: File) => {
-    if (!socket || !user || !activeRoom) return;
+  const sendMessage = useCallback(async (content: string, file?: File) => {
+    if (!socket || !user || !activeRoomRef.current) return;
     
-    setIsSending(true); // ✅ Start Loader
+    setIsSending(true);
     if (sendingTimeoutRef.current) clearTimeout(sendingTimeoutRef.current);
-    sendingTimeoutRef.current = setTimeout(() => setIsSending(false), 5000); // Safety timeout
+    sendingTimeoutRef.current = setTimeout(() => setIsSending(false), 5000);
 
-    socket.emit('stop_typing', activeRoom);
+    socket.emit('stop_typing', activeRoomRef.current);
     let attachmentData = {};
     if (file) {
         const uploadResult = await uploadFile(file);
         if (uploadResult) attachmentData = { attachmentUrl: uploadResult.url, attachmentType: uploadResult.mimetype, attachmentName: uploadResult.filename };
         else { setIsSending(false); return; }
     }
-    socket.emit('send_message', { content, userId: user.id, roomId: activeRoom, ...attachmentData });
+    socket.emit('send_message', { content, userId: user.id, roomId: activeRoomRef.current, ...attachmentData });
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    // ❌ REMOVED setIsSending(false) - waiting for receive_message
-  };
+  }, [socket, user]);
 
-  const sendThreadMessage = async (content: string, parentId: string, file?: File) => {
-      if (!socket || !user || !activeRoom) return;
+  const sendThreadMessage = useCallback(async (content: string, parentId: string, file?: File) => {
+      if (!socket || !user || !activeRoomRef.current) return;
       let attachmentData = {};
       if (file) {
           const uploadResult = await uploadFile(file);
           if (uploadResult) attachmentData = { attachmentUrl: uploadResult.url, attachmentType: uploadResult.mimetype, attachmentName: uploadResult.filename };
           else return; 
       }
-      socket.emit('send_thread_message', { content, userId: user.id, roomId: activeRoom, parentId, ...attachmentData });
-  };
+      socket.emit('send_thread_message', { content, userId: user.id, roomId: activeRoomRef.current, parentId, ...attachmentData });
+  }, [socket, user]);
 
-  const sendTyping = () => {
-      if(!socket || !user || !activeRoom) return;
-      socket.emit('typing', { roomId: activeRoom, name: user.name });
+  const sendTyping = useCallback(() => {
+      if(!socket || !user || !activeRoomRef.current) return;
+      socket.emit('typing', { roomId: activeRoomRef.current, name: user.name });
       if(typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = setTimeout(() => socket.emit('stop_typing', activeRoom), 2000);
-  };
+      typingTimeoutRef.current = setTimeout(() => socket.emit('stop_typing', activeRoomRef.current), 2000);
+  }, [socket, user]);
 
-  const deleteMessage = (id: string) => socket?.emit('delete_message', id);
-  const editMessage = (id: string, newContent: string) => socket?.emit('edit_message', { messageId: id, newContent });
-  const addReaction = (messageId: string, emoji: string) => { if (socket && activeRoom) socket.emit('add_reaction', { messageId, emoji, roomId: activeRoom }); };
-  const removeReaction = (messageId: string, emoji: string) => { if (socket && activeRoom) socket.emit('remove_reaction', { messageId, emoji, roomId: activeRoom }); };
-  const openThread = (message: Message) => { if (activeThread?.id === message.id) return; setIsThreadOpen(true); setActiveThread({ id: message.id, replies: [] }); socket?.emit('join_thread', message.id); };
-  const closeThread = () => { if (activeThread) socket?.emit('leave_thread', activeThread.id); setIsThreadOpen(false); setActiveThread(null); };
+  const deleteMessage = useCallback((id: string) => socket?.emit('delete_message', id), [socket]);
+  const editMessage = useCallback((id: string, newContent: string) => socket?.emit('edit_message', { messageId: id, newContent }), [socket]);
+  const addReaction = useCallback((messageId: string, emoji: string) => { if (socket && activeRoomRef.current) socket.emit('add_reaction', { messageId, emoji, roomId: activeRoomRef.current }); }, [socket]);
+  const removeReaction = useCallback((messageId: string, emoji: string) => { if (socket && activeRoomRef.current) socket.emit('remove_reaction', { messageId, emoji, roomId: activeRoomRef.current }); }, [socket]);
+  
+  const openThread = useCallback((message: Message) => { 
+      setIsThreadOpen(true); 
+      setActiveThread({ id: message.id, replies: [] }); 
+      socket?.emit('join_thread', message.id); 
+  }, [socket]);
+  
+  const closeThread = useCallback(() => { 
+      if (activeThread) socket?.emit('leave_thread', activeThread.id); 
+      setIsThreadOpen(false); 
+      setActiveThread(null); 
+  }, [socket, activeThread]);
 
   return {
     user, activeRoom, activeDM, channels, activeDMs, messages, 

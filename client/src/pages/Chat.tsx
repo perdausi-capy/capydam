@@ -308,7 +308,12 @@ const Chat = () => {
   
   const handleDeleteMessage = useCallback((id: string) => setMessageToDelete(id), []);
   const confirmDeleteMessage = () => { if (messageToDelete) { deleteMessage(messageToDelete); setMessageToDelete(null); }};
-  const handleSaveEdit = () => { if(editingMessageId) editMessage(editingMessageId, editText); setEditingMessageId(null); };
+//   const handleSaveEdit = () => { if(editingMessageId) editMessage(editingMessageId, editText); setEditingMessageId(null); };
+// ✅ This ensures handleSaveEdit doesn't change on every render
+    const handleSaveEdit = useCallback(() => { 
+        if(editingMessageId) editMessage(editingMessageId, editText); 
+        setEditingMessageId(null); 
+    }, [editingMessageId, editText, editMessage]);
 
   const handleOpenReaction = useCallback((e: React.MouseEvent, msgId: string) => {
       const rect = e.currentTarget.getBoundingClientRect();
