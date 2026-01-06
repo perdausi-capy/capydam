@@ -91,45 +91,41 @@ export const useChat = () => {
 
   // ✅ 5. File Upload Helper (Production Ready)
   // 5. File Upload Helper (Robust Production Fix)
+  // 5. File Upload Helper (Final URL Fix)
   const uploadFile = async (file: File): Promise<string | null> => {
     try {
         const formData = new FormData();
         formData.append('file', file);
         
-        // 1. Get Base URL
+        // 1. Get API URL (e.g., https://dam.capy-dev.com/api)
         let API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
         
-        // 2. Remove trailing slash if present (e.g. "com/" -> "com")
-        if (API_URL.endsWith('/')) {
-            API_URL = API_URL.slice(0, -1);
-        }
+        // Remove trailing slash if it exists
+        if (API_URL.endsWith('/')) API_URL = API_URL.slice(0, -1);
 
-        // 3. Prevent double "/api"
-        // If env var already has "/api", use "/upload", otherwise use "/api/upload"
-        const endpoint = API_URL.endsWith('/api') 
+        // 2. Determine Endpoint for Uploading
+        // If API_URL has "/api", we append "/upload". If not, "/api/upload".
+        const uploadEndpoint = API_URL.endsWith('/api') 
             ? `${API_URL}/upload` 
             : `${API_URL}/api/upload`;
 
-        console.log("📂 Uploading to:", endpoint); // Debug log
-
-        const res = await fetch(endpoint, { 
+        const res = await fetch(uploadEndpoint, { 
             method: 'POST', 
             body: formData 
         });
 
-        if (!res.ok) throw new Error(`Upload failed: ${res.statusText}`);
+        if (!res.ok) throw new Error("Upload failed");
         
         const data = await res.json();
         
-        // 4. Construct Public URL
-        // If data.url is relative ("/uploads/x.png"), prepend base
-        if (data.url.startsWith('/')) {
-            // Ensure we use the ROOT domain, not the /api path for static files
-            const rootBase = API_URL.replace(/\/api$/, ''); 
-            return `${rootBase}${data.url}`;
-        }
+        // 3. Construct Display URL (CRITICAL FIX)
+        // The server returns "/uploads/filename.jpg". 
+        // We need the ROOT domain (https://dam.capy-dev.com), NOT the API path.
         
-        return data.url; 
+        // Strip "/api" from the base URL if it exists
+        const rootDomain = API_URL.replace(/\/api$/, ''); 
+        
+        return `${rootDomain}${data.url}`; 
         
     } catch (e) {
         console.error("Upload error:", e);
