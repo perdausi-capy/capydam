@@ -90,33 +90,53 @@ export const useChat = () => {
   }, [socket]);
 
   // ✅ 5. File Upload Helper (Production Ready)
+  // 5. File Upload Helper (Robust Production Fix)
   const uploadFile = async (file: File): Promise<string | null> => {
-      try {
-          const formData = new FormData();
-          formData.append('file', file);
-          
-          // Use environment variable for production URL, fallback to localhost for dev
-          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        // 1. Get Base URL
+        let API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+        
+        // 2. Remove trailing slash if present (e.g. "com/" -> "com")
+        if (API_URL.endsWith('/')) {
+            API_URL = API_URL.slice(0, -1);
+        }
 
-          const res = await fetch(`${API_URL}/upload`, { 
-              method: 'POST', 
-              body: formData 
-          });
+        // 3. Prevent double "/api"
+        // If env var already has "/api", use "/upload", otherwise use "/api/upload"
+        const endpoint = API_URL.endsWith('/api') 
+            ? `${API_URL}/upload` 
+            : `${API_URL}/api/upload`;
 
-          if (!res.ok) throw new Error("Upload failed");
-          
-          const data = await res.json();
-          
-          // Your controller returns a relative path like "/uploads/img.png"
-          // We prepend the API URL so the browser can find it.
-          return `${API_URL}${data.url}`; 
-          
-      } catch (e) {
-          console.error("Upload error:", e);
-          toast.error("Failed to upload file");
-          return null;
-      }
-  };
+        console.log("📂 Uploading to:", endpoint); // Debug log
+
+        const res = await fetch(endpoint, { 
+            method: 'POST', 
+            body: formData 
+        });
+
+        if (!res.ok) throw new Error(`Upload failed: ${res.statusText}`);
+        
+        const data = await res.json();
+        
+        // 4. Construct Public URL
+        // If data.url is relative ("/uploads/x.png"), prepend base
+        if (data.url.startsWith('/')) {
+            // Ensure we use the ROOT domain, not the /api path for static files
+            const rootBase = API_URL.replace(/\/api$/, ''); 
+            return `${rootBase}${data.url}`;
+        }
+        
+        return data.url; 
+        
+    } catch (e) {
+        console.error("Upload error:", e);
+        toast.error("Failed to upload file");
+        return null;
+    }
+};
 
   // 6. Send Message
   const sendMessage = useCallback(async (content: string, file?: File) => {
