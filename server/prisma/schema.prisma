@@ -33,6 +33,8 @@ model User {
   // ✅ UPDATED: Link to Membership instead of ChatRoom directly
   memberships Membership[]
 
+  notifications Notification[]
+
   reactions     Reaction[]
 }
 
@@ -211,4 +213,17 @@ model Reaction {
 
   // Ensure a user can't react with the same emoji twice on the same message
   @@unique([userId, messageId, emoji])
+}
+
+// Add this new model
+model Notification {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text       String
+  roomId     String
+  roomName   String
+  senderName String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
 }
