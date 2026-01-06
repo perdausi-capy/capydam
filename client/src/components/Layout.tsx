@@ -22,7 +22,7 @@ import {
   MessageSquare,
   TrendingUp,
   Trash2,
-  Hash // ✅ Added Hash icon for a distinct Community look
+  Hash 
 } from 'lucide-react';
 import FloatingThemeToggle from './FloatingThemeToggle';
 
@@ -42,7 +42,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
 
-  // ✅ 1. FETCH ADMIN STATS
+  // 1. FETCH ADMIN STATS
   const isAdmin = user?.role === 'admin' || user?.role === 'editor';
   
   const { data: stats } = useQuery<AdminStats>({
@@ -71,13 +71,14 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     return false;
   };
 
-  // 💎 REUSABLE BRAND TITLE COMPONENT (Full Logo Image)
+  // 💎 BRAND TITLE COMPONENT (Icon + Text)
   const BrandTitle = () => (
-    <img
-      src="/title-brand.png" 
-      alt="Capydam"
-      className="h-12 w-auto select-none object-contain"
-    />
+    <div className="flex items-center gap-3 animate-fadeIn">
+      <img src={logo} alt="CapyTech" className="h-8 w-8 object-contain" />
+      <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white select-none whitespace-nowrap">
+        CapyDAM
+      </h1>
+    </div>
   );
 
   return (
@@ -91,10 +92,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       
       <FloatingThemeToggle />
       
-      {/* MOBILE HEADER (Always shows Brand Title) */} 
-      <div className="fixed top-0 left-0 right-0 z-20 flex h-16 items-center justify-between border-b bg-white dark:bg-[#1A1D21] dark:border-white/10 px-4 shadow-sm lg:hidden transition-colors duration-300">
-        <Link to="/" className="flex items-center">
-            <BrandTitle />
+      {/* MOBILE HEADER */} 
+      <div className="fixed top-0 left-0 right-0 z-20 flex h-16 items-center justify-between border-b border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] px-4 shadow-sm lg:hidden transition-colors duration-300">
+        <Link to="/" className="flex items-center gap-2">
+            <img src={logo} alt="CapyDAM" className="h-8 w-8" />
+            <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">CapyDAM</h1>
         </Link>
 
         <button 
@@ -107,27 +109,28 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
       {/* SIDEBAR */}
       <aside 
-          className={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1D21] transition-all duration-300 ease-in-out
+          className={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] transition-all duration-300 ease-in-out
             ${isMobileMenuOpen ? 'translate-x-0 w-64 shadow-2xl' : '-translate-x-full lg:translate-x-0 lg:shadow-none'}
             ${isCollapsed ? 'lg:w-20' : 'lg:w-64'}
           `}
         >
         
-        {/* LOGO SECTION (Swaps based on collapse state) */}
-        <div className="flex h-16 items-center border-b border-gray-100 dark:border-white/5 shrink-0 transition-colors">
+        {/* LOGO SECTION - HEADER */}
+        {/* We use h-[65px] or py-3 to match DashboardHeader height exactly so borders align */}
+        <div className="flex h-16 items-center border-b border-gray-200 dark:border-white/5 shrink-0 transition-colors">
            <Link 
              to="/" 
-             className="flex items-center w-full h-full justify-center transition-all duration-300"
+             className={`flex items-center w-full h-full transition-all duration-300 ${isCollapsed ? 'justify-center' : 'px-6'}`}
            >
                {isCollapsed ? (
-                   // 1. COLLAPSED: Show Small Icon
+                   // 1. COLLAPSED: Just the Logo
                    <img 
                      src={logo} 
                      alt="Icon" 
                      className="h-8 w-8 object-contain transition-transform hover:scale-110" 
                    />
                ) : (
-                   // 2. EXPANDED: Show Full Brand Title Image
+                   // 2. EXPANDED: Logo + Text
                    <BrandTitle />
                )}
            </Link>
@@ -152,7 +155,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           
           <NavItem to="/collections" icon={<Folder size={20} />} label="Collections" isCollapsed={isCollapsed} active={isActive('/collections')} onClick={handleNavClick} />
           
-          {/* ✅ NEW COMMUNITY/CHAT LINK (Visible to ALL) */}
           <NavItem 
             to="/chat" 
             icon={<Hash size={20} />} 
