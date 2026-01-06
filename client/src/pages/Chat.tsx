@@ -1,5 +1,5 @@
-import React, { useMemo, useEffect, useRef, useState } from 'react';
-import { useChat, type Room } from '../hooks/useChat';
+import { useMemo, useEffect, useRef, useState } from 'react';
+import { useChat } from '../hooks/useChat';
 import { useAuth } from '../context/AuthContext';
 import ChatInput from '../components/ChatInput'; 
 import { Hash, Lock, Plus, X, Search, UserPlus, UserMinus, AlertTriangle, Edit2, Trash2, Check, Loader2 } from 'lucide-react';
