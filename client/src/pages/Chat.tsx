@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useRef, useState, useCallback } from 'react';
+import React, { useMemo, useEffect, useRef, useState } from 'react';
 import { useChat } from '../hooks/useChat';
 import { useAuth } from '../context/AuthContext';
 import ChatInput from '../components/ChatInput'; 
@@ -136,7 +136,7 @@ const Chat = () => {
 
     // Loaders
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [loadingId, setLoadingId] = useState<string | null>(null);
+    const [_loadingId, setLoadingId] = useState<string | null>(null);
 
     // Modals
     const [isAddingMember, setIsAddingMember] = useState(false);
