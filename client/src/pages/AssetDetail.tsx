@@ -310,14 +310,24 @@ const AssetDetail = () => {
   };
 
   const addToCollection = async (collectionId: string, name: string) => {
-      if (!asset || addingToId) return; 
-      setAddingToId(collectionId); 
-      try {
-          await client.post(`/collections/${collectionId}/assets`, { assetId: asset.id });
-          toast.success(`Added to ${name}`);
-          setActiveModal(null); 
-      } catch (e) { toast.info("Already in this collection"); } finally { setAddingToId(null); }
-  };
+    if (!asset || addingToId) return; 
+    setAddingToId(collectionId); 
+    
+    try {
+        await client.post(`/collections/${collectionId}/assets`, { assetId: asset.id });
+        
+        // ✅ FIX: Invalidate BOTH
+        await queryClient.invalidateQueries({ queryKey: ['collections'] }); 
+        await queryClient.invalidateQueries({ queryKey: ['collection', collectionId] }); 
+
+        toast.success(`Added to ${name}`);
+        setActiveModal(null); 
+    } catch (e) { 
+        toast.info("Already in this collection"); 
+    } finally { 
+        setAddingToId(null); 
+    }
+};
 
   const addToTopic = async (categoryId: string, name: string) => {
       if (!asset || addingToId) return;

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { Prisma } from '@prisma/client';
 
 // Helper to generate slug
 const slugify = (text: string) => {
@@ -13,61 +14,50 @@ const slugify = (text: string) => {
     .replace(/-+$/, '');            // Trim - from end
 };
 
-// 1. GET ALL (Filtered by Role)
+// 1. GET ALL (Super Optimized)
 export const getCollections = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user?.id;
     const userRole = (req as any).user?.role;
-    
-    // Check for optional query param if Admin wants to see specific user's folders
-    // e.g. /api/collections?targetUserId=123
     const targetUserId = req.query.targetUserId as string;
 
     const whereClause: any = {
       parentId: null
     };
 
-    // ✅ LOGIC:
-    // 1. If Admin provides 'targetUserId', show that user's collections.
-    // 2. Otherwise, ALWAYS filter by the logged-in userId (Admin sees their own, Viewer sees theirs).
+    // ✅ LOGIC: Admin view vs User view
     if (userRole === 'admin' && targetUserId) {
         whereClause.userId = targetUserId;
     } else {
         whereClause.userId = userId;
     }
 
+    // ⚡️ OPTIMIZATION: 
+    // 1. We fetch 'coverImage' directly from the column (No heavy joins!)
+    // 2. We limit to 100 to prevent server overload
     const collections = await prisma.collection.findMany({
       where: whereClause,
-      include: {
+      take: 100, 
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        coverImage: true, // Direct column access (Fast!)
         _count: {
           select: { assets: true }
-        },
-        assets: {
-            take: 1,
-            include: {
-                asset: { select: { path: true, thumbnailPath: true, mimeType: true } }
-            }
         }
       },
       orderBy: { createdAt: 'desc' }
     });
 
-    const formatted = collections.map(c => ({
-        id: c.id,
-        name: c.name,
-        createdAt: c.createdAt,
-        _count: c._count,
-        coverImage: c.assets[0]?.asset.thumbnailPath || c.assets[0]?.asset.path || null
-    }));
-
-    res.json(formatted);
+    res.json(collections);
   } catch (error) {
     console.error("Get Collections Error:", error);
     res.status(500).json({ message: 'Error fetching collections' });
   }
 };
 
-// 2. GET ONE (With Security Check)
+// 2. GET ONE (Unchanged)
 export const getCollectionById = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
@@ -77,11 +67,9 @@ export const getCollectionById = async (req: Request, res: Response): Promise<vo
       const collection = await prisma.collection.findUnique({
         where: { id },
         include: {
-            // ✅ Include Sub-folders
             children: {
                 include: { _count: { select: { assets: true } } }
             },
-            // Include Assets
             assets: {
                 include: {
                     asset: {
@@ -97,7 +85,6 @@ export const getCollectionById = async (req: Request, res: Response): Promise<vo
         return;
       }
 
-      // Security Check: Is this MY collection? (Skip if Admin)
       if (userRole !== 'admin' && collection.userId !== userId) {
           res.status(403).json({ message: 'Access denied' });
           return;
@@ -115,45 +102,69 @@ export const getCollectionById = async (req: Request, res: Response): Promise<vo
     }
 };
 
-// 3. CREATE
+// 3. CREATE (Optimized: Fail-Fast Strategy)
 export const createCollection = async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, parentId } = req.body;
     const userId = (req as any).user?.id;
-    let slug = slugify(name);
+    
+    const baseSlug = slugify(name);
+    let slug = baseSlug;
 
-    // Ensure unique slug
-    const existing = await prisma.collection.findUnique({ where: { slug } });
-    if (existing) {
-        slug = `${slug}-${Date.now()}`;
+    // ⚡️ OPTIMIZATION: Try to create immediately. 
+    // We assume the name is unique most of the time.
+    // This saves 1 DB call (findUnique) for every successful creation.
+    try {
+        const collection = await prisma.collection.create({
+            data: {
+                name,
+                slug,
+                userId,
+                parentId: parentId || null
+            }
+        });
+        res.status(201).json(collection);
+        return;
+
+    } catch (dbError: any) {
+        // P2002 = Unique Constraint Failed (Slug collision)
+        if (dbError.code === 'P2002') {
+            // Collision happened! Now append timestamp and retry.
+            slug = `${baseSlug}-${Date.now()}`;
+            const collectionRetry = await prisma.collection.create({
+                data: {
+                    name,
+                    slug,
+                    userId,
+                    parentId: parentId || null
+                }
+            });
+            res.status(201).json(collectionRetry);
+            return;
+        }
+        throw dbError; // Throw other errors to the main catch block
     }
 
-    const collection = await prisma.collection.create({
-      data: {
-        name,
-        slug,
-        userId,
-        parentId: parentId || null
-      }
-    });
-
-    res.status(201).json(collection);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Error creating collection' });
   }
 };
 
-// 4. ADD ASSET TO COLLECTION
+// 4. ADD ASSET TO COLLECTION (Auto-update Cover)
 export const addAssetToCollection = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { id } = req.params; // Collection ID
+        const { id } = req.params; 
         const { assetId } = req.body;
         const userId = (req as any).user?.id;
         const userRole = (req as any).user?.role;
 
-        // Check ownership
-        const collection = await prisma.collection.findUnique({ where: { id } });
+        // 1. Fetch Collection to check rights & current cover status
+        const collection = await prisma.collection.findUnique({ 
+            where: { id },
+            select: { userId: true, coverImage: true } 
+        });
+        
         if (!collection) { res.status(404).json({ message: 'Not found' }); return; }
         
         if (userRole !== 'admin' && collection.userId !== userId) {
@@ -161,44 +172,96 @@ export const addAssetToCollection = async (req: Request, res: Response): Promise
             return;
         }
 
-        await prisma.assetOnCollection.create({
-            data: {
-                collectionId: id,
-                assetId
-            }
+        // 2. Fetch the Asset details (we need the path for the cover)
+        const asset = await prisma.asset.findUnique({ 
+            where: { id: assetId },
+            select: { thumbnailPath: true, path: true }
         });
+
+        if (!asset) { res.status(404).json({ message: 'Asset not found' }); return; }
+
+        // 3. Prepare Transaction Operations
+        const operations: any[] = [
+            prisma.assetOnCollection.create({
+                data: { collectionId: id, assetId }
+            })
+        ];
+
+        // ✅ LOGIC: If collection has no cover, use this new asset immediately
+        if (!collection.coverImage) {
+            const newCover = asset.thumbnailPath || asset.path;
+            operations.push(
+                prisma.collection.update({
+                    where: { id },
+                    data: { coverImage: newCover }
+                })
+            );
+        }
+
+        // Execute all updates atomically
+        await prisma.$transaction(operations);
+
         res.json({ success: true });
     } catch (error) {
-        // Ignore duplicate errors (P2002)
+        // Ignore P2002 (Duplicate entry) - means asset is already in collection
         res.json({ success: true });
     }
 };
 
-// 5. REMOVE ASSET
+// 5. REMOVE ASSET (Recalculate Cover if needed)
 export const removeAssetFromCollection = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { id, assetId } = req.params;
-        const userId = (req as any).user?.id;
-        const userRole = (req as any).user?.role;
+  try {
+      const { id, assetId } = req.params;
+      const userId = (req as any).user?.id;
+      const userRole = (req as any).user?.role;
 
-        const collection = await prisma.collection.findUnique({ where: { id } });
-        if (!collection) { res.status(404).json({ message: 'Not found' }); return; }
+      const collection = await prisma.collection.findUnique({ where: { id } });
+      if (!collection) { res.status(404).json({ message: 'Not found' }); return; }
 
-        if (userRole !== 'admin' && collection.userId !== userId) {
-            res.status(403).json({ message: 'Access denied' });
-            return;
-        }
+      if (userRole !== 'admin' && collection.userId !== userId) {
+          res.status(403).json({ message: 'Access denied' });
+          return;
+      }
 
-        await prisma.assetOnCollection.deleteMany({
-            where: {
-                collectionId: id,
-                assetId: assetId
-            }
-        });
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ message: 'Error removing asset' });
-    }
+      // 1. Get the asset we are about to remove (to check if it's the cover)
+      const assetToRemove = await prisma.asset.findUnique({
+          where: { id: assetId },
+          select: { thumbnailPath: true, path: true }
+      });
+
+      // 2. Remove the link
+      await prisma.assetOnCollection.deleteMany({
+          where: { collectionId: id, assetId: assetId }
+      });
+
+      // 3. ✅ CHECK: Did we just delete the cover image?
+      const currentCover = collection.coverImage;
+      const removedImage = assetToRemove?.thumbnailPath || assetToRemove?.path;
+
+      if (currentCover && removedImage && currentCover === removedImage) {
+          
+          // Find the most recent asset remaining in the collection
+          // ✅ FIX: Use 'assignedAt' instead of 'createdAt'
+          const nextAssetLink = await prisma.assetOnCollection.findFirst({
+              where: { collectionId: id },
+              include: { asset: { select: { thumbnailPath: true, path: true } } },
+              orderBy: { assignedAt: 'desc' } 
+          });
+
+          // If found, use it. If not (folder empty), set to null.
+          const newCover = nextAssetLink?.asset.thumbnailPath || nextAssetLink?.asset.path || null;
+
+          await prisma.collection.update({
+              where: { id },
+              data: { coverImage: newCover }
+          });
+      }
+
+      res.json({ success: true });
+  } catch (error) {
+      console.error("Remove Asset Error:", error);
+      res.status(500).json({ message: 'Error removing asset' });
+  }
 };
 
 // 6. UPDATE COLLECTION (Rename)
@@ -210,10 +273,7 @@ export const updateCollection = async (req: Request, res: Response): Promise<voi
     const userRole = (req as any).user?.role;
 
     const collection = await prisma.collection.findUnique({ where: { id } });
-    if (!collection) {
-        res.status(404).json({ message: 'Collection not found' });
-        return;
-    }
+    if (!collection) { res.status(404).json({ message: 'Collection not found' }); return; }
 
     if (userRole !== 'admin' && collection.userId !== userId) {
         res.status(403).json({ message: 'Access denied' });
@@ -239,10 +299,7 @@ export const deleteCollection = async (req: Request, res: Response): Promise<voi
     const userRole = (req as any).user?.role;
 
     const collection = await prisma.collection.findUnique({ where: { id } });
-    if (!collection) {
-        res.status(404).json({ message: 'Collection not found' });
-        return;
-    }
+    if (!collection) { res.status(404).json({ message: 'Collection not found' }); return; }
 
     if (userRole !== 'admin' && collection.userId !== userId) {
         res.status(403).json({ message: 'Access denied' });

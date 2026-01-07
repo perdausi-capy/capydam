@@ -6,7 +6,7 @@ import Masonry from 'react-masonry-css';
 import AssetThumbnail from '../components/AssetThumbnail';
 import DashboardHeader, { type FilterType } from '../components/DashboardHeader';
 import { toast } from 'react-toastify';
-import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // --- TYPES ---
@@ -134,6 +134,7 @@ const AssetCard = React.memo(({
 
 // --- DASHBOARD COMPONENT ---
 const Dashboard = () => {
+const queryClient = useQueryClient();
   // ✅ 1. READ URL PARAMS
   const [searchParams, setSearchParams] = useSearchParams();
   const urlSearch = searchParams.get('search') || '';
@@ -292,13 +293,20 @@ const Dashboard = () => {
   const addToCollection = async (collectionId: string, collectionName: string) => {
     if (!selectedAssetId) return;
     setIsCollectionModalOpen(false);
-    const promise = client.post(`/collections/${collectionId}/assets`, { assetId: selectedAssetId });
+    
+    const promise = client.post(`/collections/${collectionId}/assets`, { assetId: selectedAssetId })
+        .then(async () => {
+            // ✅ FIX: Invalidate BOTH the list of collections AND the details of the specific collection
+            await queryClient.invalidateQueries({ queryKey: ['collections'] }); // Updates cover images on main list
+            await queryClient.invalidateQueries({ queryKey: ['collection', collectionId] }); // Updates the specific folder contents
+        });
+
     toast.promise(promise, {
         pending: 'Adding...',
         success: `Added to ${collectionName}!`,
         error: 'Already in collection'
     }, { autoClose: 2000 });
-  };
+};
 
   const filteredCollections = collections.filter(c => 
       c.name.toLowerCase().includes(modalSearch.toLowerCase())

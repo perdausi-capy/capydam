@@ -114,6 +114,8 @@ model Collection {
   createdAt DateTime @default(now()) 
   updatedAt DateTime @updatedAt
   assets    AssetOnCollection[]
+
+  coverImage String?
 }
 
 model AssetOnCollection {

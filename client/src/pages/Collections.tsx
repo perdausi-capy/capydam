@@ -10,13 +10,14 @@ import {
     Edit2,
     Layers, 
     Clock,
+    Loader2 
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import ConfirmModal from '../components/ConfirmModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-// ✅ Interface matched to your Controller Response
+// ✅ Interface matched to your new Controller Response
 interface Collection {
   id: string;
   name: string;
@@ -28,12 +29,9 @@ interface Collection {
 // --- 🦴 SKELETON COMPONENT ---
 const CollectionSkeleton = React.memo(() => (
     <div className="flex flex-col rounded-3xl border border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] shadow-sm overflow-hidden h-64">
-        {/* Cover Area Skeleton */}
         <div className="relative flex-1 w-full bg-gray-200 dark:bg-white/5 animate-pulse">
             <div className="absolute top-4 right-4 h-6 w-12 rounded-full bg-gray-300 dark:bg-white/10" />
         </div>
-        
-        {/* Footer Skeleton */}
         <div className="flex items-center justify-between p-5 border-t border-gray-100 dark:border-white/5 bg-white dark:bg-[#1A1D21]">
             <div className="space-y-2 w-2/3">
                 <div className="h-4 bg-gray-200 dark:bg-white/5 rounded w-3/4 animate-pulse" />
@@ -50,11 +48,11 @@ const CollectionCard = React.memo(({ col, onEdit, onDelete }: { col: Collection,
         layout
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9 }}
         transition={{ duration: 0.3 }}
         className="group relative flex flex-col rounded-3xl border border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-300 overflow-hidden h-64 transform-gpu"
     >
         <Link to={`/collections/${col.id}`} className="flex-1 flex flex-col">
-            
             {/* COVER AREA */}
             <div 
                 className="relative flex-1 w-full overflow-hidden bg-gradient-to-br from-indigo-50 to-blue-100 dark:from-indigo-900/20 dark:to-blue-900/10 flex items-center justify-center isolation-isolate"
@@ -78,7 +76,7 @@ const CollectionCard = React.memo(({ col, onEdit, onDelete }: { col: Collection,
                 
                 {/* Count Badge */}
                 <div className="absolute top-4 right-4 rounded-full bg-white/90 dark:bg-black/60 px-3 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 shadow-sm backdrop-blur-md border border-transparent dark:border-white/10 z-10">
-                    {col._count.assets}
+                    {col._count?.assets || 0}
                 </div>
             </div>
 
@@ -89,7 +87,7 @@ const CollectionCard = React.memo(({ col, onEdit, onDelete }: { col: Collection,
                         {col.name}
                     </h3>
                     <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 font-medium">
-                        <Clock size={12} /> {new Date(col.createdAt).toLocaleDateString()}
+                        <Clock size={12} /> {col.createdAt ? new Date(col.createdAt).toLocaleDateString() : 'Just now'}
                     </div>
                 </div>
                 <div className="h-8 w-8 shrink-0 rounded-full bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 dark:group-hover:bg-indigo-900/20 dark:group-hover:text-indigo-400 transition-colors">
@@ -121,7 +119,7 @@ const CollectionCard = React.memo(({ col, onEdit, onDelete }: { col: Collection,
 const Collections = () => {
   const queryClient = useQueryClient();
   
-  // --- 1. DATA FETCHING (Cached) ---
+  // --- 1. DATA FETCHING ---
   const { data: collections = [], isLoading: loading } = useQuery<Collection[]>({
       queryKey: ['collections'],
       queryFn: async () => {
@@ -129,51 +127,111 @@ const Collections = () => {
           return data;
       },
       staleTime: 1000 * 60 * 5, // Cache for 5 mins
-      refetchOnWindowFocus: false,
   });
   
-  // Modals
+  // UI States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  
-  // Form State
   const [formName, setFormName] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Delete State
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  // --- 2. MUTATIONS (Optimized) ---
+  // --- 2. OPTIMISTIC CREATE MUTATION ---
   const createMutation = useMutation({
       mutationFn: (name: string) => client.post('/collections', { name }),
-      onSuccess: () => {
-          queryClient.invalidateQueries(['collections'] as any);
-          toast.success("Collection created!");
+      
+      // ⚡️ OPTIMISTIC UPDATE START
+      onMutate: async (newName) => {
+          await queryClient.cancelQueries({ queryKey: ['collections'] });
+          const previousCollections = queryClient.getQueryData<Collection[]>(['collections']);
+
+          // Create a "Fake" collection to show instantly
+          const optimisticCollection: Collection = {
+              id: `temp-${Date.now()}`,
+              name: newName,
+              createdAt: new Date().toISOString(),
+              _count: { assets: 0 },
+              coverImage: null
+          };
+
+          // Inject into cache immediately
+          queryClient.setQueryData<Collection[]>(['collections'], (old: Collection[] | undefined) => {
+              return [optimisticCollection, ...(old || [])];
+          });
+
+          // Close modal instantly
           setIsModalOpen(false);
+          setFormName('');
+
+          return { previousCollections };
       },
-      onError: (err: any) => toast.error(err.response?.data?.message || 'Failed')
+      // If error, roll back
+      onError: (err, newName, context) => {
+          if (context?.previousCollections) {
+              queryClient.setQueryData(['collections'], context.previousCollections);
+          }
+          toast.error("Failed to create collection");
+      },
+      // Always refetch to get real ID/data from server
+      onSettled: () => {
+          queryClient.invalidateQueries({ queryKey: ['collections'] });
+          toast.success("Collection created!");
+      }
   });
 
+  // --- 3. OPTIMISTIC UPDATE MUTATION ---
   const updateMutation = useMutation({
       mutationFn: ({ id, name }: { id: string, name: string }) => client.patch(`/collections/${id}`, { name }),
-      onSuccess: () => {
-          queryClient.invalidateQueries(['collections'] as any);
-          toast.success("Collection updated!");
+      onMutate: async ({ id, name }) => {
+          await queryClient.cancelQueries({ queryKey: ['collections'] });
+          const previousCollections = queryClient.getQueryData<Collection[]>(['collections']);
+
+          queryClient.setQueryData<Collection[]>(['collections'], (old: Collection[] | undefined) => 
+              old?.map(col => col.id === id ? { ...col, name } : col) || []
+          );
+
           setIsModalOpen(false);
+          return { previousCollections };
+      },
+      onError: (err, vars, context) => {
+          if (context?.previousCollections) {
+              queryClient.setQueryData(['collections'], context.previousCollections);
+          }
+          toast.error("Update failed");
+      },
+      onSettled: () => {
+          queryClient.invalidateQueries({ queryKey: ['collections'] });
+          toast.success("Collection updated!");
       }
   });
 
+  // --- 4. OPTIMISTIC DELETE MUTATION ---
   const deleteMutation = useMutation({
       mutationFn: (id: string) => client.delete(`/collections/${id}`),
-      onSuccess: () => {
-          queryClient.invalidateQueries(['collections'] as any);
-          toast.success("Collection deleted");
+      onMutate: async (id) => {
+          await queryClient.cancelQueries({ queryKey: ['collections'] });
+          const previousCollections = queryClient.getQueryData<Collection[]>(['collections']);
+
+          // Remove immediately from UI
+          queryClient.setQueryData<Collection[]>(['collections'], (old: Collection[] | undefined) => 
+              old?.filter(col => col.id !== id) || []
+          );
+
           setDeleteId(null);
+          return { previousCollections };
+      },
+      onError: (err, id, context) => {
+          if (context?.previousCollections) {
+              queryClient.setQueryData(['collections'], context.previousCollections);
+          }
+          toast.error("Delete failed");
+      },
+      onSettled: () => {
+          queryClient.invalidateQueries({ queryKey: ['collections'] });
+          toast.success("Collection deleted");
       }
   });
 
-  // --- ACTIONS (Memoized) ---
-
+  // --- ACTIONS ---
   const openCreate = useCallback(() => {
       setEditingId(null);
       setFormName('');
@@ -187,25 +245,22 @@ const Collections = () => {
       setIsModalOpen(true);
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) return;
     
-    setIsSubmitting(true);
-    try {
-        if (editingId) {
-            await updateMutation.mutateAsync({ id: editingId, name: formName });
-        } else {
-            await createMutation.mutateAsync(formName);
-        }
-    } finally {
-        setIsSubmitting(false);
+    if (editingId) {
+        updateMutation.mutate({ id: editingId, name: formName });
+    } else {
+        createMutation.mutate(formName);
     }
   };
 
   const handleDelete = () => {
     if (deleteId) deleteMutation.mutate(deleteId);
   };
+
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
 
   return (
     <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] transition-colors duration-500 relative overflow-hidden font-sans">
@@ -216,7 +271,7 @@ const Collections = () => {
         <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-400/10 dark:bg-blue-600/10 blur-[120px] rounded-full" />
       </div>
 
-      {/* HEADER (Always Visible) */}
+      {/* HEADER */}
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -247,29 +302,28 @@ const Collections = () => {
       {/* GRID */}
       <div className="relative z-10 max-w-7xl mx-auto px-8 py-12">
         {loading ? (
-            // ✅ LOADING STATE: Show Skeletons
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {Array.from({ length: 8 }).map((_, i) => (
                     <CollectionSkeleton key={i} />
                 ))}
             </div>
         ) : collections.length === 0 ? (
-            // EMPTY STATE
             <div className="text-center py-20 opacity-50 bg-white/50 dark:bg-white/5 rounded-3xl border border-dashed border-gray-300 dark:border-white/10 backdrop-blur-sm">
                 <Folder size={64} className="mx-auto mb-4 text-gray-300 dark:text-gray-600" />
                 <p className="text-gray-500 dark:text-gray-400">No collections yet. Create one!</p>
             </div>
         ) : (
-            // DATA STATE
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {collections.map((col) => (
-                    <CollectionCard 
-                        key={col.id} 
-                        col={col} 
-                        onEdit={openEdit} 
-                        onDelete={(id) => setDeleteId(id)} 
-                    />
-                ))}
+                <AnimatePresence>
+                    {collections.map((col) => (
+                        <CollectionCard 
+                            key={col.id} 
+                            col={col} 
+                            onEdit={openEdit} 
+                            onDelete={(id) => setDeleteId(id)} 
+                        />
+                    ))}
+                </AnimatePresence>
             </div>
         )}
       </div>
@@ -295,7 +349,8 @@ const Collections = () => {
                             <input autoFocus type="text" required value={formName} onChange={e => setFormName(e.target.value)} className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20" placeholder="e.g. Marketing Assets" />
                         </div>
                         
-                        <button type="submit" disabled={isSubmitting} className="w-full mt-2 rounded-xl bg-indigo-600 text-white font-bold py-3 hover:bg-indigo-700 transition-colors disabled:opacity-70">
+                        <button type="submit" disabled={isSubmitting} className="flex items-center justify-center gap-2 w-full mt-2 rounded-xl bg-indigo-600 text-white font-bold py-3 hover:bg-indigo-700 transition-colors disabled:opacity-70">
+                            {isSubmitting && <Loader2 size={18} className="animate-spin" />}
                             {isSubmitting ? 'Saving...' : (editingId ? 'Update' : 'Create')}
                         </button>
                     </form>
