@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
@@ -198,7 +198,7 @@ const CollectionDetail = () => {
   });
   
   // State
-  const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null); 
+  const [activeDropdownId, _setActiveDropdownId] = useState<string | null>(null); 
   const [moveModalOpen, setMoveModalOpen] = useState(false);
   const [assetToMove, setAssetToMove] = useState<string | null>(null); 
   const [moveSearch, setMoveSearch] = useState('');
@@ -236,7 +236,7 @@ const CollectionDetail = () => {
           setNewFolderName('');
           return { previousData };
       },
-      onError: (err, name, context) => {
+      onError: (_err, _name, context) => {
           queryClient.setQueryData(['collection', id], context?.previousData);
           toast.error("Failed to create folder");
       },
@@ -281,7 +281,7 @@ const CollectionDetail = () => {
 
           return { previousData };
       },
-      onError: (err, vars, context) => {
+      onError: (_err, _vars, context) => {
           queryClient.setQueryData(['collection', id], context?.previousData);
           toast.error("Move failed");
       },
@@ -305,7 +305,7 @@ const CollectionDetail = () => {
           });
           return { previousData };
       },
-      onError: (err, vars, context) => {
+      onError: (_err, _vars, context) => {
           queryClient.setQueryData(['collection', id], context?.previousData);
           toast.error("Failed to delete assets");
       },

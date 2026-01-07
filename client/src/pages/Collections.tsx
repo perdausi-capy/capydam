@@ -165,7 +165,7 @@ const Collections = () => {
           return { previousCollections };
       },
       // If error, roll back
-      onError: (err, newName, context) => {
+      onError: (_err, _newName, context) => {
           if (context?.previousCollections) {
               queryClient.setQueryData(['collections'], context.previousCollections);
           }
@@ -192,7 +192,7 @@ const Collections = () => {
           setIsModalOpen(false);
           return { previousCollections };
       },
-      onError: (err, vars, context) => {
+      onError: (_err, _vars, context) => {
           if (context?.previousCollections) {
               queryClient.setQueryData(['collections'], context.previousCollections);
           }
@@ -219,7 +219,7 @@ const Collections = () => {
           setDeleteId(null);
           return { previousCollections };
       },
-      onError: (err, id, context) => {
+      onError: (_err, _id, context) => {
           if (context?.previousCollections) {
               queryClient.setQueryData(['collections'], context.previousCollections);
           }
