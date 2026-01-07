@@ -291,28 +291,59 @@ export const updateCollection = async (req: Request, res: Response): Promise<voi
   }
 };
 
-// 7. DELETE COLLECTION (Transactional)
+// 7. DELETE COLLECTION (Recursive Force Delete)
 export const deleteCollection = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const userId = (req as any).user?.id;
     const userRole = (req as any).user?.role;
 
+    // 1. Fetch the collection AND all its children (recursive) to check permissions
+    // Note: A simple check is enough, we will let the DB cascade handle the deep structure
+    // provided we clean up the Asset links first.
     const collection = await prisma.collection.findUnique({ where: { id } });
-    if (!collection) { res.status(404).json({ message: 'Collection not found' }); return; }
+
+    if (!collection) {
+        res.status(404).json({ message: 'Collection not found' });
+        return;
+    }
 
     if (userRole !== 'admin' && collection.userId !== userId) {
         res.status(403).json({ message: 'Access denied' });
         return;
     }
 
-    // Transaction: Empty the folder, then delete the folder
+    // 2. FORCE DELETE STRATEGY
+    // We need to find ALL descendent collection IDs to remove their AssetOnCollection links first.
+    // Prisma doesn't support recursive deleteMany easily, so we fetch IDs first.
+    
+    // Get all collections owned by this user (optimization: we assume we only delete our own tree)
+    const allUserCollections = await prisma.collection.findMany({
+        where: { userId: collection.userId },
+        select: { id: true, parentId: true }
+    });
+
+    // Helper to find all descendants of the target ID
+    const getDescendants = (parentId: string): string[] => {
+        const children = allUserCollections.filter(c => c.parentId === parentId);
+        let ids = children.map(c => c.id);
+        children.forEach(c => {
+            ids = [...ids, ...getDescendants(c.id)];
+        });
+        return ids;
+    };
+
+    const targetIds = [id, ...getDescendants(id)];
+
+    // 3. TRANSACTION
     await prisma.$transaction([
-        // Remove links to assets inside this collection
+        // A. Remove all asset links from the target folder AND all sub-folders
         prisma.assetOnCollection.deleteMany({
-            where: { collectionId: id }
+            where: { collectionId: { in: targetIds } }
         }),
-        // Delete the collection itself
+        
+        // B. Delete the parent collection. 
+        // Since schema has `onDelete: Cascade` for `children`, this wipes the sub-folders automatically.
         prisma.collection.delete({
             where: { id }
         })
