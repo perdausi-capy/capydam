@@ -4,10 +4,10 @@ import client from '../api/client';
 import { 
   ArrowLeft, Download, Trash2, 
   Calendar, HardDrive, FileText, 
-  FolderPlus, Hash, ExternalLink, Check, 
+  FolderPlus, Hash, Check, 
   Layout, Link as LinkIcon, Plus, X,
   Edit2, Search, Loader2, Share2,
-  ChevronDown, ChevronUp, Image as ImageIcon, Video
+  ChevronDown, ChevronUp, Video
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -15,7 +15,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import Masonry from 'react-masonry-css';
 import AssetThumbnail from '../components/AssetThumbnail';
 import { useQueryClient } from '@tanstack/react-query';
-import AssetChatPanel from '../components/AssetChatPanel';
+// import AssetChatPanel from '../components/AssetChatPanel';
 
 // --- TYPES ---
 interface Asset {
