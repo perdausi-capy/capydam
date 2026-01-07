@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import client from '../api/client';
 import { Image as ImageIcon, Search, X, Download, FolderPlus, Plus, ExternalLink } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'; // ✅ Added useSearchParams
 import Masonry from 'react-masonry-css';
 import AssetThumbnail from '../components/AssetThumbnail';
 import DashboardHeader, { type FilterType } from '../components/DashboardHeader';
@@ -134,11 +134,15 @@ const AssetCard = React.memo(({
 
 // --- DASHBOARD COMPONENT ---
 const Dashboard = () => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  // ✅ 1. READ URL PARAMS
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlSearch = searchParams.get('search') || '';
+
+  // ✅ 2. INITIALIZE STATE FROM URL
+  const [searchQuery, setSearchQuery] = useState(urlSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
   
-  // ✅ CHANGED: Default filter is now 'all'
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<FilterType>('all');
 
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
@@ -147,6 +151,15 @@ const Dashboard = () => {
 
   const navigate = useNavigate();
   const observer = useRef<IntersectionObserver | null>(null);
+
+  // ✅ 3. LISTEN FOR URL CHANGES (Navigation from other pages)
+  useEffect(() => {
+    const currentUrlSearch = searchParams.get('search') || '';
+    if (currentUrlSearch !== searchQuery) {
+        setSearchQuery(currentUrlSearch);
+        setDebouncedSearch(currentUrlSearch); // Instant update if coming from URL
+    }
+  }, [searchParams]);
 
   // --- QUERY ---
   const {
@@ -221,9 +234,18 @@ const Dashboard = () => {
   }, [assetsLoading, isFetchingNextPage, hasNextPage, fetchNextPage]);
 
   // --- ACTIONS ---
+  
+  // ✅ 4. UPDATE URL WHEN TYPING
   const handleSearchChange = (newQuery: string) => {
     if (searchQuery !== newQuery) sessionStorage.removeItem(SCROLL_KEY);
     setSearchQuery(newQuery);
+    
+    // Update URL silently without reloading
+    setSearchParams(params => {
+        if (newQuery) params.set('search', newQuery);
+        else params.delete('search');
+        return params;
+    }, { replace: true });
   };
 
   useEffect(() => {
@@ -307,7 +329,6 @@ const Dashboard = () => {
             <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/10 p-16 text-center mt-8 opacity-60">
                 <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-full mb-4"><ImageIcon size={32} className="text-gray-400 dark:text-gray-500" /></div>
                 <p className="text-lg font-medium text-gray-600 dark:text-gray-300">No assets found</p>
-                {/* ✅ CHANGED: Reset to 'all' instead of 'image' */}
                 <button onClick={() => { handleSearchChange(''); setFilterType('all'); setSelectedColor(null); }} className="text-blue-600 dark:text-blue-400 font-medium hover:underline mt-2">Clear all filters</button>
             </div>
         ) : (

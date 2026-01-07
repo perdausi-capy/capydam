@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
@@ -7,7 +7,7 @@ import {
   FolderPlus, Hash, ExternalLink, Check, 
   Layout, Link as LinkIcon, Plus, X,
   Edit2, Search, Loader2, Share2,
-  MessageCircle // ✅ Added MessageCircle for the button
+  ChevronDown, ChevronUp, Image as ImageIcon, Video
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -15,9 +15,6 @@ import ConfirmModal from '../components/ConfirmModal';
 import Masonry from 'react-masonry-css';
 import AssetThumbnail from '../components/AssetThumbnail';
 import { useQueryClient } from '@tanstack/react-query';
-
-// ✅ IMPORT SOCKET CONTEXT & CHAT PANEL
-import { useSocket } from '../context/SocketContext';
 import AssetChatPanel from '../components/AssetChatPanel';
 
 // --- TYPES ---
@@ -76,24 +73,10 @@ const DetailSkeleton = () => (
     </div>
 );
 
-const RelatedSkeleton = () => (
-    <div className="mt-6">
-        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">More Like This</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="space-y-2">
-                    <div className="w-full bg-gray-200 dark:bg-white/5 rounded-xl animate-pulse" style={{ height: '200px' }} />
-                </div>
-            ))}
-        </div>
-    </div>
-);
-
 const AssetDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { socket } = useSocket(); // ✅ Get Socket Instance
 
   const [asset, setAsset] = useState<Asset | null>(null);
   const [relatedAssets, setRelatedAssets] = useState<Asset[]>([]);
@@ -104,6 +87,17 @@ const AssetDetail = () => {
   const [collections, setCollections] = useState<CollectionSimple[]>([]);
   const [categories, setCategories] = useState<CategorySimple[]>([]); 
 
+  // UI States
+  const [showAllTags, setShowAllTags] = useState(false);
+
+  // SEARCH STATES (Spotlight)
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Asset[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  // Modal / Action States
   const [activeModal, setActiveModal] = useState<'collection' | 'topic' | null>(null);
   const [modalSearch, setModalSearch] = useState(''); 
   const [addingToId, setAddingToId] = useState<string | null>(null);
@@ -128,10 +122,44 @@ const AssetDetail = () => {
   const isOwner = user?.id === asset?.userId;
   const isAdmin = user?.role === 'admin';
   const isEditor = user?.role === 'editor';
-
   const canManageAsset = isAdmin || isEditor || isOwner;
   const canDelete = isAdmin || isOwner;
   const canAddToTopic = isAdmin || isEditor;
+
+  // CLOSE DROPDOWN ON CLICK OUTSIDE
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // LIVE SEARCH EFFECT
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(async () => {
+      if (searchQuery.trim().length > 1) {
+        setIsSearching(true);
+        setShowDropdown(true);
+        try {
+          // Fetch limit 5 results for the dropdown
+          const res = await client.get(`/assets?search=${encodeURIComponent(searchQuery)}&limit=5`);
+          setSearchResults(res.data.results || []);
+        } catch (error) {
+          console.error("Quick search failed", error);
+        } finally {
+          setIsSearching(false);
+        }
+      } else {
+        setSearchResults([]);
+        setShowDropdown(false);
+      }
+    }, 300); // 300ms delay to prevent spamming server
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -172,6 +200,21 @@ const AssetDetail = () => {
     if (id) loadData();
   }, [id, navigate]);
 
+  // HANDLE RESULT CLICK
+  const handleResultClick = (assetId: string) => {
+      navigate(`/assets/${assetId}`);
+      setShowDropdown(false);
+      setSearchQuery('');
+  };
+
+  // ✅ FIXED: Navigate to /library instead of /
+  const handleGlobalSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchQuery.trim()) {
+        navigate(`/library?search=${encodeURIComponent(searchQuery)}`);
+        setShowDropdown(false);
+    }
+  };
+
   const handleDownload = async () => {
     if (!asset) return;
     try {
@@ -192,24 +235,6 @@ const AssetDetail = () => {
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
     toast.success("Link copied to clipboard!");
-  };
-
-  // ✅ NEW: Share to Global Chat Feature
-  const handleDiscussInChat = () => {
-    if (!socket || !asset || !user) return;
-    
-    // Create a message linking to this asset
-    const assetLink = `${window.location.origin}/assets/${asset.id}`;
-    const messageContent = `Check out this asset: ${assetLink}`;
-    
-    const messageData = {
-        content: messageContent,
-        userId: user.id,
-        roomId: 'global', // Explicitly target Global Room
-    };
-
-    socket.emit('send_message', messageData);
-    toast.success("Shared to Community Chat!");
   };
 
   const handleDelete = async () => {
@@ -311,63 +336,144 @@ const AssetDetail = () => {
 
   const effectiveLink = parsedAi.externalLink || parsedAi.link || parsedAi.url || null;
   const effectiveTags = parsedAi.tags || parsedAi.keywords || [];
+  const visibleTags = showAllTags ? effectiveTags : effectiveTags.slice(0, 10); // Show only first 10
   const effectiveDescription = parsedAi.description || parsedAi.summary || parsedAi.caption || "";
 
   return (
     <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] pb-20 transition-colors duration-500">
       
       {/* HEADER */}
-      <div className="bg-white/80 dark:bg-[#1A1D21]/80 backdrop-blur-md border-b border-gray-200 dark:border-white/5 px-6 py-6 sticky top-0 z-30">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-              <button onClick={() => navigate(-1)} className="flex items-center text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors font-medium text-sm">
+      <div className="bg-white/80 dark:bg-[#1A1D21]/80 backdrop-blur-md border-b border-gray-200 dark:border-white/5 px-6 py-3 sticky top-0 z-30 shadow-sm">
+          <div className="max-w-[2000px] mx-auto flex items-center justify-between gap-4">
+              
+              {/* LEFT: BACK BUTTON */}
+              <button onClick={() => navigate(-1)} className="shrink-0 flex items-center text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors font-medium text-sm">
                   <ArrowLeft size={18} className="mr-2" /> Back
               </button>
               
-              <div className="flex items-center gap-3">
-                  
-                  {/* ✅ NEW: DISCUSS BUTTON */}
-                  <button 
-                    onClick={handleDiscussInChat}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-blue-700 transition-colors"
-                  >
-                      <MessageCircle size={16} /> Discuss
-                  </button>
+              {/* ✅ CENTER: LIVE SEARCH SPOTLIGHT */}
+              <div className="flex-1 max-w-xl mx-auto hidden md:block group relative" ref={searchRef}>
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search size={16} className="text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                  </div>
+                  <input
+                    type="text"
+                    className="block w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all shadow-sm focus:bg-white dark:focus:bg-black/40"
+                    placeholder="Search library..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onFocus={() => searchQuery.length > 1 && setShowDropdown(true)}
+                    onKeyDown={handleGlobalSearch}
+                  />
 
-                  <button onClick={handleDownload} className="flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-black px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:scale-105 transition-transform">
-                      <Download size={16} /> Download
-                  </button>
+                  {/* 🟢 SPOTLIGHT DROPDOWN RESULTS */}
+                  {showDropdown && (
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
+                          {isSearching ? (
+                              <div className="p-4 flex items-center justify-center text-gray-400 gap-2 text-sm">
+                                  <Loader2 size={16} className="animate-spin" /> Searching...
+                              </div>
+                          ) : searchResults.length > 0 ? (
+                              <div className="py-2">
+                                  <div className="px-3 pb-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quick Results</div>
+                                  {searchResults.map(result => (
+                                      <button 
+                                          key={result.id}
+                                          onClick={() => handleResultClick(result.id)}
+                                          className="w-full px-4 py-2 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-left"
+                                      >
+                                          {/* Tiny Thumbnail */}
+                                          <div className="h-8 w-8 rounded bg-gray-200 dark:bg-white/10 overflow-hidden shrink-0">
+                                               {result.mimeType.startsWith('image') ? (
+                                                   <img src={result.thumbnailPath || result.path} className="w-full h-full object-cover" />
+                                               ) : (
+                                                   <div className="w-full h-full flex items-center justify-center text-gray-500">
+                                                       {result.mimeType.startsWith('video') ? <Video size={14} /> : <FileText size={14} />}
+                                                   </div>
+                                               )}
+                                          </div>
+                                          <div className="min-w-0">
+                                              <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{result.originalName}</p>
+                                              <p className="text-[10px] text-gray-500 uppercase">{result.mimeType.split('/')[1]}</p>
+                                          </div>
+                                      </button>
+                                  ))}
+                                  <div className="border-t border-gray-100 dark:border-white/5 mt-1 pt-1">
+                                      <button 
+                                          // ✅ FIXED: Navigate to Library instead of Home
+                                          onClick={() => navigate(`/library?search=${encodeURIComponent(searchQuery)}`)}
+                                          className="w-full px-4 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-center"
+                                      >
+                                          View all results for "{searchQuery}"
+                                      </button>
+                                  </div>
+                              </div>
+                          ) : (
+                              <div className="p-4 text-center text-gray-400 text-sm">
+                                  No results found. <br/> Press Enter to search everywhere.
+                              </div>
+                          )}
+                      </div>
+                  )}
+              </div>
 
-                  <button onClick={handleShare} className="flex items-center gap-2 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-gray-50 dark:hover:bg-white/5 transition-all">
-                      <Share2 size={16} /> Share
-                  </button>
-
+              {/* RIGHT: ACTIONS */}
+              <div className="flex items-center gap-3 shrink-0">
                   {/* DELETE BUTTON */}
                   {canDelete && (
                       <button 
                         onClick={() => setShowDeleteConfirm(true)} 
-                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors border border-transparent"
                         title="Move to Recycle Bin"
                       >
-                          <Trash2 size={20} />
+                          <Trash2 size={18} />
                       </button>
                   )}
+
+                  <div className="h-8 w-px bg-gray-200 dark:bg-white/10 mx-1 hidden sm:block"></div>
+
+                  <button onClick={handleShare} className="hidden sm:flex items-center gap-2 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-gray-50 dark:hover:bg-white/5 transition-all">
+                      <Share2 size={16} /> Share
+                  </button>
+
+                  {/* PRIMARY: DOWNLOAD (Blue) */}
+                  <button onClick={handleDownload} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md hover:scale-105 transition-transform active:scale-95">
+                      <Download size={18} /> Download
+                  </button>
               </div>
           </div>
+      </div>
+
+      {/* MOBILE SEARCH (Visible only on small screens below header) */}
+      <div className="md:hidden px-6 pt-4 pb-2">
+           <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search size={16} className="text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+              </div>
+              <input
+                type="text"
+                className="block w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-black/20 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all shadow-sm"
+                placeholder="Search library..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleGlobalSearch}
+              />
+           </div>
       </div>
 
       {loading || !asset ? (
           <DetailSkeleton />
       ) : (
-          <div className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+          <div className="max-w-[2000px] mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-8 items-start">
               
               {/* LEFT: PREVIEW & RELATED (Scrollable) */}
-              <div className="lg:col-span-2 space-y-12">
+              <div className="lg:col-span-2 xl:col-span-3 space-y-12 min-w-0">
                   {/* MEDIA PREVIEW */}
-                  <div className="rounded-3xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] border border-gray-200 dark:border-white/5 shadow-sm">
+                  <div className="rounded-3xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] border border-gray-200 dark:border-white/5 shadow-sm relative group">
                       {asset.mimeType.startsWith('image/') ? (
-                          <img src={asset.path} alt={asset.originalName} className="w-full h-auto object-contain max-h-[80vh]" />
+                          <img src={asset.path} alt={asset.originalName} className="w-full h-auto object-contain max-h-[75vh]" />
                       ) : asset.mimeType.startsWith('video/') ? (
-                          <video src={asset.path} poster={asset.thumbnailPath || undefined} controls className="w-full h-auto max-h-[80vh]" />
+                          <video src={asset.path} poster={asset.thumbnailPath || undefined} controls className="w-full h-auto max-h-[75vh]" />
                       ) : (
                           <div className="h-96 flex flex-col items-center justify-center text-gray-400">
                               <FileText size={64} />
@@ -378,10 +484,12 @@ const AssetDetail = () => {
 
                   {/* RELATED ASSETS SECTION */}
                   {isRelatedLoading ? (
-                      <RelatedSkeleton />
+                      <div className="animate-pulse h-64 bg-gray-100 dark:bg-white/5 rounded-2xl"></div>
                   ) : relatedAssets.length > 0 && (
                       <div>
-                          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">More Like This</h3>
+                          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                             More Like This
+                          </h3>
                           <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-4" columnClassName="pl-4 bg-clip-padding">
                               {relatedAssets.map(item => (
                                   <div key={item.id} className="block mb-4 group cursor-pointer" onClick={() => navigate(`/assets/${item.id}`)}>
@@ -399,43 +507,45 @@ const AssetDetail = () => {
                   )}
               </div>
 
-              {/* RIGHT: INFO PANEL & CHAT (Sticky) */}
-              <div className="space-y-6 min-w-0 lg:sticky lg:top-24">
+              {/* RIGHT: INFO PANEL (Sticky) */}
+              <div 
+                  id="asset-sidebar"
+                  className="space-y-6 lg:sticky lg:top-24 h-fit min-w-0 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/5 rounded-3xl p-6 shadow-sm"
+              >
                   
-                  {/* 1. TITLE & RENAME */}
+                  {/* 1. TITLE & METADATA */}
                   <div className="group min-w-0">
                       {isRenaming ? (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 mb-4">
                               <input 
                                   type="text" 
                                   value={newName} 
                                   onChange={(e) => setNewName(e.target.value)} 
                                   autoFocus 
-                                  className="w-full text-2xl font-bold bg-white dark:bg-[#1A1D21] border-b-2 border-blue-500 outline-none text-gray-900 dark:text-white pb-1 min-w-0"
+                                  className="w-full text-xl font-bold bg-white dark:bg-[#1A1D21] border-b-2 border-blue-500 outline-none text-gray-900 dark:text-white pb-1 min-w-0"
                               />
                               <button onClick={handleRename} className="shrink-0 p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200"><Check size={18} /></button>
                               <button onClick={() => setIsRenaming(false)} className="shrink-0 p-2 bg-gray-100 dark:bg-white/10 text-gray-500 rounded-lg hover:bg-gray-200"><X size={18} /></button>
                           </div>
                       ) : (
-                          <div className="flex items-start justify-between gap-2">
-                              <h1 className="text-2xl font-bold text-gray-900 dark:text-white leading-tight break-words break-all line-clamp-3" title={asset.originalName || asset.filename}>
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                              <h1 className="text-xl font-bold text-gray-900 dark:text-white leading-tight break-words" title={asset.originalName || asset.filename}>
                                   {asset.originalName || asset.filename}
                               </h1>
                               {canManageAsset && (
-                                  <button onClick={() => setIsRenaming(true)} className="shrink-0 ml-1 p-1.5 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Rename Asset">
+                                  <button onClick={() => setIsRenaming(true)} className="shrink-0 mt-1 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Rename Asset">
                                       <Edit2 size={16} />
                                   </button>
                               )}
                           </div>
                       )}
                       
-                      <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-gray-400 font-medium mt-2">
+                      <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-gray-400 font-medium">
                           <span className="flex items-center gap-1.5"><Calendar size={14}/> {new Date(asset.createdAt).toLocaleDateString()}</span>
                           <span className="flex items-center gap-1.5"><HardDrive size={14}/> {(asset.size / 1024 / 1024).toFixed(2)} MB</span>
                           <span className="uppercase bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded text-[10px] tracking-wide">{asset.mimeType.split('/')[1]}</span>
                       </div>
 
-                      {/* ASSET OWNER */}
                       <div className="flex items-center gap-2 mt-4 text-sm font-medium text-gray-700 dark:text-gray-300">
                           <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center text-[10px] text-white font-bold shadow-sm shrink-0">
                               {asset.uploadedBy?.name?.charAt(0).toUpperCase() || 'U'}
@@ -446,32 +556,32 @@ const AssetDetail = () => {
                       </div>
                   </div>
 
-                  <hr className="border-gray-200 dark:border-white/10" />
+                  <hr className="border-gray-100 dark:border-white/5" />
 
                   {/* 2. ACTION BUTTONS */}
-                  <div className={`grid gap-3 relative z-20 ${canAddToTopic ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  <div className={`grid gap-3 ${canAddToTopic ? 'grid-cols-2' : 'grid-cols-1'}`}>
                       <button 
                           onClick={() => openSelectionModal('collection')}
-                          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 hover:border-blue-500 dark:hover:border-blue-400 bg-white dark:bg-[#1A1D21] text-gray-700 dark:text-gray-200 font-bold text-sm transition-all shadow-sm active:scale-95"
+                          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 hover:border-blue-500 dark:hover:border-blue-400 bg-gray-50 dark:bg-white/5 text-gray-700 dark:text-gray-200 font-bold text-xs transition-all shadow-sm active:scale-95"
                       >
-                          <FolderPlus size={18} className="text-blue-500" /> Collection
+                          <FolderPlus size={16} className="text-blue-500" /> Add to Collection
                       </button>
 
                       {canAddToTopic && (
                           <button 
                               onClick={() => openSelectionModal('topic')}
-                              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 hover:border-purple-500 dark:hover:border-purple-400 bg-white dark:bg-[#1A1D21] text-gray-700 dark:text-gray-200 font-bold text-sm transition-all shadow-sm active:scale-95"
+                              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 hover:border-purple-500 dark:hover:border-purple-400 bg-gray-50 dark:bg-white/5 text-gray-700 dark:text-gray-200 font-bold text-xs transition-all shadow-sm active:scale-95"
                           >
-                              <Layout size={18} className="text-purple-500" /> Topic
+                              <Layout size={16} className="text-purple-500" /> Add to Topic
                           </button>
                       )}
                   </div>
 
                   {/* 3. GOOGLE DRIVE LINK */}
-                  <div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl p-5 border border-blue-100 dark:border-blue-800/30">
-                      <div className="flex items-center justify-between mb-3">
-                          <h3 className="text-sm font-bold text-gray-800 dark:text-blue-100 flex items-center gap-2">
-                              <ExternalLink size={16} /> Source Link
+                  <div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl p-4 border border-blue-100 dark:border-blue-800/30">
+                      <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-xs font-bold text-gray-800 dark:text-blue-100 flex items-center gap-2 uppercase tracking-wide">
+                              Source Link
                           </h3>
                           {canManageAsset && (
                               <button onClick={() => setIsEditingLink(!isEditingLink)} className="text-xs font-bold text-blue-600 hover:underline">
@@ -498,10 +608,10 @@ const AssetDetail = () => {
                               href={effectiveLink} 
                               target="_blank" 
                               rel="noreferrer" 
-                              className="flex items-center justify-center gap-2 w-full bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500 text-gray-700 dark:text-gray-200 font-semibold py-3 rounded-xl shadow-sm transition-all hover:shadow-md group"
+                              className="flex items-center justify-center gap-2 w-full bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500 text-gray-700 dark:text-gray-200 font-semibold py-2.5 rounded-xl shadow-sm transition-all hover:shadow-md group text-sm"
                           >
-                              <LinkIcon size={16} className="text-blue-500 group-hover:rotate-45 transition-transform" />
-                              Open Link
+                              <LinkIcon size={14} className="text-blue-500 group-hover:rotate-45 transition-transform" />
+                              Open External Link
                           </a>
                       ) : (
                           <p className="text-xs text-gray-400 italic">No external link added.</p>
@@ -510,13 +620,13 @@ const AssetDetail = () => {
 
                   {/* 4. DESCRIPTION */}
                   {effectiveDescription && (
-                    <div className="min-w-0">
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</h3>
-                        <CollapsibleText text={effectiveDescription} />
-                    </div>
+                      <div className="min-w-0">
+                          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</h3>
+                          <CollapsibleText text={effectiveDescription} />
+                      </div>
                   )}
 
-                  {/* 5. TAGS */}
+                  {/* 5. TAGS (Collapsible) */}
                   <div>
                       <div className="flex items-center justify-between mb-2">
                           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tags</h3>
@@ -528,20 +638,31 @@ const AssetDetail = () => {
                       </div>
                       
                       <div className="flex flex-wrap gap-2">
-                          {effectiveTags.length > 0 ? (
-                            effectiveTags.map((tag: string) => (
-                                <span key={tag} className="group flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-full border border-gray-200 dark:border-white/5 max-w-full">
-                                    <Hash size={10} className="opacity-50 shrink-0" /> 
-                                    <span className="truncate">{tag}</span>
-                                    {canManageAsset && (
-                                        <button onClick={() => handleRemoveTag(tag)} className="ml-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                            <X size={10} />
-                                        </button>
-                                    )}
-                                </span>
-                            ))
+                          {visibleTags.length > 0 ? (
+                              <>
+                                  {visibleTags.map((tag: string) => (
+                                      <span key={tag} className="group flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-full border border-gray-200 dark:border-white/5 max-w-full">
+                                          <Hash size={10} className="opacity-50 shrink-0" /> 
+                                          <span className="truncate">{tag}</span>
+                                          {canManageAsset && (
+                                              <button onClick={() => handleRemoveTag(tag)} className="ml-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                  <X size={10} />
+                                              </button>
+                                          )}
+                                      </span>
+                                  ))}
+                                  
+                                  {effectiveTags.length > 10 && (
+                                      <button 
+                                          onClick={() => setShowAllTags(!showAllTags)}
+                                          className="text-xs font-bold text-gray-500 hover:text-blue-600 flex items-center gap-1 px-2 py-1"
+                                      >
+                                          {showAllTags ? <><ChevronUp size={12}/> Show Less</> : <><ChevronDown size={12}/> +{effectiveTags.length - 10} more</>}
+                                      </button>
+                                  )}
+                              </>
                           ) : (
-                            <p className="text-xs text-gray-400 italic">No tags found.</p>
+                              <p className="text-xs text-gray-400 italic">No tags found.</p>
                           )}
 
                           {isAddingTag && (
@@ -557,13 +678,6 @@ const AssetDetail = () => {
                                   />
                               </form>
                           )}
-                      </div>
-                  </div>
-
-                  {/* ✅ 6. CHAT PANEL */}
-                  <div className="mt-8 pt-6 border-t border-gray-200 dark:border-white/10">
-                      <div className="h-[500px] rounded-2xl overflow-hidden border border-gray-200 dark:border-white/10 shadow-sm bg-white dark:bg-[#1A1D21]">
-                           <AssetChatPanel assetId={asset.id} />
                       </div>
                   </div>
 
