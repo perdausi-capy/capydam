@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../api/client';
 import { 
@@ -17,7 +17,8 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import ConfirmModal from '../components/ConfirmModal';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface Category {
   id: string;
@@ -27,8 +28,16 @@ interface Category {
   _count: { assets: number };
 }
 
-// --- 🦴 SKELETON COMPONENT (The Fix for "Heaviness") ---
-const CategorySkeleton = () => (
+// ⚡️ HELPER: Resize images on the fly to save bandwidth
+const getOptimizedUrl = (url: string | undefined) => {
+    if (!url) return undefined;
+    // If using Supabase, append transformation params
+    if (url.includes('supabase.co')) return `${url}?width=600&resize=cover&quality=70`;
+    return url;
+};
+
+// --- 🦴 SKELETON COMPONENT ---
+const CategorySkeleton = React.memo(() => (
     <div className="rounded-3xl border border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] h-64 overflow-hidden">
         <div className="h-4/5 bg-gray-200 dark:bg-white/5 animate-pulse" />
         <div className="h-1/5 p-5 flex items-center justify-between border-t border-gray-100 dark:border-white/5">
@@ -36,24 +45,19 @@ const CategorySkeleton = () => (
             <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-white/5 animate-pulse" />
         </div>
     </div>
-);
+));
 
-// --- 🎥 SMART MEDIA COMPONENT (The Fix for "Lag") ---
-// Automatically switches between Image and Video based on extension
-const CardMedia = ({ src, alt, className }: { src: string, alt: string, className: string }) => {
-    // Check if it's a video file
-    const isVideo = src.match(/\.(mp4|webm|mov)$/i);
+// --- 🎥 SMART MEDIA COMPONENT ---
+const CardMedia = React.memo(({ src, alt, className }: { src: string, alt: string, className: string }) => {
+    const isVideo = useMemo(() => src.match(/\.(mp4|webm|mov)$/i), [src]);
+    const optimizedSrc = useMemo(() => isVideo ? src : getOptimizedUrl(src), [src, isVideo]);
 
     if (isVideo) {
         return (
             <video
-                src={src}
+                src={src} // Videos usually shouldn't be resized via URL params unless supported
                 className={className}
-                muted
-                loop
-                playsInline
-                autoPlay
-                // GPU Acceleration Hints
+                muted loop playsInline autoPlay
                 style={{ transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
             />
         );
@@ -61,23 +65,23 @@ const CardMedia = ({ src, alt, className }: { src: string, alt: string, classNam
 
     return (
         <img 
-            src={src} 
+            src={optimizedSrc} 
             alt={alt} 
             className={className}
             loading="lazy"
             decoding="async"
         />
     );
-};
+});
 
-// --- CARD COMPONENT ---
-const CategoryCard = ({ cat, icon: Icon, colorClass, canManage, onEdit, onDelete }: any) => (
+// --- 💎 MEMOIZED CARD COMPONENT ---
+const CategoryCard = React.memo(({ cat, icon: Icon, colorClass, canManage, onEdit, onDelete }: any) => (
     <motion.div 
         layout
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.3 }}
-        className="group relative flex flex-col rounded-3xl border border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-300 overflow-hidden h-64"
+        className="group relative flex flex-col rounded-3xl border border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-300 overflow-hidden h-64 transform-gpu"
     >
         <Link to={`/categories/${cat.id}`} className="flex-1 flex flex-col h-full z-0">
             {/* COVER AREA */}
@@ -131,14 +135,25 @@ const CategoryCard = ({ cat, icon: Icon, colorClass, canManage, onEdit, onDelete
             </div>
         )}
     </motion.div>
-);
+));
 
 const Categories = () => {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const canManage = user?.role === 'admin' || user?.role === 'editor';
+
+  // --- 1. DATA FETCHING (Cached) ---
+  const { data: categories = [], isLoading: loading } = useQuery<Category[]>({
+      queryKey: ['categories'],
+      queryFn: async () => {
+          const { data } = await client.get('/categories');
+          return data;
+      },
+      staleTime: 1000 * 60 * 10, // ✅ Data stays fresh for 10 minutes (Instant load on return)
+      refetchOnWindowFocus: false,
+  });
   
-  // Modals & Form State (Keep existing)
+  // Modals & Form State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formName, setFormName] = useState('');
@@ -147,29 +162,50 @@ const Categories = () => {
   const [formPreview, setFormPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
 
-  const canManage = user?.role === 'admin' || user?.role === 'editor';
+  // --- 2. OPTIMIZED MUTATIONS ---
+  const createMutation = useMutation({
+      mutationFn: (formData: FormData) => client.post('/categories', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+      onSuccess: () => {
+          queryClient.invalidateQueries(['categories'] as any);
+          toast.success("Topic created!");
+          setIsModalOpen(false);
+      },
+      onError: (err: any) => toast.error(err.response?.data?.message || 'Failed')
+  });
 
-  const fetchCategories = async () => {
-    try {
-      const { data } = await client.get('/categories');
-      setCategories(data);
-    } catch (error) { toast.error("Failed to load topics"); } 
-    // Small timeout to prevent flicker on fast loads
-    finally { setTimeout(() => setLoading(false), 300); }
-  };
+  const updateMutation = useMutation({
+      mutationFn: ({ id, data }: { id: string, data: FormData }) => client.patch(`/categories/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+      onSuccess: () => {
+          queryClient.invalidateQueries(['categories'] as any);
+          toast.success("Topic updated!");
+          setIsModalOpen(false);
+      }
+  });
 
-  useEffect(() => { fetchCategories(); }, []);
+  const deleteMutation = useMutation({
+      mutationFn: (id: string) => client.delete(`/categories/${id}`),
+      onSuccess: () => {
+          queryClient.invalidateQueries(['categories'] as any);
+          toast.success("Topic deleted");
+          setDeleteId(null);
+      }
+  });
 
-  // --- HANDLERS (Keep existing logic) ---
-  const openCreate = () => {
+  // --- HANDLERS (Memoized) ---
+  const openCreate = useCallback(() => {
       setEditingId(null); setFormName(''); setFormGroup('Features'); setFormFile(null); setFormPreview(null); setIsModalOpen(true);
-  };
+  }, []);
 
-  const openEdit = (e: React.MouseEvent, cat: Category) => {
-      e.preventDefault(); setEditingId(cat.id); setFormName(cat.name); setFormGroup(cat.group); setFormFile(null); setFormPreview(cat.coverImage || null); setIsModalOpen(true);
-  };
+  const openEdit = useCallback((e: React.MouseEvent, cat: Category) => {
+      e.preventDefault(); 
+      setEditingId(cat.id); 
+      setFormName(cat.name); 
+      setFormGroup(cat.group); 
+      setFormFile(null); 
+      setFormPreview(cat.coverImage || null); 
+      setIsModalOpen(true);
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0]) {
@@ -183,40 +219,30 @@ const Categories = () => {
     e.preventDefault();
     if (!formName.trim()) return;
     setIsSubmitting(true);
-    try {
-        const formData = new FormData();
-        formData.append('name', formName);
-        formData.append('group', formGroup);
-        if (formFile) formData.append('cover', formFile);
+    
+    const formData = new FormData();
+    formData.append('name', formName);
+    formData.append('group', formGroup);
+    if (formFile) formData.append('cover', formFile);
 
+    try {
         if (editingId) {
-            await client.patch(`/categories/${editingId}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-            toast.success("Topic updated!");
+            await updateMutation.mutateAsync({ id: editingId, data: formData });
         } else {
-            await client.post('/categories', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-            toast.success("Topic created!");
+            await createMutation.mutateAsync(formData);
         }
-        setIsModalOpen(false);
-        fetchCategories();
-    } catch (error: any) {
-        toast.error(error.response?.data?.message || 'Operation failed');
-    } finally { setIsSubmitting(false); }
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
-  const handleDelete = async () => {
-    if (!deleteId) return;
-    setIsDeleting(true);
-    try {
-        await client.delete(`/categories/${deleteId}`);
-        toast.success("Topic deleted");
-        setCategories(prev => prev.filter(c => c.id !== deleteId));
-        setDeleteId(null);
-    } catch (error) { toast.error("Failed to delete topic"); } 
-    finally { setIsDeleting(false); }
+  const handleDelete = () => {
+    if (deleteId) deleteMutation.mutate(deleteId);
   };
 
-  const features = categories.filter(c => c.group === 'Features');
-  const inspiration = categories.filter(c => c.group === 'Inspiration');
+  // Memoize Filtered Lists to prevent recalc on every render
+  const features = useMemo(() => categories.filter(c => c.group === 'Features'), [categories]);
+  const inspiration = useMemo(() => categories.filter(c => c.group === 'Inspiration'), [categories]);
 
   return (
     <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] transition-colors duration-500 overflow-x-hidden">
@@ -258,10 +284,8 @@ const Categories = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {loading ? (
-                    // 🦴 SKELETONS
                     Array.from({ length: 4 }).map((_, i) => <CategorySkeleton key={i} />)
                 ) : (
-                    // 🎥 REAL CARDS
                     features.map(c => (
                         <CategoryCard 
                             key={c.id} 
@@ -307,63 +331,74 @@ const Categories = () => {
       </div>
 
       {/* --- CREATE/EDIT MODAL --- */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-            <motion.div 
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="relative w-full max-w-md bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl p-6 border border-gray-200 dark:border-white/10"
-            >
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{editingId ? 'Edit Topic' : 'Add New Topic'}</h3>
-                    <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={20}/></button>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Topic Name</label>
-                        <input autoFocus type="text" required value={formName} onChange={e => setFormName(e.target.value)} className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30" placeholder="e.g. 3D Icons" />
+      <AnimatePresence>
+        {isModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
+                <motion.div 
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="relative w-full max-w-md bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl p-6 border border-gray-200 dark:border-white/10"
+                >
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">{editingId ? 'Edit Topic' : 'Add New Topic'}</h3>
+                        <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={20}/></button>
                     </div>
 
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Group</label>
-                        <div className="grid grid-cols-2 gap-2">
-                            {['Features', 'Inspiration'].map(g => (
-                                <button key={g} type="button" onClick={() => setFormGroup(g)} className={`py-2.5 rounded-xl text-sm font-semibold border transition-all ${formGroup === g ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400' : 'bg-white dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-500 hover:bg-gray-50 dark:hover:bg-white/10'}`}>{g}</button>
-                            ))}
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Topic Name</label>
+                            <input autoFocus type="text" required value={formName} onChange={e => setFormName(e.target.value)} className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/30" placeholder="e.g. 3D Icons" />
                         </div>
-                    </div>
 
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Cover Image (Optional)</label>
-                        <div className="relative group cursor-pointer border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-black/20 hover:border-blue-400 transition-colors h-32 flex flex-col items-center justify-center text-center overflow-hidden">
-                            <input type="file" accept="image/*,video/mp4" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
-                            {formPreview ? (
-                                formPreview.match(/\.(mp4|webm)$/i) || (formFile && formFile.type.startsWith('video/')) ? (
-                                    <video src={formPreview} className="w-full h-full object-cover" muted autoPlay loop />
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Group</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {['Features', 'Inspiration'].map(g => (
+                                    <button key={g} type="button" onClick={() => setFormGroup(g)} className={`py-2.5 rounded-xl text-sm font-semibold border transition-all ${formGroup === g ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400' : 'bg-white dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-500 hover:bg-gray-50 dark:hover:bg-white/10'}`}>{g}</button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Cover Image (Optional)</label>
+                            <div className="relative group cursor-pointer border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-black/20 hover:border-blue-400 transition-colors h-32 flex flex-col items-center justify-center text-center overflow-hidden">
+                                <input type="file" accept="image/*,video/mp4" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                {formPreview ? (
+                                    formPreview.match(/\.(mp4|webm)$/i) || (formFile && formFile.type.startsWith('video/')) ? (
+                                        <video src={formPreview} className="w-full h-full object-cover" muted autoPlay loop />
+                                    ) : (
+                                        <img src={formPreview} alt="Preview" className="w-full h-full object-cover" />
+                                    )
                                 ) : (
-                                    <img src={formPreview} alt="Preview" className="w-full h-full object-cover" />
-                                )
-                            ) : (
-                                <div className="text-gray-400 dark:text-gray-500">
-                                    <UploadCloud size={24} className="mx-auto mb-2" />
-                                    <span className="text-xs">Click to upload cover</span>
-                                </div>
-                            )}
+                                    <div className="text-gray-400 dark:text-gray-500">
+                                        <UploadCloud size={24} className="mx-auto mb-2" />
+                                        <span className="text-xs">Click to upload cover</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
 
-                    <button type="submit" disabled={isSubmitting} className="w-full mt-4 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-bold py-3 hover:shadow-lg hover:scale-[1.02] transition-all disabled:opacity-70">
-                        {isSubmitting ? 'Saving...' : (editingId ? 'Update Topic' : 'Create Topic')}
-                    </button>
-                </form>
-            </motion.div>
-        </div>
-      )}
+                        <button type="submit" disabled={isSubmitting} className="w-full mt-4 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-black font-bold py-3 hover:shadow-lg hover:scale-[1.02] transition-all disabled:opacity-70">
+                            {isSubmitting ? 'Saving...' : (editingId ? 'Update Topic' : 'Create Topic')}
+                        </button>
+                    </form>
+                </motion.div>
+            </div>
+        )}
+      </AnimatePresence>
 
-      <ConfirmModal isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} title="Delete Topic" message="Are you sure? This will delete the folder but keep the assets." confirmText="Delete" isDangerous={true} isLoading={isDeleting} />
+      <ConfirmModal 
+        isOpen={!!deleteId} 
+        onClose={() => setDeleteId(null)} 
+        onConfirm={handleDelete} 
+        title="Delete Topic" 
+        message="Are you sure? This will delete the folder but keep the assets." 
+        confirmText="Delete" 
+        isDangerous={true} 
+        isLoading={deleteMutation.isPending} 
+      />
     </div>
   );
 };
