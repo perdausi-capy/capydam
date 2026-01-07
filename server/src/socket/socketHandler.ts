@@ -16,6 +16,19 @@ export const setupSocketIO = (io: Server) => {
 
     io.on('connection', (socket: Socket) => {
         
+
+            // --- 0. FETCH ALL USERS (Directory) ---
+            socket.on('fetch_all_users', async () => {
+                try {
+                    const users = await prisma.user.findMany({
+                        select: { id: true, name: true, avatar: true },
+                        orderBy: { name: 'asc' }
+                    });
+                    socket.emit('receive_all_users', users);
+                } catch (e) {
+                    console.error("❌ Fetch Users Error:", e);
+                }
+            });
         // --- 1. REGISTRATION & AUTO-JOIN ---
         socket.on('register_user', async (user: SocketUser) => {
             console.log(`🔌 Connected: ${user.name} (${user.userId})`);

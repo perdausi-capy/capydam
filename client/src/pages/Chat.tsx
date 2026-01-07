@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef, useState } from 'react';
+import React, { useMemo, useEffect, useRef, useState, useCallback } from 'react';
 import { useChat } from '../hooks/useChat';
 import { useAuth } from '../context/AuthContext';
 import ChatInput from '../components/ChatInput'; 
@@ -7,12 +7,118 @@ import { renderMessageContent } from '../utils/messageRenderer';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
+// --- 🦴 SIDEBAR SKELETON ---
+const SidebarSkeleton = () => (
+    <div className="animate-pulse space-y-4 p-3">
+        {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-gray-200 dark:bg-white/5 rounded-full" />
+                <div className="h-4 bg-gray-200 dark:bg-white/5 rounded w-24" />
+            </div>
+        ))}
+    </div>
+);
+
+// --- 💎 MEMOIZED ROOM ITEM ---
+const RoomItem = React.memo(({ room, activeRoomId, user, selectRoom, setRoomToDelete }: any) => {
+    const isAdmin = room.memberships.find((m: any) => m.user.id === user.id)?.role === 'ADMIN';
+    const isGroup = room.type === 'group';
+    
+    return (
+        <div 
+            onClick={() => selectRoom(room.id)} 
+            className={`group/item flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${activeRoomId === room.id ? 'bg-blue-600/10 text-blue-500 font-bold' : 'hover:bg-gray-100 dark:hover:bg-white/5 text-gray-500'}`}
+        >
+            <div className="flex items-center gap-2 min-w-0">
+                {isGroup ? <Lock size={16} className="shrink-0"/> : <Hash size={18} className="shrink-0"/>}
+                <span className="truncate">{room.name}</span>
+            </div>
+            <div className="flex items-center gap-1">
+                {isAdmin && (
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); setRoomToDelete({ id: room.id, name: room.name }); }}
+                        className="opacity-0 group-hover/item:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 rounded transition-all"
+                    >
+                        <Trash2 size={12} />
+                    </button>
+                )}
+                {room.unreadCount > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{room.unreadCount}</span>}
+            </div>
+        </div>
+    );
+});
+
+// --- 💎 MEMOIZED DM ITEM (For Sidebar) ---
+const DMItem = React.memo(({ room, activeRoomId, selectRoom, getRoomDetails }: any) => {
+    const details = getRoomDetails(room);
+    
+    return (
+        <div 
+            onClick={() => selectRoom(room.id)} 
+            className={`flex items-center gap-3 p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg cursor-pointer group transition-colors ${activeRoomId === room.id ? 'bg-blue-600/10 text-blue-500 font-bold' : ''}`}
+        >
+            <div className="relative">
+                <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 overflow-hidden flex items-center justify-center text-xs font-bold text-white">
+                    {details.avatar ? <img src={details.avatar} className="w-full h-full object-cover" /> : details.name?.charAt(0).toUpperCase()}
+                </div>
+                {details.isOnline && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-[#15171B] rounded-full" />}
+            </div>
+            <span className="text-sm font-medium flex-1 truncate">{details.name}</span>
+            {room.unreadCount > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{room.unreadCount}</span>}
+        </div>
+    );
+});
+
+// --- 💎 MEMOIZED SEARCH RESULT ITEM (For "+" Menu) ---
+const SearchUserItem = React.memo(({ u, startDM, toggleSearch }: any) => {
+    return (
+        <div 
+            onClick={() => { startDM(u.id); toggleSearch(false); }} 
+            className="flex items-center gap-3 p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg cursor-pointer group transition-colors"
+        >
+            <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 overflow-hidden flex items-center justify-center text-xs font-bold text-white">
+                {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : u.name?.charAt(0).toUpperCase()}
+            </div>
+            <span className="text-sm font-medium flex-1 truncate text-gray-700 dark:text-gray-200">{u.name}</span>
+            <Plus size={16} className="text-gray-400 group-hover:text-blue-500" />
+        </div>
+    );
+});
+
+// --- 💎 RIGHT SIDEBAR USER ITEM ---
+const UserItem = React.memo(({ u, startDM, currentUser, activeRoomType, setMemberToKick }: any) => {
+    return (
+        <div 
+            onClick={() => startDM(u.userId)} 
+            className={`flex items-center gap-3 p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg cursor-pointer group transition-colors`}
+        >
+            <div className="relative">
+                <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 overflow-hidden flex items-center justify-center text-xs font-bold text-white">
+                    {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : u.name?.charAt(0).toUpperCase()}
+                </div>
+                {u.isOnline && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-[#15171B] rounded-full" />}
+            </div>
+            <span className="text-sm font-medium flex-1 truncate">{u.name}</span>
+            
+            {activeRoomType === 'group' && u.userId !== currentUser.id && (
+                <button 
+                    onClick={(e) => { e.stopPropagation(); setMemberToKick({ id: u.userId, name: u.name }); }} 
+                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded opacity-0 group-hover:opacity-100 transition-opacity" 
+                    title="Remove Member"
+                >
+                    <UserMinus size={14} />
+                </button>
+            )}
+        </div>
+    );
+});
+
 const Chat = () => {
     const { user } = useAuth();
     const { 
         rooms, activeRoomId, messages, onlineUsers, allUsers,
         isLoadingMessages, isSending,
-        selectRoom, startDM, createChannel, createGroup, deleteRoom, // ✅ Added deleteRoom
+        selectRoom, startDM, createChannel, createGroup, deleteRoom,
         addMember, kickMember, 
         sendMessage, editMessage, deleteMessage,
         getRoomDetails 
@@ -29,21 +135,24 @@ const Chat = () => {
     const [userSearchQuery, setUserSearchQuery] = useState('');
 
     // Loaders
-    const [isSubmitting, setIsSubmitting] = useState(false); // For creation
-    const [loadingId, setLoadingId] = useState<string | null>(null); // For deletion (per item)
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [loadingId, setLoadingId] = useState<string | null>(null);
 
     // Modals
     const [isAddingMember, setIsAddingMember] = useState(false);
     const [memberSearchQuery, setMemberSearchQuery] = useState('');
     const [memberToKick, setMemberToKick] = useState<{ id: string, name: string } | null>(null);
     const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
-    const [roomToDelete, setRoomToDelete] = useState<{ id: string, name: string } | null>(null); // ✅ Room Delete Modal
+    const [roomToDelete, setRoomToDelete] = useState<{ id: string, name: string } | null>(null);
 
     // Editing
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [editContent, setEditContent] = useState('');
 
-    // Auto-scroll logic
+    // ✅ DETECT LOADING STATE
+    const isSidebarLoading = !rooms || (allUsers.length === 0 && rooms.length === 0);
+
+    // Auto-scroll
     useEffect(() => {
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -52,12 +161,24 @@ const Chat = () => {
 
     // Derived Lists
     const activeRoom = useMemo(() => rooms.find(r => r.id === activeRoomId), [rooms, activeRoomId]);
-    const channels = rooms.filter(r => r.type === 'global' || r.type === 'channel');
-    const groups = rooms.filter(r => r.type === 'group');
-    const dms = rooms.filter(r => r.type === 'dm');
+    const channels = useMemo(() => rooms.filter(r => r.type === 'global' || r.type === 'channel'), [rooms]);
+    const groups = useMemo(() => rooms.filter(r => r.type === 'group'), [rooms]);
+    
+    // ✅ FIX: Only get Active DMs for the sidebar
+    const dms = useMemo(() => rooms.filter(r => r.type === 'dm'), [rooms]);
 
-    // Sidebar Users Logic
-    const sidebarUsers = useMemo(() => {
+    // ✅ FIX: Search Results for the "+" Button (Start new chat)
+    // Filter `allUsers` to find people you DON'T have a DM with yet (optional) or just search everyone
+    const searchResults = useMemo(() => {
+        if (!userSearchQuery) return [];
+        return allUsers.filter(u => 
+            u.id !== user?.id && 
+            u.name.toLowerCase().includes(userSearchQuery.toLowerCase())
+        );
+    }, [allUsers, userSearchQuery, user?.id]);
+
+    // Right Sidebar Users (Group Members or Online Users)
+    const rightSidebarUsers = useMemo(() => {
         if (activeRoom && activeRoom.type === 'group') {
             return activeRoom.memberships
                 .map(m => ({
@@ -69,60 +190,41 @@ const Chat = () => {
                 .sort((a, b) => Number(b.isOnline) - Number(a.isOnline));
         }
         
-        const unique = new Map();
-        onlineUsers.forEach(u => { if (u.userId !== user?.id) unique.set(u.userId, { ...u, isOnline: true }); });
-        allUsers.forEach(u => { if (u.id !== user?.id && !unique.has(u.id)) unique.set(u.id, { userId: u.id, name: u.name, avatar: u.avatar, isOnline: false }); });
-        return Array.from(unique.values());
+        // If in Channel or DM, showing all online/offline users might be too much clutter.
+        // Usually, Slack/Discord only shows members of the CURRENT room.
+        // For Public Channels, that means everyone.
+        
+        const userMap = new Map();
+        onlineUsers.forEach(u => { if (u.userId !== user?.id) userMap.set(u.userId, { ...u, isOnline: true }); });
+        allUsers.forEach(u => { if (u.id !== user?.id && !userMap.has(u.id)) userMap.set(u.id, { userId: u.id, name: u.name, avatar: u.avatar, isOnline: false }); });
+        return Array.from(userMap.values());
     }, [activeRoom, onlineUsers, allUsers, user?.id]);
 
-    const filteredSidebarUsers = useMemo(() => {
-        if (!userSearchQuery) return sidebarUsers;
-        return sidebarUsers.filter((u: any) => u.name.toLowerCase().includes(userSearchQuery.toLowerCase()));
-    }, [sidebarUsers, userSearchQuery]);
-
-    // Candidates for Add Member
-    const candidatesForGroup = useMemo(() => {
-        if (!activeRoom || activeRoom.type !== 'group') return [];
-        const existingMemberIds = new Set(activeRoom.memberships.map(m => m.user.id));
-        const fullDirectory = allUsers.filter(u => u.id !== user?.id); 
-        return fullDirectory.filter((u: any) => !existingMemberIds.has(u.id) && u.name.toLowerCase().includes(memberSearchQuery.toLowerCase()));
-    }, [allUsers, activeRoom, memberSearchQuery, user?.id]);
-
     // --- HANDLERS ---
-    
-    // Create Channel
     const handleCreateChannel = async () => {
         if (newChannelName.trim()) {
             setIsSubmitting(true);
             await createChannel(newChannelName);
-            // Simulate delay for UX or wait for socket (optimistic)
-            setTimeout(() => {
-                setNewChannelName('');
-                setIsCreatingChannel(false);
-                setIsSubmitting(false);
-            }, 500);
+            setNewChannelName('');
+            setIsCreatingChannel(false);
+            setIsSubmitting(false);
         }
     };
 
-    // Create Group
     const handleCreateGroup = async () => {
         if (newGroupName.trim()) {
             setIsSubmitting(true);
             await createGroup(newGroupName);
-            setTimeout(() => {
-                setNewGroupName('');
-                setIsCreatingGroup(false);
-                setIsSubmitting(false);
-            }, 500);
+            setNewGroupName('');
+            setIsCreatingGroup(false);
+            setIsSubmitting(false);
         }
     };
 
-    // Confirm Delete Room
     const confirmDeleteRoom = () => {
         if (roomToDelete) {
             setLoadingId(roomToDelete.id);
             deleteRoom(roomToDelete.id);
-            // We don't turn off loadingId here immediately; it turns off when the room disappears from list
             setRoomToDelete(null);
         }
     };
@@ -135,6 +237,13 @@ const Chat = () => {
     const saveEdit = () => { if (editingMessageId && editContent.trim()) { editMessage(editingMessageId, editContent); setEditingMessageId(null); setEditContent(''); } };
     const confirmDeleteMessage = () => { if (messageToDelete) { deleteMessage(messageToDelete); setMessageToDelete(null); } };
 
+    // Candidates for Add Member Modal
+    const candidatesForGroup = useMemo(() => {
+        if (!activeRoom || activeRoom.type !== 'group') return [];
+        const existingMemberIds = new Set(activeRoom.memberships.map(m => m.user.id));
+        return allUsers.filter(u => u.id !== user?.id && !existingMemberIds.has(u.id) && u.name.toLowerCase().includes(memberSearchQuery.toLowerCase()));
+    }, [allUsers, activeRoom, memberSearchQuery, user?.id]);
+
     if (!user) return null;
 
     return (
@@ -142,150 +251,124 @@ const Chat = () => {
             <ToastContainer theme="dark" position="top-right" />
             
             {/* --- LEFT SIDEBAR (Rooms) --- */}
-            <div className="w-64 bg-gray-50 dark:bg-[#15171B] flex flex-col border-r border-gray-200 dark:border-white/5">
+            <div className="w-64 bg-gray-50 dark:bg-[#15171B] flex flex-col border-r border-gray-200 dark:border-white/5 shrink-0">
                 <div className="h-16 flex items-center px-5 font-bold text-lg border-b border-gray-200 dark:border-white/5">CapyChat</div>
+                
                 <div className="flex-1 overflow-y-auto p-3 space-y-6 custom-scrollbar">
                     
-                    {/* 1. CHANNELS */}
-                    <div>
-                        <div className="px-2 mb-2 flex items-center justify-between group">
-                            <span className="text-xs font-bold text-gray-400">CHANNELS</span>
-                            <button onClick={() => setIsCreatingChannel(true)} className="text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100"><Plus size={16} /></button>
-                        </div>
-                        
-                        {/* Creation Input */}
-                        {isCreatingChannel && (
-                            <div className="px-2 mb-2">
-                                <div className="flex items-center gap-1 bg-white dark:bg-black/20 border border-blue-500 rounded px-2 py-1">
-                                    {isSubmitting ? <Loader2 size={14} className="animate-spin text-blue-500" /> : <Hash size={14} className="text-gray-400" />}
-                                    <input 
-                                        autoFocus
-                                        disabled={isSubmitting}
-                                        className="w-full bg-transparent outline-none text-sm"
-                                        placeholder="new-channel"
-                                        value={newChannelName}
-                                        onChange={(e) => setNewChannelName(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') handleCreateChannel();
-                                            if (e.key === 'Escape') setIsCreatingChannel(false);
-                                        }}
-                                    />
-                                    {/* Cancel Button */}
-                                    <button onClick={() => setIsCreatingChannel(false)} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
+                    {isSidebarLoading ? <SidebarSkeleton /> : (
+                        <>
+                            {/* 1. CHANNELS */}
+                            <div>
+                                <div className="px-2 mb-2 flex items-center justify-between group">
+                                    <span className="text-xs font-bold text-gray-400">CHANNELS</span>
+                                    <button onClick={() => setIsCreatingChannel(true)} className="text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100"><Plus size={16} /></button>
                                 </div>
+                                
+                                {isCreatingChannel && (
+                                    <div className="px-2 mb-2">
+                                        <div className="flex items-center gap-1 bg-white dark:bg-black/20 border border-blue-500 rounded px-2 py-1">
+                                            {isSubmitting ? <Loader2 size={14} className="animate-spin text-blue-500" /> : <Hash size={14} className="text-gray-400" />}
+                                            <input 
+                                                autoFocus disabled={isSubmitting}
+                                                className="w-full bg-transparent outline-none text-sm" placeholder="new-channel"
+                                                value={newChannelName} onChange={(e) => setNewChannelName(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateChannel(); if (e.key === 'Escape') setIsCreatingChannel(false); }}
+                                            />
+                                            <button onClick={() => setIsCreatingChannel(false)} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {channels.map(room => (
+                                    <RoomItem key={room.id} room={room} activeRoomId={activeRoomId} user={user} selectRoom={selectRoom} setRoomToDelete={setRoomToDelete} />
+                                ))}
                             </div>
-                        )}
 
-                        {channels.map(room => {
-                            // Check if I am Admin (to show delete)
-                            // Note: For public channels, usually only creator/admin has role 'ADMIN'.
-                            const isAdmin = room.memberships.find(m => m.user.id === user.id)?.role === 'ADMIN';
-
-                            return (
-                                <div key={room.id} onClick={() => selectRoom(room.id)} className={`group/item flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer ${activeRoomId === room.id ? 'bg-blue-600/10 text-blue-500 font-bold' : 'hover:bg-gray-100 dark:hover:bg-white/5 text-gray-500'}`}>
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        <Hash size={18} className="shrink-0"/>
-                                        <span className="truncate">{room.name}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        {loadingId === room.id ? (
-                                            <Loader2 size={14} className="animate-spin text-gray-400" />
-                                        ) : (
-                                            isAdmin && (
-                                                <button 
-                                                    onClick={(e) => { e.stopPropagation(); setRoomToDelete({ id: room.id, name: room.name }); }}
-                                                    className="opacity-0 group-hover/item:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 rounded transition-all"
-                                                >
-                                                    <Trash2 size={12} />
-                                                </button>
-                                            )
-                                        )}
-                                        {room.unreadCount! > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{room.unreadCount}</span>}
-                                    </div>
+                            {/* 2. PRIVATE GROUPS */}
+                            <div>
+                                <div className="px-2 mb-2 flex items-center justify-between group">
+                                    <span className="text-xs font-bold text-gray-400">PRIVATE GROUPS</span>
+                                    <button onClick={() => setIsCreatingGroup(true)} className="text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100"><Plus size={16} /></button>
                                 </div>
-                            );
-                        })}
-                    </div>
+                                
+                                {isCreatingGroup && (
+                                    <div className="px-2 mb-2">
+                                        <div className="flex items-center gap-1 bg-white dark:bg-black/20 border border-blue-500 rounded px-2 py-1">
+                                            {isSubmitting ? <Loader2 size={14} className="animate-spin text-blue-500" /> : <Lock size={14} className="text-gray-400" />}
+                                            <input 
+                                                autoFocus disabled={isSubmitting}
+                                                className="w-full bg-transparent outline-none text-sm" placeholder="Group Name"
+                                                value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateGroup(); if (e.key === 'Escape') setIsCreatingGroup(false); }}
+                                            />
+                                            <button onClick={() => setIsCreatingGroup(false)} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
+                                        </div>
+                                    </div>
+                                )}
 
-                    {/* 2. PRIVATE GROUPS */}
-                    <div>
-                        <div className="px-2 mb-2 flex items-center justify-between group">
-                            <span className="text-xs font-bold text-gray-400">PRIVATE GROUPS</span>
-                            <button onClick={() => setIsCreatingGroup(true)} className="text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100"><Plus size={16} /></button>
-                        </div>
-                        
-                        {/* Creation Input */}
-                        {isCreatingGroup && (
-                            <div className="px-2 mb-2">
-                                <div className="flex items-center gap-1 bg-white dark:bg-black/20 border border-blue-500 rounded px-2 py-1">
-                                    {isSubmitting ? <Loader2 size={14} className="animate-spin text-blue-500" /> : <Lock size={14} className="text-gray-400" />}
-                                    <input 
-                                        autoFocus
-                                        disabled={isSubmitting}
-                                        className="w-full bg-transparent outline-none text-sm"
-                                        placeholder="Group Name"
-                                        value={newGroupName}
-                                        onChange={(e) => setNewGroupName(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') handleCreateGroup();
-                                            if (e.key === 'Escape') setIsCreatingGroup(false);
-                                        }}
-                                    />
-                                    <button onClick={() => setIsCreatingGroup(false)} className="text-gray-400 hover:text-red-500"><X size={14} /></button>
-                                </div>
+                                {groups.map(room => (
+                                    <RoomItem key={room.id} room={room} activeRoomId={activeRoomId} user={user} selectRoom={selectRoom} setRoomToDelete={setRoomToDelete} />
+                                ))}
                             </div>
-                        )}
 
-                        {groups.map(room => {
-                            const isAdmin = room.memberships.find(m => m.user.id === user.id)?.role === 'ADMIN';
-                            return (
-                                <div key={room.id} onClick={() => selectRoom(room.id)} className={`group/item flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer ${activeRoomId === room.id ? 'bg-blue-600/10 text-blue-500 font-bold' : 'hover:bg-gray-100 dark:hover:bg-white/5 text-gray-500'}`}>
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        <Lock size={16} className="shrink-0"/>
-                                        <span className="truncate">{room.name}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        {loadingId === room.id ? (
-                                            <Loader2 size={14} className="animate-spin text-gray-400" />
-                                        ) : (
-                                            isAdmin && (
-                                                <button 
-                                                    onClick={(e) => { e.stopPropagation(); setRoomToDelete({ id: room.id, name: room.name }); }}
-                                                    className="opacity-0 group-hover/item:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 rounded transition-all"
-                                                >
-                                                    <Trash2 size={12} />
-                                                </button>
-                                            )
+                            {/* 3. DIRECT MESSAGES (Corrected) */}
+                            <div>
+                                <div className="px-2 mb-2 flex items-center justify-between group">
+                                    <span className="text-xs font-bold text-gray-400">DIRECT MESSAGES</span>
+                                    {/* This Plus button opens the user search to start NEW chats */}
+                                    <button onClick={() => setIsSearchingUser(!isSearchingUser)} className="text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100"><Plus size={16} /></button>
+                                </div>
+                                
+                                {/* Search Box to find NEW users */}
+                                {isSearchingUser && (
+                                    <div className="px-2 mb-2">
+                                        <div className="flex items-center gap-1 bg-white dark:bg-black/20 border border-gray-300 dark:border-white/20 rounded px-2 py-1">
+                                            <Search size={14} className="text-gray-400"/>
+                                            <input autoFocus className="w-full bg-transparent outline-none text-sm" placeholder="Search user..." value={userSearchQuery} onChange={(e) => setUserSearchQuery(e.target.value)} />
+                                            <button onClick={() => setIsSearchingUser(false)} className="text-gray-400 hover:text-red-500"><X size={14}/></button>
+                                        </div>
+                                        {/* Dropdown Results for Search */}
+                                        {userSearchQuery && (
+                                            <div className="mt-1 bg-white dark:bg-[#1E1F22] border border-gray-200 dark:border-white/10 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                                                {searchResults.length > 0 ? (
+                                                    searchResults.map(u => (
+                                                        <SearchUserItem 
+                                                            key={u.id} 
+                                                            u={u} 
+                                                            startDM={startDM} 
+                                                            toggleSearch={setIsSearchingUser} 
+                                                        />
+                                                    ))
+                                                ) : (
+                                                    <div className="p-2 text-xs text-gray-500 text-center">No users found</div>
+                                                )}
+                                            </div>
                                         )}
-                                        {room.unreadCount! > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{room.unreadCount}</span>}
                                     </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                                )}
 
-                    {/* 3. DIRECT MESSAGES */}
-                    <div>
-                        <div className="px-2 mb-2 flex items-center justify-between group"><span className="text-xs font-bold text-gray-400">DIRECT MESSAGES</span><button onClick={() => setIsSearchingUser(!isSearchingUser)} className="text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100"><Plus size={16} /></button></div>
-                        {isSearchingUser && <div className="px-2 mb-2"><div className="flex items-center gap-1 bg-white dark:bg-black/20 border border-gray-300 dark:border-white/20 rounded px-2 py-1"><Search size={14} className="text-gray-400"/><input autoFocus className="w-full bg-transparent outline-none text-sm" placeholder="Search user..." value={userSearchQuery} onChange={(e) => setUserSearchQuery(e.target.value)} /><button onClick={() => setIsSearchingUser(false)} className="text-gray-400 hover:text-red-500"><X size={14}/></button></div></div>}
-                        {dms.map(room => {
-                            const details = getRoomDetails(room);
-                            return (
-                                <div key={room.id} onClick={() => selectRoom(room.id)} className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer ${activeRoomId === room.id ? 'bg-blue-600/10 text-blue-500 font-bold' : 'hover:bg-gray-100 dark:hover:bg-white/5 text-gray-500'}`}>
-                                    <div className="flex items-center gap-2 overflow-hidden"><div className="relative shrink-0 w-5 h-5 rounded-full bg-gray-300 overflow-hidden">{details.avatar && <img src={details.avatar} className="w-full h-full object-cover" />}</div><span className="truncate">{details.name}</span></div>
-                                    <div className="flex items-center gap-1">{details.isOnline && <div className="w-2 h-2 bg-green-500 rounded-full" />}{room.unreadCount! > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{room.unreadCount}</span>}</div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                                {/* RENDER ONLY ACTIVE DMs */}
+                                {dms.map(room => (
+                                    <DMItem 
+                                        key={room.id} 
+                                        room={room} 
+                                        activeRoomId={activeRoomId} 
+                                        selectRoom={selectRoom} 
+                                        getRoomDetails={getRoomDetails} 
+                                    />
+                                ))}
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
 
             {/* MAIN CHAT AREA */}
             <div className="flex-1 flex flex-col min-w-0">
                 {/* Header */}
-                <div className="h-16 border-b border-gray-200 dark:border-white/5 flex items-center justify-between px-6">
-                    <div className="font-bold text-lg flex items-center gap-2">
+                <div className="h-16 border-b border-gray-200 dark:border-white/5 flex items-center justify-between px-6 shrink-0">
+                    <div className="font-bold text-lg flex items-center gap-2 truncate">
                         {activeRoom ? <>{activeRoom.type === 'group' ? <Lock size={20}/> : activeRoom.type === 'dm' ? null : <Hash size={20}/>}{getRoomDetails(activeRoom).name}</> : 'Select a chat'}
                     </div>
                     {activeRoom?.type === 'group' && <button onClick={() => setIsAddingMember(true)} className="p-2 hover:bg-gray-100 dark:hover:bg-white/10 rounded-full text-blue-600" title="Add Member"><UserPlus size={20} /></button>}
@@ -293,7 +376,7 @@ const Chat = () => {
 
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-4 custom-scrollbar" ref={scrollRef}>
-                    {isLoadingMessages && <div className="text-center text-gray-500 mt-10">Loading history...</div>}
+                    {isLoadingMessages && <div className="flex justify-center p-10"><Loader2 className="animate-spin text-blue-500" /></div>}
                     {!isLoadingMessages && messages.length === 0 && <div className="text-center text-gray-500 mt-10">No messages yet.</div>}
                     
                     {messages.map((msg, i) => {
@@ -306,7 +389,7 @@ const Chat = () => {
                         return (
                             <div key={msg.id} className={`group flex flex-col mb-1 ${isMe ? 'items-end' : 'items-start'}`}>
                                 {showHeader && <span className="text-xs text-gray-400 mt-2 mb-1 ml-1">{msg.user.name}</span>}
-                                <div className="relative max-w-[70%]">
+                                <div className="relative max-w-[85%] md:max-w-[70%]">
                                     <div className={`px-4 py-2 rounded-2xl ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-gray-200 dark:bg-white/10 rounded-bl-none'}`}>
                                         {msg.attachmentUrl && (<div className="mb-2 mt-1"><img src={msg.attachmentUrl} className="max-w-full max-h-[300px] rounded-lg object-cover cursor-pointer border border-black/10 dark:border-white/10" onClick={() => window.open(msg.attachmentUrl, '_blank')} /></div>)}
                                         {isEditing ? (
@@ -322,20 +405,26 @@ const Chat = () => {
                     })}
                 </div>
 
-                <div className="p-4 bg-gray-50 dark:bg-[#15171B]"><ChatInput onSendMessage={sendMessage} isLoading={isSending} /></div>
+                <div className="p-4 bg-gray-50 dark:bg-[#15171B] shrink-0"><ChatInput onSendMessage={sendMessage} isLoading={isSending} /></div>
             </div>
 
-            {/* RIGHT SIDEBAR */}
-            <div className="w-64 bg-white dark:bg-[#15171B] border-l border-gray-200 dark:border-white/5 p-4 overflow-y-auto hidden lg:block">
+            {/* RIGHT SIDEBAR (Desktop Only) */}
+            <div className="w-64 bg-white dark:bg-[#15171B] border-l border-gray-200 dark:border-white/5 p-4 overflow-y-auto hidden lg:block shrink-0">
                 <div className="text-xs font-bold text-gray-400 mb-4">{activeRoom?.type === 'group' ? 'GROUP MEMBERS' : 'ALL MEMBERS'}</div>
-                {filteredSidebarUsers.map((u: any) => (
-                    <div key={u.userId} onClick={() => startDM(u.userId)} className="flex items-center gap-3 p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg cursor-pointer group">
-                        <div className="relative"><div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 overflow-hidden">{u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : null}</div>{u.isOnline && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-[#15171B] rounded-full" />}</div>
-                        <span className="text-sm font-medium flex-1 truncate">{u.name}</span>
-                        {activeRoom?.type === 'group' && u.userId !== user.id && (
-                            <button onClick={(e) => { e.stopPropagation(); setMemberToKick({ id: u.userId, name: u.name }); }} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded opacity-0 group-hover:opacity-100 transition-opacity" title="Remove Member"><UserMinus size={14} /></button>
-                        )}
-                    </div>
+                {/* Only show relevant users here:
+                    - If Group: Group Members
+                    - If Public Channel: All Online Users + Others
+                */}
+                {rightSidebarUsers.map((u: any) => (
+                    <UserItem 
+                        key={u.userId} 
+                        u={u} 
+                        startDM={startDM} 
+                        activeRoomId={activeRoomId} 
+                        currentUser={user}
+                        activeRoomType={activeRoom?.type} 
+                        setMemberToKick={setMemberToKick}
+                    />
                 ))}
             </div>
 
@@ -352,7 +441,6 @@ const Chat = () => {
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4"><div className="w-full max-w-sm bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl p-6 animate-in zoom-in-95"><div className="text-center mb-6"><h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Delete Message?</h3><p className="text-sm text-gray-500">This action cannot be undone.</p></div><div className="flex gap-3"><button onClick={() => setMessageToDelete(null)} className="flex-1 py-2 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-white rounded-lg">Cancel</button><button onClick={confirmDeleteMessage} className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Delete</button></div></div></div>
             )}
 
-            {/* ✅ NEW: Delete Room Modal */}
             {roomToDelete && (
                 <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4">
                     <div className="w-full max-w-sm bg-white dark:bg-[#1A1D21] border border-red-200 dark:border-red-900/50 rounded-xl shadow-2xl p-6 animate-in zoom-in-95">
