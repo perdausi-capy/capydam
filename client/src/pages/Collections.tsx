@@ -173,7 +173,7 @@ const Collections = () => {
 
           return { previousCollections };
       },
-      onError: (err, newName, context) => {
+      onError: (_err, _newName, context) => {
           if (context?.previousCollections) {
               queryClient.setQueryData(['collections'], context.previousCollections);
           }
@@ -198,7 +198,7 @@ const Collections = () => {
           setIsModalOpen(false);
           return { previousCollections };
       },
-      onError: (err, vars, context) => {
+      onError: (_err, _vars, context) => {
           if (context?.previousCollections) queryClient.setQueryData(['collections'], context.previousCollections);
           toast.error("Update failed");
       },
@@ -219,7 +219,7 @@ const Collections = () => {
           toast.success("Collection deleted");
           setDeleteId(null);
       },
-      onError: (err) => {
+      onError: (_err) => {
           toast.error("Failed to delete. Try again.");
       }
   });
