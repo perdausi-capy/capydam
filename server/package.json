@@ -15,6 +15,7 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.965.0",
     "@supabase/supabase-js": "^2.87.3",
     "@types/node-cron": "^3.0.11",
     "axios": "^1.13.2",

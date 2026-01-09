@@ -1,58 +1,70 @@
-import { createClient } from '@supabase/supabase-js';
 import fs from 'fs-extra';
+import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
-// Initialize Client
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_KEY || ''; 
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Import the client we just created in src/lib/storage.ts
+import { storageClient, BUCKET_NAME, PUBLIC_URL_BASE } from '../lib/storage';
 
-const BUCKET_NAME = 'assets';
-
+/**
+ * UPLOADS a file to your Self-Hosted MinIO Server.
+ * * NOTE: The function name is kept as 'uploadToSupabase' so we don't 
+ * have to rewrite your entire Asset Controller. It now points to MinIO.
+ */
 export const uploadToSupabase = async (
   localFilePath: string, 
   destinationPath: string, 
   mimeType: string
 ): Promise<string> => {
   try {
+    // 1. Read file from local disk
     const fileBuffer = await fs.readFile(localFilePath);
 
-    // Upload
-    const { data, error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(destinationPath, fileBuffer, {
-        contentType: mimeType,
-        upsert: true,
-      });
+    // 2. Upload to MinIO (S3 Compatible)
+    await storageClient.send(new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: destinationPath, // e.g., "originals/my-photo.jpg"
+      Body: fileBuffer,
+      ContentType: mimeType,
+      // ACL: 'public-read' // Optional: Depends on your bucket policy
+    }));
 
-    if (error) throw error;
+    // 3. Return the Public URL
+    // Result: https://storage.capy-dev.com/capydam-assets/originals/my-photo.jpg
+    // This string is what gets saved into your Prisma Database.
+    return `${PUBLIC_URL_BASE}/${destinationPath}`;
 
-    // Get Public URL
-    const { data: publicData } = supabase.storage
-      .from(BUCKET_NAME)
-      .getPublicUrl(destinationPath);
-
-    return publicData.publicUrl;
   } catch (error) {
-    console.error('Supabase Upload Error:', error);
+    console.error('❌ Storage Upload Error:', error);
     throw new Error('Failed to upload to cloud storage');
   }
 };
 
-export const deleteFromSupabase = async (pathUrl: string) => {
+/**
+ * DELETES a file from MinIO.
+ */
+export const deleteFromSupabase = async (pathUrl: string): Promise<void> => {
   try {
-    // Extract relative path from full URL
-    const pathParts = pathUrl.split(`${BUCKET_NAME}/`);
-    if (pathParts.length < 2) return; 
+    // 1. Extract the file key (relative path) from the full URL
+    // Example Input: https://storage.capy-dev.com/capydam-assets/originals/image.jpg
+    // We need just: "originals/image.jpg"
+    let fileKey = pathUrl;
     
-    const relativePath = pathParts[1]; 
+    // Split by the bucket name to find the relative part
+    if (pathUrl.includes(`${BUCKET_NAME}/`)) {
+      const parts = pathUrl.split(`${BUCKET_NAME}/`);
+      if (parts.length > 1) {
+        fileKey = parts[1];
+      }
+    }
 
-    const { error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .remove([relativePath]);
+    // 2. Send Delete Command
+    await storageClient.send(new DeleteObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: fileKey,
+    }));
 
-    if (error) throw error;
   } catch (error) {
-    console.error('Supabase Delete Error:', error);
+    console.error('⚠️ Storage Delete Error:', error);
+    // We do NOT throw an error here, so the controller keeps running 
+    // even if the file was already missing.
   }
 };
-
