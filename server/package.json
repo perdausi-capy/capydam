@@ -43,6 +43,7 @@
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
+    "@aws-sdk/lib-storage": "^3.965.0",
     "@prisma/client": "^5.22.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/cli-progress": "^3.11.6",

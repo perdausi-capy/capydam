@@ -1,26 +1,20 @@
-// server/src/scripts/reset.ts
+// Run this with: npx ts-node src/scripts/reset.ts
 import { PrismaClient } from '@prisma/client';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
-// Load environment variables from the server/.env file
 dotenv.config();
 
 const prisma = new PrismaClient();
 
-// Use Service Role Key if available (bypasses RLS), otherwise fallback to standard key
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+// Initialize Supabase Admin Client (Needs Service Role Key for deletion)
+// If you don't have SERVICE_ROLE_KEY in .env, use your SUPABASE_KEY temporarily
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY! 
+);
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error("❌ Missing SUPABASE_URL or SUPABASE_KEY in .env file.");
-  process.exit(1);
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-// ⚠️ CHANGE THIS if your bucket is named differently in Supabase
-const BUCKET_NAME = 'chat-attachments'; 
+const BUCKET_NAME = 'chat-attachments'; // Change this to your actual bucket name
 
 async function main() {
   console.log('🚨 STARTING NUCLEAR RESET 🚨');
@@ -28,43 +22,37 @@ async function main() {
   // --- 1. CLEAR DATABASE ---
   console.log('\n🗑️  Cleaning Database...');
   
-  try {
-    // Delete in specific order to handle Foreign Keys
-    await prisma.notification.deleteMany({});
-    console.log(' - Deleted Notifications');
+  // Delete in order to avoid foreign key constraint errors
+  await prisma.notification.deleteMany({});
+  console.log(' - Deleted Notifications');
 
-    await prisma.reaction.deleteMany({});
-    console.log(' - Deleted Reactions');
+  await prisma.reaction.deleteMany({});
+  console.log(' - Deleted Reactions');
 
-    await prisma.message.deleteMany({});
-    console.log(' - Deleted Messages');
+  await prisma.message.deleteMany({});
+  console.log(' - Deleted Messages');
 
-    await prisma.membership.deleteMany({});
-    console.log(' - Deleted Memberships');
+  await prisma.membership.deleteMany({});
+  console.log(' - Deleted Memberships');
 
-    await prisma.chatRoom.deleteMany({});
-    console.log(' - Deleted Chat Rooms');
-    
-    // Optional: Delete users if you want a complete wipe (Commented out for safety)
-    // await prisma.user.deleteMany({}); 
-    // console.log(' - Deleted Users');
+  // Delete all rooms EXCEPT specific ones if you want to keep them (optional)
+  // For now, we delete ALL rooms.
+  await prisma.chatRoom.deleteMany({});
+  console.log(' - Deleted Chat Rooms');
 
-  } catch (error) {
-    console.error("❌ Database cleanup failed:", error);
-  }
-
+  
   // --- 2. CLEAR STORAGE ---
   console.log('\n🗑️  Cleaning Supabase Storage...');
   
   try {
-    // List files (Supabase lists max 100 at a time, loop might be needed for massive buckets, but this clears the bulk)
+    // List all files in the bucket
     const { data: files, error: listError } = await supabase
       .storage
       .from(BUCKET_NAME)
-      .list(undefined, { limit: 100 });
+      .list(undefined, { limit: 1000 });
 
     if (listError) {
-      console.error('❌ Error listing files (Check BUCKET_NAME):', listError.message);
+      console.error('Error listing files:', listError.message);
     } else if (files && files.length > 0) {
       const pathsToRemove = files.map((file) => file.name);
       
@@ -74,19 +62,18 @@ async function main() {
         .remove(pathsToRemove);
 
       if (removeError) {
-        console.error('❌ Error deleting files:', removeError.message);
+        console.error('Error deleting files:', removeError.message);
       } else {
-        console.log(`✅ Deleted ${files.length} files from storage.`);
-        console.log(`ℹ️  (If you have >100 files, run this script again)`);
+        console.log(` - Deleted ${files.length} files from storage`);
       }
     } else {
-      console.log(' - Storage bucket is already empty.');
+      console.log(' - Storage bucket is already empty');
     }
   } catch (error) {
-    console.error("❌ Storage cleanup failed:", error);
+    console.error("Storage cleanup failed (Check your Bucket Name):", error);
   }
 
-  console.log('\n✅ RESET COMPLETE.');
+  console.log('\n✅ RESET COMPLETE. Your app is fresh.');
 }
 
 main()

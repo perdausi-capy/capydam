@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { analyzeImage, analyzePdf, analyzeAudioVideo } from '../src/services/ai.service'; // We reuse your existing service!
+import { analyzeImage, analyzePdf, analyzeAudioVideo } from '../services/ai.service'; // We reuse your existing service!
 import fs from 'fs';
 import path from 'path';
 import https from 'https';

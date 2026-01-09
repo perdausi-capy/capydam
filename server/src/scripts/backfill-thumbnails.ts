@@ -1,10 +1,10 @@
 import { PrismaClient } from '@prisma/client';
-import { uploadToSupabase } from '../src/services/storage.service';
+import { uploadToSupabase } from '../services/storage.service';
 import { 
   generateThumbnail, 
   generateVideoThumbnail, 
   generatePdfThumbnail 
-} from '../src/services/image.service';
+} from '../services/image.service';
 import fs from 'fs-extra';
 import path from 'path';
 import axios from 'axios';
