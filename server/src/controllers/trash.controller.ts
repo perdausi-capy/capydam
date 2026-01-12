@@ -1,9 +1,7 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-import fs from 'fs';
-import path from 'path';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
+// ✅ CORRECTED IMPORT: Use the new storage service
+import { deleteFromSupabase } from '../services/storage.service';
 
 // 1. GET /assets/trash - List deleted items
 export const getTrash = async (req: Request, res: Response) => {
@@ -52,25 +50,35 @@ export const restoreAsset = async (req: Request, res: Response) => {
 // 3. DELETE /assets/:id/force - Permanently Delete
 export const forceDeleteAsset = async (req: Request, res: Response) => {
   try {
-    const asset = await prisma.asset.findUnique({ where: { id: req.params.id } });
+    const { id } = req.params;
+    const asset = await prisma.asset.findUnique({ where: { id } });
+
     if (!asset) return res.status(404).json({ message: 'Asset not found' });
 
-    // A. Delete physical file
-    const filePath = path.join(process.cwd(), 'uploads', asset.filename); 
-    if (fs.existsSync(filePath)) {
-        try { fs.unlinkSync(filePath); } catch (e) { console.error("File delete error:", e); }
-    }
+    console.log(`🔥 Force Deleting Asset: ${asset.originalName} (${id})`);
 
-    // B. Delete thumbnail if exists
-    if (asset.thumbnailPath) {
-        const thumbPath = path.join(process.cwd(), 'uploads', asset.thumbnailPath);
-        if (fs.existsSync(thumbPath)) {
-            try { fs.unlinkSync(thumbPath); } catch (e) { console.error("Thumb delete error:", e); }
+    // A. Delete physical files from MinIO (Cloud)
+    // We use try/catch here so if the file is already gone, we still delete the DB record
+    try {
+        if (asset.path) await deleteFromSupabase(asset.path);
+        if (asset.thumbnailPath) await deleteFromSupabase(asset.thumbnailPath);
+        
+        // Delete video previews if they exist
+        if (asset.previewFrames && asset.previewFrames.length > 0) {
+            await Promise.all(asset.previewFrames.map(frame => deleteFromSupabase(frame)));
         }
+    } catch (storageError) {
+        console.warn("⚠️ Storage delete warning (continuing to DB):", storageError);
     }
 
-    // C. Delete DB record
-    await prisma.asset.delete({ where: { id: req.params.id } });
+    // B. Delete DB records (Transaction to handle Foreign Keys)
+    // We must remove connections to Collections/Categories first!
+    await prisma.$transaction([
+        prisma.assetOnCollection.deleteMany({ where: { assetId: id } }),
+        prisma.assetOnCategory.deleteMany({ where: { assetId: id } }),
+        prisma.assetClick.deleteMany({ where: { assetId: id } }), // Clean up analytics
+        prisma.asset.delete({ where: { id } }) // Finally delete the asset
+    ]);
 
     res.json({ message: 'Asset permanently deleted' });
   } catch (error) {
@@ -82,22 +90,39 @@ export const forceDeleteAsset = async (req: Request, res: Response) => {
 // 4. DELETE /assets/trash/empty - Empty Trash
 export const emptyTrash = async (req: Request, res: Response) => {
   try {
+    // 1. Find all trash items
     const assets = await prisma.asset.findMany({ where: { NOT: { deletedAt: null } } });
+    
+    if (assets.length === 0) {
+        return res.json({ message: 'Trash is already empty' });
+    }
 
-    // Delete all files
-    assets.forEach(asset => {
-        const filePath = path.join(process.cwd(), 'uploads', asset.filename);
-        if (fs.existsSync(filePath)) try { fs.unlinkSync(filePath); } catch {}
-        
-        if (asset.thumbnailPath) {
-             const thumbPath = path.join(process.cwd(), 'uploads', asset.thumbnailPath);
-             if (fs.existsSync(thumbPath)) try { fs.unlinkSync(thumbPath); } catch {}
+    console.log(`🗑️ Emptying Trash: ${assets.length} items...`);
+
+    // 2. Delete all files from Storage
+    for (const asset of assets) {
+        try {
+            if (asset.path) await deleteFromSupabase(asset.path);
+            if (asset.thumbnailPath) await deleteFromSupabase(asset.thumbnailPath);
+            if (asset.previewFrames && asset.previewFrames.length > 0) {
+                await Promise.all(asset.previewFrames.map(frame => deleteFromSupabase(frame)));
+            }
+        } catch (err) {
+            console.warn(`Failed to delete file for ${asset.id}`, err);
         }
-    });
+    }
 
-    // Clear DB
-    await prisma.asset.deleteMany({ where: { NOT: { deletedAt: null } } });
-    res.json({ message: 'Trash emptied' });
+    // 3. Delete all DB records (Transaction)
+    const assetIds = assets.map(a => a.id);
+    
+    await prisma.$transaction([
+        prisma.assetOnCollection.deleteMany({ where: { assetId: { in: assetIds } } }),
+        prisma.assetOnCategory.deleteMany({ where: { assetId: { in: assetIds } } }),
+        prisma.assetClick.deleteMany({ where: { assetId: { in: assetIds } } }),
+        prisma.asset.deleteMany({ where: { id: { in: assetIds } } })
+    ]);
+
+    res.json({ message: 'Trash emptied successfully' });
   } catch (error) {
     console.error("Empty Trash Error:", error);
     res.status(500).json({ error: 'Failed to empty trash' });

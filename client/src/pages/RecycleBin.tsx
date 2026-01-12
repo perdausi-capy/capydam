@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
   Trash2, RotateCcw, ArrowLeft, Eraser, 
-  Check, Clock, Loader2, ScanLine
+  Check, Clock, Loader2, ScanLine, AlertTriangle
 } from 'lucide-react';
 import Masonry from 'react-masonry-css';
 import { toast } from 'react-toastify';
@@ -33,7 +33,7 @@ const AUTO_DELETE_DAYS = 30;
 
 // --- ⚡️ COMPONENTS ---
 
-// 1. SCANNING LOADER (New Design)
+// 1. SCANNING LOADER
 const ScanningLoader = () => (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-in fade-in duration-700">
         <div className="relative mb-6">
@@ -141,8 +141,11 @@ const RecycleBin = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  // Modal States
   const [restoreId, setRestoreId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [showEmptyTrashConfirm, setShowEmptyTrashConfirm] = useState(false);
+  const [isEmptying, setIsEmptying] = useState(false);
 
   const observerInstance = useRef<IntersectionObserver | null>(null);
 
@@ -162,11 +165,8 @@ const RecycleBin = () => {
   } = useInfiniteQuery({
     queryKey: ['recycle-bin'],
     queryFn: async ({ pageParam = 1 }) => {
-        // Simulated delay to show off the cool loader (Remove setTimeouts in prod!)
-        // await new Promise(resolve => setTimeout(resolve, 800)); 
-        
         const res = await client.get(`/assets/trash`, { 
-            params: { page: pageParam, limit: QUERY_LIMIT } 
+          params: { page: pageParam, limit: QUERY_LIMIT } 
         });
         const results = res.data.results || [];
         const nextPage = results.length === QUERY_LIMIT ? (pageParam as number) + 1 : undefined;
@@ -223,13 +223,19 @@ const RecycleBin = () => {
       finally { setDeleteId(null); }
   };
 
-  const handleEmptyTrash = async () => {
-      if (!window.confirm("WARNING: This will permanently delete ALL items in the trash. Continue?")) return;
+  const confirmEmptyTrash = async () => {
+      setIsEmptying(true);
       try {
           await client.delete(`/assets/trash/empty`);
-          toast.success("Trash emptied");
-          refetch();
-      } catch (err) { toast.error("Failed to empty trash"); }
+          toast.success("Trash emptied successfully");
+          // Re-fetch to ensure list is clear on all clients
+          await refetch();
+          setShowEmptyTrashConfirm(false);
+      } catch (err) { 
+          toast.error("Failed to empty trash"); 
+      } finally {
+          setIsEmptying(false);
+      }
   };
 
   // --- RENDER ---
@@ -257,7 +263,7 @@ const RecycleBin = () => {
 
                 {assets.length > 0 && (
                      <button 
-                        onClick={handleEmptyTrash} 
+                        onClick={() => setShowEmptyTrashConfirm(true)} 
                         className="group flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white rounded-xl text-sm font-bold transition-all border border-red-100 dark:bg-red-900/10 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-600 dark:hover:text-white shadow-sm"
                      >
                         <Eraser size={16} className="group-hover:rotate-12 transition-transform" /> 
@@ -280,9 +286,9 @@ const RecycleBin = () => {
                 <div className="bg-green-100 dark:bg-green-900/20 p-8 rounded-full mb-6 shadow-sm">
                     <Check size={48} className="text-green-600 dark:text-green-400" />
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">System Clean</h3>
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Trash is Empty</h3>
                 <p className="text-gray-500 max-w-md">
-                    No deleted assets found. Your library is running efficiently.
+                    No deleted assets found. Your library is clean and efficient.
                 </p>
             </div>
         ) : (
@@ -331,6 +337,18 @@ const RecycleBin = () => {
         message="This action creates a permanent data loss. The file cannot be recovered." 
         confirmText="Delete Forever" 
         isDangerous={true} 
+      />
+
+      {/* ✅ NEW: Empty Trash Modal */}
+      <ConfirmModal 
+        isOpen={showEmptyTrashConfirm} 
+        onClose={() => setShowEmptyTrashConfirm(false)} 
+        onConfirm={confirmEmptyTrash} 
+        title="Empty Recycle Bin" 
+        message={`Are you sure you want to permanently delete all ${totalItems} items? This action cannot be undone.`} 
+        confirmText="Yes, Delete Everything" 
+        isDangerous={true} 
+        isLoading={isEmptying}
       />
     </div>
   );
