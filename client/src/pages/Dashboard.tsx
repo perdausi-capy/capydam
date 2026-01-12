@@ -1,7 +1,16 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import client from '../api/client';
-import { Image as ImageIcon, Search, X, Download, FolderPlus, Plus, ExternalLink } from 'lucide-react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'; // ✅ Added useSearchParams
+import { 
+  Image as ImageIcon, 
+  Search, 
+  X, 
+  Download, 
+  FolderPlus, 
+  Plus, 
+  ExternalLink,
+  Loader2 // ✅ Added Loader2
+} from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Masonry from 'react-masonry-css';
 import AssetThumbnail from '../components/AssetThumbnail';
 import DashboardHeader, { type FilterType } from '../components/DashboardHeader';
@@ -20,7 +29,7 @@ interface Asset {
   uploadedBy: { name: string };
   aiData?: string;
   previewFrames?: string[];
-  isSkeleton?: boolean; // New flag for loading state
+  isSkeleton?: boolean;
 }
 
 interface CollectionSimple { id: string; name: string; }
@@ -46,18 +55,27 @@ const parseAiData = (jsonString?: string) => {
 
 const SCROLL_KEY = 'capydam_dashboard_scroll_y';
 
-// --- 🦴 SKELETON CARD (The "Pinterest" loading effect) ---
+// --- 🦴 SKELETON CARD ---
 const SkeletonCard = () => (
     <div className="mb-8 w-full">
-        {/* Image Placeholder */}
         <div className="w-full aspect-[3/4] bg-gray-200 dark:bg-white/5 rounded-2xl animate-pulse" />
-        
-        {/* Text Placeholders */}
         <div className="mt-3 space-y-2 px-1">
             <div className="h-4 bg-gray-200 dark:bg-white/5 rounded w-3/4 animate-pulse" />
             <div className="flex gap-2">
                 <div className="h-3 w-12 bg-gray-200 dark:bg-white/5 rounded-full animate-pulse" />
                 <div className="h-3 w-8 bg-gray-200 dark:bg-white/5 rounded-full animate-pulse" />
+            </div>
+        </div>
+    </div>
+);
+
+// --- 👻 SYNC LOADER (The "Ghost" Card) ---
+const ProcessingAssetCard = () => (
+    <div className="group relative mb-8 block animate-pulse w-full">
+        <div className="relative w-full rounded-2xl overflow-hidden bg-indigo-50 dark:bg-indigo-900/10 border-2 border-indigo-200 dark:border-indigo-500/30 flex items-center justify-center aspect-[3/4]">
+            <div className="flex flex-col items-center gap-3">
+                <Loader2 size={32} className="animate-spin text-indigo-500" />
+                <span className="text-xs font-bold text-indigo-500 uppercase tracking-widest">Syncing Library...</span>
             </div>
         </div>
     </div>
@@ -80,7 +98,6 @@ const AssetCard = React.memo(({
     const { tags, link } = useMemo(() => parseAiData(asset.aiData), [asset.aiData]);
 
     return (
-        // transform-gpu triggers hardware acceleration for smoother scrolling
         <div className="group relative mb-8 block transition-all duration-300 w-full min-w-0 transform-gpu">
             <div className="relative">
                 <div className="relative w-full rounded-2xl overflow-hidden transition-all duration-300 bg-gray-100 dark:bg-[#1A1D21] shadow-sm hover:shadow-xl hover:-translate-y-1">
@@ -134,15 +151,12 @@ const AssetCard = React.memo(({
 
 // --- DASHBOARD COMPONENT ---
 const Dashboard = () => {
-const queryClient = useQueryClient();
-  // ✅ 1. READ URL PARAMS
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlSearch = searchParams.get('search') || '';
 
-  // ✅ 2. INITIALIZE STATE FROM URL
   const [searchQuery, setSearchQuery] = useState(urlSearch);
   const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
-  
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<FilterType>('all');
 
@@ -153,12 +167,11 @@ const queryClient = useQueryClient();
   const navigate = useNavigate();
   const observer = useRef<IntersectionObserver | null>(null);
 
-  // ✅ 3. LISTEN FOR URL CHANGES (Navigation from other pages)
   useEffect(() => {
     const currentUrlSearch = searchParams.get('search') || '';
     if (currentUrlSearch !== searchQuery) {
         setSearchQuery(currentUrlSearch);
-        setDebouncedSearch(currentUrlSearch); // Instant update if coming from URL
+        setDebouncedSearch(currentUrlSearch); 
     }
   }, [searchParams]);
 
@@ -168,6 +181,7 @@ const queryClient = useQueryClient();
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isRefetching, // ✅ CAPTURED: This detects the background sync!
     isLoading: assetsLoading,
     error: assetError
   } = useInfiniteQuery({
@@ -192,26 +206,23 @@ const queryClient = useQueryClient();
     staleTime: 1000 * 60 * 2,
   });
 
-  // --- 🪄 MAGIC: Combine Real Assets + Skeletons ---
+  // --- Combine Real Assets + Skeletons ---
   const assets = useMemo(() => {
       const realAssets = data?.pages.flatMap(page => page.results) || [];
       
-      // If we are fetching more, append 10 "Skeleton" items
       if (isFetchingNextPage) {
           const skeletons = Array.from({ length: 10 }).map((_, i) => ({
               id: `skeleton-${i}`,
-              isSkeleton: true, // Marker
+              isSkeleton: true,
               filename: '', thumbnailPath: '', mimeType: '', originalName: '', path: '', uploadedBy: { name: '' }
           }));
           return [...realAssets, ...skeletons];
       }
-      
       return realAssets;
   }, [data, isFetchingNextPage]);
 
   const isFallback = data?.pages[0]?.isFallback || false;
 
-  // --- COLLECTIONS QUERY ---
   const { data: collections = [] } = useQuery({
     queryKey: ['collections'],
     queryFn: async () => {
@@ -221,7 +232,6 @@ const queryClient = useQueryClient();
     staleTime: 1000 * 60, 
   });
 
-  // --- SCROLL TRIGGER ---
   const lastAssetRef = useCallback((node: HTMLDivElement) => {
     if (assetsLoading || isFetchingNextPage) return;
     if (observer.current) observer.current.disconnect();
@@ -235,13 +245,9 @@ const queryClient = useQueryClient();
   }, [assetsLoading, isFetchingNextPage, hasNextPage, fetchNextPage]);
 
   // --- ACTIONS ---
-  
-  // ✅ 4. UPDATE URL WHEN TYPING
   const handleSearchChange = (newQuery: string) => {
     if (searchQuery !== newQuery) sessionStorage.removeItem(SCROLL_KEY);
     setSearchQuery(newQuery);
-    
-    // Update URL silently without reloading
     setSearchParams(params => {
         if (newQuery) params.set('search', newQuery);
         else params.delete('search');
@@ -296,9 +302,8 @@ const queryClient = useQueryClient();
     
     const promise = client.post(`/collections/${collectionId}/assets`, { assetId: selectedAssetId })
         .then(async () => {
-            // ✅ FIX: Invalidate BOTH the list of collections AND the details of the specific collection
-            await queryClient.invalidateQueries({ queryKey: ['collections'] }); // Updates cover images on main list
-            await queryClient.invalidateQueries({ queryKey: ['collection', collectionId] }); // Updates the specific folder contents
+            await queryClient.invalidateQueries({ queryKey: ['collections'] });
+            await queryClient.invalidateQueries({ queryKey: ['collection', collectionId] });
         });
 
     toast.promise(promise, {
@@ -333,7 +338,7 @@ const queryClient = useQueryClient();
                     {Array.from({ length: 15 }).map((_, i) => <SkeletonCard key={i} />)}
                 </Masonry>
             </div>
-        ) : assets.length === 0 ? (
+        ) : assets.length === 0 && !isRefetching ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/10 p-16 text-center mt-8 opacity-60">
                 <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-full mb-4"><ImageIcon size={32} className="text-gray-400 dark:text-gray-500" /></div>
                 <p className="text-lg font-medium text-gray-600 dark:text-gray-300">No assets found</p>
@@ -342,13 +347,17 @@ const queryClient = useQueryClient();
         ) : (
             <div className="w-full overflow-hidden">
                 <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-6" columnClassName="pl-6 bg-clip-padding">
+                    
+                    {/* ✅ SYNC LOADER: Shows only when refreshing existing data (like after an upload) */}
+                    {isRefetching && !isFetchingNextPage && <ProcessingAssetCard />}
+
                     {assets.map((asset, index) => {
                         if (asset.isSkeleton) {
                             return <SkeletonCard key={asset.id} />;
                         }
 
                         if (index === assets.length - 11) {
-                             return (
+                            return (
                                 <div ref={lastAssetRef} key={asset.id}>
                                     <AssetCard asset={asset} index={index} onClick={handleAssetClick} onDownload={handleDownload} onAddToCollection={openCollectionModal} />
                                 </div>
