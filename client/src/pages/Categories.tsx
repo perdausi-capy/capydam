@@ -28,14 +28,6 @@ interface Category {
   _count: { assets: number };
 }
 
-// ⚡️ HELPER: Resize images on the fly to save bandwidth
-const getOptimizedUrl = (url: string | undefined) => {
-    if (!url) return undefined;
-    // If using Supabase, append transformation params
-    if (url.includes('supabase.co')) return `${url}?width=600&resize=cover&quality=70`;
-    return url;
-};
-
 // --- 🦴 SKELETON COMPONENT ---
 const CategorySkeleton = React.memo(() => (
     <div className="rounded-3xl border border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] h-64 overflow-hidden">
@@ -50,12 +42,11 @@ const CategorySkeleton = React.memo(() => (
 // --- 🎥 SMART MEDIA COMPONENT ---
 const CardMedia = React.memo(({ src, alt, className }: { src: string, alt: string, className: string }) => {
     const isVideo = useMemo(() => src.match(/\.(mp4|webm|mov)$/i), [src]);
-    const optimizedSrc = useMemo(() => isVideo ? src : getOptimizedUrl(src), [src, isVideo]);
 
     if (isVideo) {
         return (
             <video
-                src={src} // Videos usually shouldn't be resized via URL params unless supported
+                src={src} 
                 className={className}
                 muted loop playsInline autoPlay
                 style={{ transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
@@ -65,7 +56,7 @@ const CardMedia = React.memo(({ src, alt, className }: { src: string, alt: strin
 
     return (
         <img 
-            src={optimizedSrc} 
+            src={src} 
             alt={alt} 
             className={className}
             loading="lazy"
@@ -165,9 +156,10 @@ const Categories = () => {
 
   // --- 2. OPTIMIZED MUTATIONS ---
   const createMutation = useMutation({
-      mutationFn: (formData: FormData) => client.post('/categories', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+      // ✅ FIX: Send JSON for creation (Backend POST /categories expects JSON, not FormData)
+      mutationFn: (data: { name: string; group: string }) => client.post('/categories', data),
       onSuccess: () => {
-          queryClient.invalidateQueries(['categories'] as any);
+          queryClient.invalidateQueries({ queryKey: ['categories'] });
           toast.success("Topic created!");
           setIsModalOpen(false);
       },
@@ -175,9 +167,10 @@ const Categories = () => {
   });
 
   const updateMutation = useMutation({
+      // ✅ Update supports FormData because PATCH /categories/:id has upload middleware
       mutationFn: ({ id, data }: { id: string, data: FormData }) => client.patch(`/categories/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
       onSuccess: () => {
-          queryClient.invalidateQueries(['categories'] as any);
+          queryClient.invalidateQueries({ queryKey: ['categories'] });
           toast.success("Topic updated!");
           setIsModalOpen(false);
       }
@@ -186,7 +179,7 @@ const Categories = () => {
   const deleteMutation = useMutation({
       mutationFn: (id: string) => client.delete(`/categories/${id}`),
       onSuccess: () => {
-          queryClient.invalidateQueries(['categories'] as any);
+          queryClient.invalidateQueries({ queryKey: ['categories'] });
           toast.success("Topic deleted");
           setDeleteId(null);
       }
@@ -220,16 +213,24 @@ const Categories = () => {
     if (!formName.trim()) return;
     setIsSubmitting(true);
     
-    const formData = new FormData();
-    formData.append('name', formName);
-    formData.append('group', formGroup);
-    if (formFile) formData.append('cover', formFile);
-
     try {
         if (editingId) {
+            // ✅ Update: Use FormData to support image change
+            const formData = new FormData();
+            formData.append('name', formName);
+            formData.append('group', formGroup);
+            if (formFile) formData.append('cover', formFile);
+            
             await updateMutation.mutateAsync({ id: editingId, data: formData });
         } else {
-            await createMutation.mutateAsync(formData);
+            // ✅ Create: Send JSON (Image upload not supported on create in this version)
+            // If user selected a file, we warn them or just create without it.
+            // Future improvement: Create -> Then Upload in background.
+            await createMutation.mutateAsync({ name: formName, group: formGroup });
+            
+            if (formFile) {
+                toast.info("Topic created! To add a cover image, please edit the topic.");
+            }
         }
     } finally {
         setIsSubmitting(false);
