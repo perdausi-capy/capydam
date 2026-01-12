@@ -43,6 +43,7 @@ exports.register = register;
 const login = async (req, res) => {
     try {
         const { email, password } = req.body;
+        // 1. Fetch User (Including Avatar)
         const user = await prisma_1.prisma.user.findUnique({ where: { email } });
         if (!user) {
             res.status(400).json({ message: 'Invalid credentials' });
@@ -54,8 +55,6 @@ const login = async (req, res) => {
             return;
         }
         // --- 🛡️ SSO SAFETY CHECK ---
-        // If user registered via SSO, they won't have a password. 
-        // This prevents bcrypt from crashing on null.
         if (!user.password) {
             res.status(400).json({ message: 'Please login with Google/SSO.' });
             return;
@@ -66,10 +65,17 @@ const login = async (req, res) => {
             return;
         }
         const token = jsonwebtoken_1.default.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '1d' });
+        // ✅ FIXED RESPONSE: Now includes 'avatar'
         res.json({
             message: 'Login successful',
             token,
-            user: { id: user.id, name: user.name, email: user.email, role: user.role },
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                avatar: user.avatar // <--- THIS WAS MISSING!
+            },
         });
     }
     catch (error) {

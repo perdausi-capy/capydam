@@ -176,9 +176,12 @@ const analyzeImage = async (assetId, filePath, options) => {
         aiData.assetType = 'image';
         await saveAiData(assetId, aiData);
         console.log(`✅ Image Analysis complete (Spec: ${options?.specificity}, Temp: ${options?.creativity})`);
+        // 2. ✅ ADD THIS: Return the data so our script can use the tags
+        return aiData;
     }
     catch (e) {
         console.error(e);
+        return null; // Return null on failure
     }
 };
 exports.analyzeImage = analyzeImage;

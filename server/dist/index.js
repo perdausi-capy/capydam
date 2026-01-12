@@ -6,41 +6,75 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config();
 const path_1 = __importDefault(require("path"));
+const http_1 = __importDefault(require("http"));
+const socket_io_1 = require("socket.io");
+dotenv_1.default.config();
 // Import Routes
 const auth_routes_1 = __importDefault(require("./routes/auth.routes"));
 const asset_routes_1 = __importDefault(require("./routes/asset.routes"));
 const user_routes_1 = __importDefault(require("./routes/user.routes"));
 const collection_routes_1 = __importDefault(require("./routes/collection.routes"));
-// ✅ 1. MAKE SURE THIS IMPORT IS HERE
 const category_routes_1 = __importDefault(require("./routes/category.routes"));
+const feedback_routes_1 = __importDefault(require("./routes/feedback.routes"));
+const admin_routes_1 = __importDefault(require("./routes/admin.routes"));
+const analytics_routes_1 = __importDefault(require("./routes/analytics.routes"));
+const uploadRoutes_1 = __importDefault(require("./routes/uploadRoutes")); // ✅ Imported
+// Import Services
+const cron_service_1 = require("./services/cron.service");
+const socketHandler_1 = require("./socket/socketHandler");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
+// ✅ CREATE HTTP SERVER
+const server = http_1.default.createServer(app);
+// ✅ INITIALIZE SOCKET.IO
+const io = new socket_io_1.Server(server, {
+    cors: {
+        origin: [
+            'http://localhost:5173',
+            process.env.CLIENT_URL || ""
+        ],
+        methods: ["GET", "POST"],
+        credentials: true
+    }
+});
+// ✅ MIDDLEWARES
 app.use((0, cors_1.default)({
     origin: [
         'http://localhost:5173',
-        process.env.CLIENT_URL || "" // Automatically allows your prod domain
+        process.env.CLIENT_URL || ""
     ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true
 }));
 app.use(express_1.default.json());
-app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, '../uploads')));
-// Register Routes
+// ✅ REGISTER ROUTES
 app.use('/api/auth', auth_routes_1.default);
 app.use('/api/assets', asset_routes_1.default);
 app.use('/api/users', user_routes_1.default);
 app.use('/api/collections', collection_routes_1.default);
-// ✅ 2. CRITICAL: REGISTER THE CATEGORY ROUTE
-// This tells the server: "When someone asks for /api/categories, go to categoryRoutes"
 app.use('/api/categories', category_routes_1.default);
-// Debug Route to verify server is alive
+app.use('/api/admin', admin_routes_1.default);
+app.use('/api/analytics', analytics_routes_1.default);
+app.use('/api/feedback', feedback_routes_1.default);
+// ✅ NEW: Chat Upload Route (This was missing!)
+app.use('/api/upload', uploadRoutes_1.default);
+// ✅ Serve uploaded files statically
+app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, '../uploads')));
+// ✅ SOCKET LOGIC (Only call this once)
+console.log('🛠️ [Server] Initializing Socket.io...');
+(0, socketHandler_1.setupSocketIO)(io);
+// Debug Route
 app.get('/', (req, res) => {
     res.send('Capydam API is running 🐹');
 });
-app.listen(PORT, () => {
+// ✅ START SERVER
+server.listen(PORT, () => {
     console.log(`⚡️ [server]: Server is running at http://localhost:${PORT}`);
     console.log(`   - Auth Routes: /api/auth`);
     console.log(`   - Asset Routes: /api/assets`);
-    console.log(`   - Category Routes: /api/categories`); // <--- Check your terminal for this line
+    console.log(`   - Upload Route: /api/upload`); // ✅ Verify this shows up
+    console.log(`   - Socket.io: Enabled 🟢`);
+    // Initialize Cron Jobs
+    (0, cron_service_1.initCronJobs)();
 });

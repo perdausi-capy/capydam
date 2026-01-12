@@ -15,7 +15,7 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
     passport_1.default.use(new passport_google_oauth20_1.Strategy({
         clientID: GOOGLE_CLIENT_ID,
         clientSecret: GOOGLE_CLIENT_SECRET,
-        callbackURL: '/api/auth/google/callback',
+        callbackURL: 'https://dam.capy-dev.com/api/auth/google/callback',
     }, async (accessToken, refreshToken, profile, done) => {
         try {
             const email = profile.emails?.[0].value;

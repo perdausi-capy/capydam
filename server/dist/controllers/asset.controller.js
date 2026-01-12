@@ -6,15 +6,17 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteAsset = exports.updateAsset = exports.getRelatedAssets = exports.getAssetById = exports.getAssets = exports.trackAssetClick = exports.uploadAsset = void 0;
 const prisma_1 = require("../lib/prisma");
 const client_1 = require("@prisma/client");
-const ai_service_1 = require("../services/ai.service");
-const natural_1 = __importDefault(require("natural"));
 const path_1 = __importDefault(require("path"));
 const fs_extra_1 = __importDefault(require("fs-extra"));
-// Import Services
+// Import Storage Services
 const storage_service_1 = require("../services/storage.service");
+// Import Image Services
 const image_service_1 = require("../services/image.service");
-const ai_service_2 = require("../services/ai.service");
-// --- UPLOAD (Synchronous: Waits for AI) ---
+// Import AI Services
+const ai_service_1 = require("../services/ai.service");
+// ==========================================
+// 1. UPLOAD ASSET (Synchronous Wait for AI)
+// ==========================================
 const uploadAsset = async (req, res) => {
     const multerReq = req;
     if (!multerReq.file) {
@@ -26,28 +28,45 @@ const uploadAsset = async (req, res) => {
         const userId = multerReq.user?.id;
         const creativity = parseFloat(req.body.creativity || '0.2');
         const specificity = req.body.specificity || 'general';
-        // 1. Capture User Inputs (Name & Link)
+        // A. Capture User Inputs
         const finalOriginalName = req.body.originalName || multerOriginalName;
         let initialAiData = {};
         if (req.body.aiData) {
             try {
-                // This contains { "externalLink": "..." } from the frontend
                 initialAiData = JSON.parse(req.body.aiData);
             }
             catch (e) {
                 console.warn("Could not parse frontend aiData");
             }
         }
-        // 2. Generate Thumbnails (Locally)
+        // B. Setup Local Thumbnail Directory
         const thumbnailDir = path_1.default.join(__dirname, '../../uploads/thumbnails');
         await fs_extra_1.default.ensureDir(thumbnailDir);
         let thumbnailRelativePath = null;
+        let previewFrames = []; // ✅ Store 10 frame URLs here
+        // C. Generate Thumbnails & Previews (Locally)
         try {
             if (mimetype.startsWith('image/')) {
                 thumbnailRelativePath = await (0, image_service_1.generateThumbnail)(tempPath, thumbnailDir);
             }
             else if (mimetype.startsWith('video/')) {
+                // 1. Main Thumbnail
                 thumbnailRelativePath = await (0, image_service_1.generateVideoThumbnail)(tempPath, thumbnailDir);
+                // 2. ✅ Generate 10 Scrubbing Previews
+                try {
+                    // Generate local files (e.g., vid-scrub-1.jpg ... vid-scrub-10.jpg)
+                    const previewFiles = await (0, image_service_1.generateVideoPreviews)(tempPath, thumbnailDir, filename);
+                    // Upload each frame to Supabase immediately
+                    for (const pFile of previewFiles) {
+                        const localPPath = path_1.default.join(thumbnailDir, pFile);
+                        const cloudPPath = await (0, storage_service_1.uploadToSupabase)(localPPath, `previews/${pFile}`, 'image/jpeg');
+                        previewFrames.push(cloudPPath);
+                        await fs_extra_1.default.remove(localPPath); // Cleanup local frame
+                    }
+                }
+                catch (videoError) {
+                    console.warn("Video preview generation failed:", videoError);
+                }
             }
             else if (mimetype === 'application/pdf') {
                 thumbnailRelativePath = await (0, image_service_1.generatePdfThumbnail)(tempPath, thumbnailDir);
@@ -57,19 +76,17 @@ const uploadAsset = async (req, res) => {
             console.warn("Thumbnail generation failed:", thumbError);
             thumbnailRelativePath = null;
         }
-        // 3. Upload ORIGINAL to Supabase
+        // D. Upload ORIGINAL to Supabase
         const cloudOriginalPath = await (0, storage_service_1.uploadToSupabase)(tempPath, `originals/${filename}`, mimetype);
-        // 4. Upload THUMBNAIL to Supabase
+        // E. Upload THUMBNAIL to Supabase
         let cloudThumbnailPath = null;
         if (thumbnailRelativePath) {
             const localThumbPath = path_1.default.join(__dirname, '../../uploads/', thumbnailRelativePath);
-            // Detect if it's WebP (for GIFs) or JPEG
             const isWebP = thumbnailRelativePath.endsWith('.webp');
             cloudThumbnailPath = await (0, storage_service_1.uploadToSupabase)(localThumbPath, thumbnailRelativePath, isWebP ? 'image/webp' : 'image/jpeg');
             await fs_extra_1.default.remove(localThumbPath);
         }
-        // 5. Initial Save to Database
-        // We save the user's link here immediately.
+        // F. Save to Database
         const asset = await prisma_1.prisma.asset.create({
             data: {
                 filename,
@@ -78,25 +95,26 @@ const uploadAsset = async (req, res) => {
                 size,
                 path: cloudOriginalPath,
                 thumbnailPath: cloudThumbnailPath,
+                previewFrames: previewFrames, // ✅ Save the frames array
                 userId: userId,
-                aiData: JSON.stringify(initialAiData), // ✅ Stores { externalLink: ... }
+                aiData: JSON.stringify(initialAiData),
             },
         });
-        // 6. Trigger AI Analysis (Synchronous Wait)
+        // G. Trigger AI Analysis
         const aiOptions = { creativity, specificity };
         try {
             console.log(`🤖 Starting AI Analysis for ${asset.id} (${mimetype})...`);
             if (mimetype === 'image/gif') {
-                await (0, ai_service_2.analyzeAudioVideo)(asset.id, tempPath, aiOptions);
+                await (0, ai_service_1.analyzeAudioVideo)(asset.id, tempPath, aiOptions);
             }
             else if (mimetype.startsWith('image/')) {
-                await (0, ai_service_2.analyzeImage)(asset.id, tempPath, aiOptions);
+                await (0, ai_service_1.analyzeImage)(asset.id, tempPath, aiOptions);
             }
             else if (mimetype === 'application/pdf') {
-                await (0, ai_service_2.analyzePdf)(asset.id, tempPath, aiOptions);
+                await (0, ai_service_1.analyzePdf)(asset.id, tempPath, aiOptions);
             }
             else if (mimetype.startsWith('audio/') || mimetype.startsWith('video/')) {
-                await (0, ai_service_2.analyzeAudioVideo)(asset.id, tempPath, aiOptions);
+                await (0, ai_service_1.analyzeAudioVideo)(asset.id, tempPath, aiOptions);
             }
             console.log(`✅ AI Analysis Finished for ${asset.id}`);
         }
@@ -104,38 +122,29 @@ const uploadAsset = async (req, res) => {
             console.error("AI Analysis Warning (continuing):", err);
         }
         finally {
-            // Cleanup temp file
-            await new Promise(resolve => setTimeout(resolve, 500)); // Delay for file locks
-            console.log(`🧹 Cleaning up temp file: ${tempPath}`);
+            await new Promise(resolve => setTimeout(resolve, 500));
             await fs_extra_1.default.remove(tempPath).catch(e => console.error("Cleanup error:", e));
         }
-        // 7. SAFETY RESTORE: Ensure the Link persists
-        // The AI process above might have done `prisma.asset.update` with new tags,
-        // potentially overwriting our `aiData` JSON. We must check and merge.
+        // H. Merge AI Data back into DB record (if frontend provided some)
         let finalAsset = await prisma_1.prisma.asset.findUnique({ where: { id: asset.id } });
-        // Only run this merge logic if the user actually provided a link
         if (req.body.aiData && finalAsset) {
             const currentAiData = finalAsset.aiData ? JSON.parse(finalAsset.aiData) : {};
-            // Merge: Keep the new AI tags + Force the User Link back in
             const mergedAiData = {
                 ...currentAiData,
-                ...initialAiData // This ensures { externalLink: "..." } wins
+                ...initialAiData
             };
-            // Write the merged data back to DB
             finalAsset = await prisma_1.prisma.asset.update({
                 where: { id: asset.id },
                 data: { aiData: JSON.stringify(mergedAiData) }
             });
-            console.log("🔗 User Link restored/merged into AI Data.");
         }
-        // 8. Return Success
         res.status(201).json({
             message: 'Asset uploaded and analyzed successfully',
             asset: finalAsset || asset,
         });
     }
     catch (error) {
-        // Cleanup if critical error
+        // Emergency Cleanup
         if (await fs_extra_1.default.pathExists(tempPath)) {
             await fs_extra_1.default.remove(tempPath).catch(() => { });
         }
@@ -144,7 +153,9 @@ const uploadAsset = async (req, res) => {
     }
 };
 exports.uploadAsset = uploadAsset;
-// --- TRACK CLICKS ---
+// ==========================================
+// 2. TRACK CLICKS (Analytics)
+// ==========================================
 const trackAssetClick = async (req, res) => {
     try {
         const { assetId, query, position } = req.body;
@@ -159,107 +170,79 @@ const trackAssetClick = async (req, res) => {
     }
 };
 exports.trackAssetClick = trackAssetClick;
-// --- GET ASSETS (Search Engine V3.0 - Fixed) ---
+// ==========================================
+// 3. GET ASSETS (Optimized V5.0) - with Soft Delete Support
+// ==========================================
 const getAssets = async (req, res) => {
     try {
-        const { search, type, color } = req.query;
+        const { search, type, color, page = 1, limit = 50 } = req.query;
+        const pageNum = Math.max(1, Number(page));
+        const limitNum = Math.max(1, Math.min(100, Number(limit)));
+        const skip = (pageNum - 1) * limitNum;
         const cleanSearch = String(search || '').trim().toLowerCase();
-        // --- MODE A: BROWSE (No Text Search) ---
-        // This runs when you just load the dashboard. Fast & Accurate.
-        if (!cleanSearch) {
-            const whereClause = {};
-            // 1. Filter by Type
+        // A. Reusable Filter Logic
+        const buildFilters = () => {
+            const filters = {
+                // ✅ CRITICAL: Only show assets that are NOT in the trash
+                deletedAt: null
+            };
             if (type && type !== 'all') {
                 if (type === 'image')
-                    whereClause.mimeType = { startsWith: 'image/' };
+                    filters.mimeType = { startsWith: 'image/' };
                 else if (type === 'video')
-                    whereClause.mimeType = { startsWith: 'video/' };
+                    filters.mimeType = { startsWith: 'video/' };
                 else if (type === 'document')
-                    whereClause.mimeType = 'application/pdf';
+                    filters.mimeType = 'application/pdf';
             }
-            // 2. Filter by Color
             if (color) {
-                whereClause.aiData = { contains: String(color), mode: 'insensitive' };
+                filters.aiData = { contains: String(color), mode: 'insensitive' };
             }
-            const assets = await prisma_1.prisma.asset.findMany({
-                where: whereClause,
-                orderBy: { createdAt: 'desc' },
-                take: 2000, // ✅ LIMIT INCREASED to 2000 (effectively "all")
-                include: { uploadedBy: { select: { name: true } } }
-            });
-            // 3. SERVER-SIDE THUMBNAIL FIX
-            // If thumbnail is missing, use the original path
+            return filters;
+        };
+        const activeFilters = buildFilters();
+        // B. Lightweight Select (Include previewFrames)
+        const lightweightSelect = {
+            id: true,
+            filename: true,
+            originalName: true,
+            mimeType: true,
+            path: true,
+            thumbnailPath: true,
+            previewFrames: true, // ✅ Return frames to frontend
+            aiData: true,
+            uploadedBy: { select: { name: true } }
+        };
+        // --- MODE A: BROWSE (No Text Search) ---
+        if (!cleanSearch) {
+            const [total, assets] = await Promise.all([
+                prisma_1.prisma.asset.count({ where: activeFilters }),
+                prisma_1.prisma.asset.findMany({
+                    where: activeFilters,
+                    orderBy: { createdAt: 'desc' },
+                    take: limitNum,
+                    skip: skip,
+                    select: lightweightSelect,
+                })
+            ]);
             const fixedAssets = assets.map(asset => ({
                 ...asset,
                 thumbnailPath: asset.thumbnailPath || asset.path
             }));
-            res.json(fixedAssets);
+            res.json({
+                results: fixedAssets,
+                total,
+                page: pageNum,
+                totalPages: Math.ceil(total / limitNum)
+            });
             return;
         }
-        // --- MODE B: SEARCH (Text Query Active) ---
+        // --- MODE B: SEARCH (Optimized) ---
         const scoredMap = new Map();
-        // 1. SMART EXPANSION
-        let searchTerms = [];
-        const stemmer = natural_1.default.PorterStemmer;
-        const stem = stemmer.stem(cleanSearch);
-        const shouldExpand = cleanSearch.length > 2 && cleanSearch.length < 6 && !cleanSearch.includes(' ');
-        if (shouldExpand) {
-            const expanded = await (0, ai_service_1.expandQuery)(cleanSearch);
-            searchTerms = [...new Set([cleanSearch, stem, ...expanded])];
-        }
-        else {
-            searchTerms = [cleanSearch, stem];
-        }
-        // 2. VECTOR SEARCH (Semantic)
-        if (cleanSearch.length > 2) {
-            try {
-                const embedding = await (0, ai_service_1.generateEmbedding)(cleanSearch);
-                if (embedding) {
-                    const vectorString = `[${embedding.join(',')}]`;
-                    const rawVectorAssets = await prisma_1.prisma.$queryRaw `
-            SELECT id, (embedding <=> ${vectorString}::vector) as distance
-            FROM "Asset"
-            WHERE 1=1
-            ${type && type !== 'all' ? client_1.Prisma.sql `AND "mimeType" LIKE ${type === 'image' ? 'image/%' : type === 'video' ? 'video/%' : '%pdf%'}` : client_1.Prisma.empty}
-            ${color ? client_1.Prisma.sql `AND "aiData" ILIKE ${'%' + color + '%'}` : client_1.Prisma.empty}
-            AND embedding IS NOT NULL
-            ORDER BY distance ASC
-            LIMIT 100; -- Vector search can keep a limit as it's sorted by relevance
-          `;
-                    if (rawVectorAssets.length > 0) {
-                        const ids = rawVectorAssets.map(a => a.id);
-                        const vectorAssets = await prisma_1.prisma.asset.findMany({
-                            where: { id: { in: ids } },
-                            include: { uploadedBy: { select: { name: true } } },
-                        });
-                        vectorAssets.forEach(asset => {
-                            const match = rawVectorAssets.find(r => r.id === asset.id);
-                            const distance = match?.distance || 1;
-                            if (distance < 0.45) { // Slightly looser threshold
-                                const semanticScore = 50 * Math.exp(-5 * distance);
-                                scoredMap.set(asset.id, { asset, score: semanticScore, debug: `Vector (${distance.toFixed(3)})` });
-                            }
-                        });
-                    }
-                }
-            }
-            catch (err) {
-                console.warn("Vector search failed", err);
-            }
-        }
-        // 3. KEYWORD SEARCH (Exact Match)
-        const keywordWhere = { AND: [] };
-        if (type && type !== 'all') {
-            if (type === 'image')
-                keywordWhere.AND.push({ mimeType: { startsWith: 'image/' } });
-            else if (type === 'video')
-                keywordWhere.AND.push({ mimeType: { startsWith: 'video/' } });
-            else if (type === 'document')
-                keywordWhere.AND.push({ mimeType: 'application/pdf' });
-        }
-        if (color) {
-            keywordWhere.AND.push({ aiData: { contains: String(color), mode: 'insensitive' } });
-        }
+        let searchTerms = [cleanSearch];
+        // Ensure activeFilters (including deletedAt: null) are applied to search
+        const keywordWhere = {
+            AND: [activeFilters]
+        };
         if (searchTerms.length > 0) {
             keywordWhere.AND.push({
                 OR: searchTerms.flatMap(term => [
@@ -268,98 +251,68 @@ const getAssets = async (req, res) => {
                 ])
             });
         }
+        // Fetch Candidates
         const keywordAssets = await prisma_1.prisma.asset.findMany({
             where: keywordWhere,
-            include: { uploadedBy: { select: { name: true } } },
-            take: 500, // ✅ INCREASED LIMIT for keyword matches
+            select: lightweightSelect,
+            take: 200,
         });
-        // 4. SCORING MERGE
+        // Score Candidates
         keywordAssets.forEach(asset => {
             let score = 0;
-            const lowerName = asset.originalName.toLowerCase();
-            const lowerAI = (asset.aiData || '').toLowerCase();
-            const nameWithoutExt = lowerName.replace(/\.[^/.]+$/, "");
-            if (nameWithoutExt === cleanSearch)
+            const lowerName = (asset.originalName || '').toLowerCase();
+            const lowerAI = (String(asset.aiData) || '').toLowerCase();
+            if (lowerName === cleanSearch)
                 score += 100;
-            else if (nameWithoutExt.startsWith(cleanSearch))
-                score += 70;
-            else if (nameWithoutExt.includes(cleanSearch))
-                score += 40;
+            else if (lowerName.includes(cleanSearch))
+                score += 50;
             if (lowerAI.includes(cleanSearch))
                 score += 30;
-            const daysOld = (Date.now() - new Date(asset.createdAt).getTime()) / (1000 * 60 * 60 * 24);
-            if (daysOld < 30)
-                score += 10 * (1 - daysOld / 30);
-            if (scoredMap.has(asset.id)) {
-                const existing = scoredMap.get(asset.id);
-                scoredMap.set(asset.id, {
-                    asset,
-                    score: existing.score + score,
-                    debug: existing.debug + ` + Keyword (${score.toFixed(0)})`
-                });
-            }
-            else {
-                scoredMap.set(asset.id, { asset, score, debug: `Keyword (${score.toFixed(0)})` });
-            }
+            scoredMap.set(asset.id, { asset, score });
         });
-        // 5. CLICK BOOST
-        if (cleanSearch) {
-            const clickCounts = await prisma_1.prisma.assetClick.groupBy({
-                by: ['assetId'],
-                where: { query: cleanSearch },
-                _count: true
-            });
-            clickCounts.forEach(c => {
-                if (scoredMap.has(c.assetId)) {
-                    const entry = scoredMap.get(c.assetId);
-                    const boost = Math.log10(c._count + 1) * 10;
-                    entry.score += boost;
-                }
-            });
-        }
-        // 6. SORT, FALLBACK & RETURN
         let finalResults = Array.from(scoredMap.values())
             .sort((a, b) => b.score - a.score)
             .map(item => item.asset);
-        // Logging
-        if (cleanSearch) {
-            await prisma_1.prisma.searchLog.create({
-                data: {
-                    query: cleanSearch,
-                    resultCount: finalResults.length,
-                    userId: req.user?.id || null
-                }
-            }).catch(e => { });
-        }
-        // Fallback if no results found for search
-        if (finalResults.length === 0) {
+        const totalSearch = finalResults.length;
+        const paginatedResults = finalResults.slice(skip, skip + limitNum);
+        // --- MODE C: FALLBACK ---
+        let isFallback = false;
+        if (paginatedResults.length === 0 && pageNum === 1) {
+            isFallback = true;
             const fallbackAssets = await prisma_1.prisma.asset.findMany({
+                where: activeFilters, // Still ensures deletedAt: null
                 orderBy: { createdAt: 'desc' },
-                take: 20,
-                include: { uploadedBy: { select: { name: true } } }
+                take: limitNum,
+                select: lightweightSelect
             });
-            // Patch Fallback Thumbnails too
             const fixedFallback = fallbackAssets.map(asset => ({
                 ...asset,
                 thumbnailPath: asset.thumbnailPath || asset.path
             }));
-            res.json({ results: fixedFallback, isFallback: true });
+            res.json({ results: fixedFallback, isFallback: true, total: 0, page: 1, totalPages: 1 });
             return;
         }
-        // ✅ FINAL THUMBNAIL PATCH (Search Mode)
-        const fixedResults = finalResults.map(asset => ({
+        const fixedResults = paginatedResults.map(asset => ({
             ...asset,
             thumbnailPath: asset.thumbnailPath || asset.path
         }));
-        res.json(fixedResults);
+        res.json({
+            results: fixedResults,
+            isFallback,
+            total: totalSearch,
+            page: pageNum,
+            totalPages: Math.ceil(totalSearch / limitNum)
+        });
     }
     catch (error) {
-        console.error(error);
+        console.error("Get Assets Error:", error);
         res.status(500).json({ message: 'Error fetching assets' });
     }
 };
 exports.getAssets = getAssets;
-// --- GET ONE ---
+// ==========================================
+// 4. GET SINGLE ASSET
+// ==========================================
 const getAssetById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -378,48 +331,113 @@ const getAssetById = async (req, res) => {
     }
 };
 exports.getAssetById = getAssetById;
-// --- RECOMMENDATIONS ---
+// ==========================================
+// 5. GET RELATED ASSETS (Recommendations)
+// ==========================================
 const getRelatedAssets = async (req, res) => {
     try {
         const { id } = req.params;
-        const targetAsset = await prisma_1.prisma.$queryRaw `
-      SELECT embedding::text 
-      FROM "Asset" 
-      WHERE id = ${id}
-    `;
-        if (!targetAsset || targetAsset.length === 0 || !targetAsset[0].embedding) {
+        const targetAsset = await prisma_1.prisma.asset.findUnique({
+            where: { id },
+            select: { id: true, originalName: true, aiData: true, mimeType: true }
+        });
+        if (!targetAsset) {
             res.json([]);
             return;
         }
-        const vectorString = targetAsset[0].embedding;
-        const relatedAssets = await prisma_1.prisma.$queryRaw `
-      SELECT id, filename, "originalName", "mimeType", "thumbnailPath", "aiData"
-      FROM "Asset"
-      WHERE id != ${id}
-      AND embedding IS NOT NULL
-      AND (embedding <=> ${vectorString}::vector) < 0.60
-      ORDER BY embedding <=> ${vectorString}::vector
-      LIMIT 20;
-    `;
-        res.json(relatedAssets);
+        let typeFilter = {};
+        if (targetAsset.mimeType.startsWith('image/')) {
+            typeFilter = { mimeType: { startsWith: 'image/' } };
+        }
+        else if (targetAsset.mimeType.startsWith('video/')) {
+            typeFilter = { mimeType: { startsWith: 'video/' } };
+        }
+        else if (targetAsset.mimeType === 'application/pdf') {
+            typeFilter = { mimeType: 'application/pdf' };
+        }
+        const stopWords = new Set(['image', 'img', 'pic', 'picture', 'photo', 'screenshot', 'screen', 'shot', 'copy', 'final', 'draft', 'upload', 'new', 'old', 'backup', 'ds', 'store', 'frame', 'rectangle', 'group', 'vector', 'untitled', 'design', 'migration', 'import', 'jpg', 'png', 'mp4']);
+        const rawName = targetAsset.originalName || '';
+        const nameKeywords = rawName.split(/[\s_\-\.\/]+/).map(w => w.toLowerCase()).filter(w => w.length > 3 && !/^\d+$/.test(w) && !stopWords.has(w));
+        let tagKeywords = [];
+        try {
+            const parsed = JSON.parse(targetAsset.aiData || '{}');
+            if (Array.isArray(parsed.tags))
+                tagKeywords = parsed.tags;
+            if (typeof parsed.keywords === 'string')
+                tagKeywords = parsed.keywords.split(',');
+        }
+        catch (e) { }
+        const searchTerms = [...new Set([...tagKeywords, ...nameKeywords])].slice(0, 10);
+        // Fallback: Recent items of same type
+        if (searchTerms.length === 0) {
+            const recent = await prisma_1.prisma.asset.findMany({
+                where: { id: { not: id }, ...typeFilter },
+                orderBy: { createdAt: 'desc' },
+                take: 20,
+                select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true, previewFrames: true }
+            });
+            res.json(recent);
+            return;
+        }
+        // Search Candidates
+        const candidates = await prisma_1.prisma.asset.findMany({
+            where: {
+                id: { not: id },
+                ...typeFilter,
+                OR: [
+                    ...searchTerms.map(t => ({ originalName: { contains: t, mode: client_1.Prisma.QueryMode.insensitive } })),
+                    ...searchTerms.map(t => ({ aiData: { contains: t, mode: client_1.Prisma.QueryMode.insensitive } }))
+                ]
+            },
+            take: 100,
+            select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true, previewFrames: true }
+        });
+        // Score Candidates
+        const scoredAssets = candidates.map(asset => {
+            let score = 0;
+            const lowerName = (asset.originalName || '').toLowerCase();
+            const lowerAI = (String(asset.aiData) || '').toLowerCase();
+            searchTerms.forEach(term => {
+                const lowerTerm = term.toLowerCase();
+                if (lowerName.includes(lowerTerm))
+                    score += 50;
+                if (lowerAI.includes(lowerTerm))
+                    score += 30;
+                if (lowerName === lowerTerm)
+                    score += 50;
+            });
+            return { asset, score };
+        });
+        const finalResults = scoredAssets.filter(item => item.score > 0).sort((a, b) => b.score - a.score).slice(0, 20).map(item => item.asset);
+        // Fallback if scoring returned nothing
+        if (finalResults.length === 0) {
+            const recent = await prisma_1.prisma.asset.findMany({
+                where: { id: { not: id }, ...typeFilter },
+                orderBy: { createdAt: 'desc' },
+                take: 20,
+                select: { id: true, filename: true, originalName: true, mimeType: true, thumbnailPath: true, aiData: true, previewFrames: true }
+            });
+            res.json(recent);
+            return;
+        }
+        res.json(finalResults);
     }
     catch (error) {
-        console.error("Error fetching related assets:", error);
-        res.status(500).json({ message: 'Failed to fetch related assets' });
+        console.error("Related Error:", error);
+        res.status(500).json({ message: 'Error' });
     }
 };
 exports.getRelatedAssets = getRelatedAssets;
-// --- UPDATE ---
+// ==========================================
+// 6. UPDATE ASSET
+// ==========================================
 const updateAsset = async (req, res) => {
     try {
         const { id } = req.params;
         const { originalName, aiData } = req.body;
         const asset = await prisma_1.prisma.asset.update({
             where: { id },
-            data: {
-                originalName,
-                aiData: typeof aiData === 'object' ? JSON.stringify(aiData) : aiData,
-            },
+            data: { originalName, aiData: typeof aiData === 'object' ? JSON.stringify(aiData) : aiData },
         });
         res.json(asset);
     }
@@ -429,34 +447,37 @@ const updateAsset = async (req, res) => {
     }
 };
 exports.updateAsset = updateAsset;
-// --- DELETE ---
+// ==========================================
+// 7. DELETE ASSET (Soft Delete / Move to Trash)
+// ==========================================
 const deleteAsset = async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user?.id;
         const userRole = req.user?.role;
+        console.log(`\n🗑️ [SOFT DELETE] Moving Asset ID to Trash: ${id}`);
+        // 1. Find the Asset
         const asset = await prisma_1.prisma.asset.findUnique({ where: { id } });
         if (!asset) {
             res.status(404).json({ message: 'Asset not found' });
             return;
         }
+        // 2. Permission Check (Owner or Admin)
         if (userRole !== 'admin' && asset.userId !== userId) {
-            res.status(403).json({ message: 'You do not have permission to delete this asset.' });
+            res.status(403).json({ message: 'Access denied' });
             return;
         }
-        // 1. Delete from Database
-        await prisma_1.prisma.asset.delete({ where: { id } });
-        // 2. Delete from Supabase (Cloud)
-        // We pass the Full URL, the service parses it
-        if (asset.path)
-            await (0, storage_service_1.deleteFromSupabase)(asset.path);
-        if (asset.thumbnailPath)
-            await (0, storage_service_1.deleteFromSupabase)(asset.thumbnailPath);
-        res.json({ message: 'Asset deleted successfully' });
+        // 3. Perform Soft Delete (Update deletedAt)
+        // We DO NOT delete files or relations yet. That happens in forceDelete.
+        await prisma_1.prisma.asset.update({
+            where: { id },
+            data: { deletedAt: new Date() }
+        });
+        res.json({ message: 'Asset moved to recycle bin' });
     }
     catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Server error deleting asset' });
+        console.error("🔥 SOFT DELETE ERROR:", error);
+        res.status(500).json({ message: 'Server error', error: String(error) });
     }
 };
 exports.deleteAsset = deleteAsset;

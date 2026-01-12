@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generatePdfThumbnail = exports.generateVideoThumbnail = exports.generateThumbnail = void 0;
+exports.generateVideoPreviews = exports.generatePdfThumbnail = exports.generateVideoThumbnail = exports.generateThumbnail = void 0;
 const sharp_1 = __importDefault(require("sharp"));
 const path_1 = __importDefault(require("path"));
 const fluent_ffmpeg_1 = __importDefault(require("fluent-ffmpeg"));
@@ -73,3 +73,28 @@ const generatePdfThumbnail = async (filePath, outputDir) => {
     return null; // Return null -> Frontend shows Icon
 };
 exports.generatePdfThumbnail = generatePdfThumbnail;
+// ✅ ADD THIS NEW FUNCTION
+const generateVideoPreviews = (videoPath, outputDir, filenameBase) => {
+    return new Promise((resolve, reject) => {
+        const filenames = [];
+        (0, fluent_ffmpeg_1.default)(videoPath)
+            .on('filenames', (fnames) => {
+            // fluent-ffmpeg returns an array of filenames
+            fnames.forEach((f) => filenames.push(f));
+        })
+            .on('end', () => {
+            resolve(filenames);
+        })
+            .on('error', (err) => {
+            console.error('FFmpeg error:', err);
+            reject(err);
+        })
+            .screenshots({
+            count: 10, // 📸 Take 10 snapshots
+            folder: outputDir,
+            filename: `${filenameBase}-scrub-%i.jpg`,
+            size: '320x?', // Small size for fast loading
+        });
+    });
+};
+exports.generateVideoPreviews = generateVideoPreviews;

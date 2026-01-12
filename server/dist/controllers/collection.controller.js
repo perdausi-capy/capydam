@@ -13,49 +13,40 @@ const slugify = (text) => {
         .replace(/^-+/, '') // Trim - from start
         .replace(/-+$/, ''); // Trim - from end
 };
-// 1. GET ALL (Filtered by Role)
+// 1. GET ALL (Super Optimized)
 const getCollections = async (req, res) => {
     try {
         const userId = req.user?.id;
         const userRole = req.user?.role;
-        // Check for optional query param if Admin wants to see specific user's folders
-        // e.g. /api/collections?targetUserId=123
         const targetUserId = req.query.targetUserId;
         const whereClause = {
             parentId: null
         };
-        // ✅ LOGIC:
-        // 1. If Admin provides 'targetUserId', show that user's collections.
-        // 2. Otherwise, ALWAYS filter by the logged-in userId (Admin sees their own, Viewer sees theirs).
+        // ✅ LOGIC: Admin view vs User view
         if (userRole === 'admin' && targetUserId) {
             whereClause.userId = targetUserId;
         }
         else {
             whereClause.userId = userId;
         }
+        // ⚡️ OPTIMIZATION: 
+        // 1. We fetch 'coverImage' directly from the column (No heavy joins!)
+        // 2. We limit to 100 to prevent server overload
         const collections = await prisma_1.prisma.collection.findMany({
             where: whereClause,
-            include: {
+            take: 100,
+            select: {
+                id: true,
+                name: true,
+                createdAt: true,
+                coverImage: true, // Direct column access (Fast!)
                 _count: {
                     select: { assets: true }
-                },
-                assets: {
-                    take: 1,
-                    include: {
-                        asset: { select: { path: true, thumbnailPath: true, mimeType: true } }
-                    }
                 }
             },
             orderBy: { createdAt: 'desc' }
         });
-        const formatted = collections.map(c => ({
-            id: c.id,
-            name: c.name,
-            createdAt: c.createdAt,
-            _count: c._count,
-            coverImage: c.assets[0]?.asset.thumbnailPath || c.assets[0]?.asset.path || null
-        }));
-        res.json(formatted);
+        res.json(collections);
     }
     catch (error) {
         console.error("Get Collections Error:", error);
@@ -63,7 +54,7 @@ const getCollections = async (req, res) => {
     }
 };
 exports.getCollections = getCollections;
-// 2. GET ONE (With Security Check)
+// 2. GET ONE (Unchanged)
 const getCollectionById = async (req, res) => {
     try {
         const { id } = req.params;
@@ -72,11 +63,9 @@ const getCollectionById = async (req, res) => {
         const collection = await prisma_1.prisma.collection.findUnique({
             where: { id },
             include: {
-                // ✅ Include Sub-folders
                 children: {
                     include: { _count: { select: { assets: true } } }
                 },
-                // Include Assets
                 assets: {
                     include: {
                         asset: {
@@ -90,7 +79,6 @@ const getCollectionById = async (req, res) => {
             res.status(404).json({ message: 'Collection not found' });
             return;
         }
-        // Security Check: Is this MY collection? (Skip if Admin)
         if (userRole !== 'admin' && collection.userId !== userId) {
             res.status(403).json({ message: 'Access denied' });
             return;
@@ -107,26 +95,46 @@ const getCollectionById = async (req, res) => {
     }
 };
 exports.getCollectionById = getCollectionById;
-// 3. CREATE
+// 3. CREATE (Optimized: Fail-Fast Strategy)
 const createCollection = async (req, res) => {
     try {
         const { name, parentId } = req.body;
         const userId = req.user?.id;
-        let slug = slugify(name);
-        // Ensure unique slug
-        const existing = await prisma_1.prisma.collection.findUnique({ where: { slug } });
-        if (existing) {
-            slug = `${slug}-${Date.now()}`;
+        const baseSlug = slugify(name);
+        let slug = baseSlug;
+        // ⚡️ OPTIMIZATION: Try to create immediately. 
+        // We assume the name is unique most of the time.
+        // This saves 1 DB call (findUnique) for every successful creation.
+        try {
+            const collection = await prisma_1.prisma.collection.create({
+                data: {
+                    name,
+                    slug,
+                    userId,
+                    parentId: parentId || null
+                }
+            });
+            res.status(201).json(collection);
+            return;
         }
-        const collection = await prisma_1.prisma.collection.create({
-            data: {
-                name,
-                slug,
-                userId,
-                parentId: parentId || null
+        catch (dbError) {
+            // P2002 = Unique Constraint Failed (Slug collision)
+            if (dbError.code === 'P2002') {
+                // Collision happened! Now append timestamp and retry.
+                slug = `${baseSlug}-${Date.now()}`;
+                const collectionRetry = await prisma_1.prisma.collection.create({
+                    data: {
+                        name,
+                        slug,
+                        userId,
+                        parentId: parentId || null
+                    }
+                });
+                res.status(201).json(collectionRetry);
+                return;
             }
-        });
-        res.status(201).json(collection);
+            throw dbError; // Throw other errors to the main catch block
+        }
     }
     catch (error) {
         console.error(error);
@@ -134,15 +142,18 @@ const createCollection = async (req, res) => {
     }
 };
 exports.createCollection = createCollection;
-// 4. ADD ASSET TO COLLECTION
+// 4. ADD ASSET TO COLLECTION (Auto-update Cover)
 const addAssetToCollection = async (req, res) => {
     try {
-        const { id } = req.params; // Collection ID
+        const { id } = req.params;
         const { assetId } = req.body;
         const userId = req.user?.id;
         const userRole = req.user?.role;
-        // Check ownership
-        const collection = await prisma_1.prisma.collection.findUnique({ where: { id } });
+        // 1. Fetch Collection to check rights & current cover status
+        const collection = await prisma_1.prisma.collection.findUnique({
+            where: { id },
+            select: { userId: true, coverImage: true }
+        });
         if (!collection) {
             res.status(404).json({ message: 'Not found' });
             return;
@@ -151,21 +162,40 @@ const addAssetToCollection = async (req, res) => {
             res.status(403).json({ message: 'Access denied' });
             return;
         }
-        await prisma_1.prisma.assetOnCollection.create({
-            data: {
-                collectionId: id,
-                assetId
-            }
+        // 2. Fetch the Asset details (we need the path for the cover)
+        const asset = await prisma_1.prisma.asset.findUnique({
+            where: { id: assetId },
+            select: { thumbnailPath: true, path: true }
         });
+        if (!asset) {
+            res.status(404).json({ message: 'Asset not found' });
+            return;
+        }
+        // 3. Prepare Transaction Operations
+        const operations = [
+            prisma_1.prisma.assetOnCollection.create({
+                data: { collectionId: id, assetId }
+            })
+        ];
+        // ✅ LOGIC: If collection has no cover, use this new asset immediately
+        if (!collection.coverImage) {
+            const newCover = asset.thumbnailPath || asset.path;
+            operations.push(prisma_1.prisma.collection.update({
+                where: { id },
+                data: { coverImage: newCover }
+            }));
+        }
+        // Execute all updates atomically
+        await prisma_1.prisma.$transaction(operations);
         res.json({ success: true });
     }
     catch (error) {
-        // Ignore duplicate errors (P2002)
+        // Ignore P2002 (Duplicate entry) - means asset is already in collection
         res.json({ success: true });
     }
 };
 exports.addAssetToCollection = addAssetToCollection;
-// 5. REMOVE ASSET
+// 5. REMOVE ASSET (Recalculate Cover if needed)
 const removeAssetFromCollection = async (req, res) => {
     try {
         const { id, assetId } = req.params;
@@ -180,15 +210,37 @@ const removeAssetFromCollection = async (req, res) => {
             res.status(403).json({ message: 'Access denied' });
             return;
         }
-        await prisma_1.prisma.assetOnCollection.deleteMany({
-            where: {
-                collectionId: id,
-                assetId: assetId
-            }
+        // 1. Get the asset we are about to remove (to check if it's the cover)
+        const assetToRemove = await prisma_1.prisma.asset.findUnique({
+            where: { id: assetId },
+            select: { thumbnailPath: true, path: true }
         });
+        // 2. Remove the link
+        await prisma_1.prisma.assetOnCollection.deleteMany({
+            where: { collectionId: id, assetId: assetId }
+        });
+        // 3. ✅ CHECK: Did we just delete the cover image?
+        const currentCover = collection.coverImage;
+        const removedImage = assetToRemove?.thumbnailPath || assetToRemove?.path;
+        if (currentCover && removedImage && currentCover === removedImage) {
+            // Find the most recent asset remaining in the collection
+            // ✅ FIX: Use 'assignedAt' instead of 'createdAt'
+            const nextAssetLink = await prisma_1.prisma.assetOnCollection.findFirst({
+                where: { collectionId: id },
+                include: { asset: { select: { thumbnailPath: true, path: true } } },
+                orderBy: { assignedAt: 'desc' }
+            });
+            // If found, use it. If not (folder empty), set to null.
+            const newCover = nextAssetLink?.asset.thumbnailPath || nextAssetLink?.asset.path || null;
+            await prisma_1.prisma.collection.update({
+                where: { id },
+                data: { coverImage: newCover }
+            });
+        }
         res.json({ success: true });
     }
     catch (error) {
+        console.error("Remove Asset Error:", error);
         res.status(500).json({ message: 'Error removing asset' });
     }
 };
@@ -220,12 +272,15 @@ const updateCollection = async (req, res) => {
     }
 };
 exports.updateCollection = updateCollection;
-// 7. DELETE COLLECTION (Transactional)
+// 7. DELETE COLLECTION (Recursive Force Delete)
 const deleteCollection = async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user?.id;
         const userRole = req.user?.role;
+        // 1. Fetch the collection AND all its children (recursive) to check permissions
+        // Note: A simple check is enough, we will let the DB cascade handle the deep structure
+        // provided we clean up the Asset links first.
         const collection = await prisma_1.prisma.collection.findUnique({ where: { id } });
         if (!collection) {
             res.status(404).json({ message: 'Collection not found' });
@@ -235,13 +290,32 @@ const deleteCollection = async (req, res) => {
             res.status(403).json({ message: 'Access denied' });
             return;
         }
-        // Transaction: Empty the folder, then delete the folder
+        // 2. FORCE DELETE STRATEGY
+        // We need to find ALL descendent collection IDs to remove their AssetOnCollection links first.
+        // Prisma doesn't support recursive deleteMany easily, so we fetch IDs first.
+        // Get all collections owned by this user (optimization: we assume we only delete our own tree)
+        const allUserCollections = await prisma_1.prisma.collection.findMany({
+            where: { userId: collection.userId },
+            select: { id: true, parentId: true }
+        });
+        // Helper to find all descendants of the target ID
+        const getDescendants = (parentId) => {
+            const children = allUserCollections.filter(c => c.parentId === parentId);
+            let ids = children.map(c => c.id);
+            children.forEach(c => {
+                ids = [...ids, ...getDescendants(c.id)];
+            });
+            return ids;
+        };
+        const targetIds = [id, ...getDescendants(id)];
+        // 3. TRANSACTION
         await prisma_1.prisma.$transaction([
-            // Remove links to assets inside this collection
+            // A. Remove all asset links from the target folder AND all sub-folders
             prisma_1.prisma.assetOnCollection.deleteMany({
-                where: { collectionId: id }
+                where: { collectionId: { in: targetIds } }
             }),
-            // Delete the collection itself
+            // B. Delete the parent collection. 
+            // Since schema has `onDelete: Cascade` for `children`, this wipes the sub-folders automatically.
             prisma_1.prisma.collection.delete({
                 where: { id }
             })

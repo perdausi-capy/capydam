@@ -5,7 +5,7 @@ const client_1 = require("@prisma/client");
 const globalForPrisma = global;
 exports.prisma = globalForPrisma.prisma ||
     new client_1.PrismaClient({
-        log: ['query'], // Helpful to see SQL queries in console
+        log: ['warn', 'error'], // Reduced logging to prevent console spam
     });
 if (process.env.NODE_ENV !== 'production')
     globalForPrisma.prisma = exports.prisma;
