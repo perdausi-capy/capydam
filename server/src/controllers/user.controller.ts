@@ -1,8 +1,9 @@
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import bcrypt from 'bcryptjs';
-import { uploadToSupabase } from '../utils/supabase'; 
-import fs from 'fs-extra'; 
+// ✅ CORRECTED IMPORT: Pointing to MinIO service
+import { uploadToSupabase } from '../services/storage.service'; 
+import fs from 'fs-extra';
 
 // Define Multer Request Type locally
 interface MulterRequest extends Request {
@@ -10,14 +11,13 @@ interface MulterRequest extends Request {
   user?: { id: string };
 }
 
-// ✅ 1. Get All Users
+// 1. Get All Users
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const search = (req.query.search as string) || '';
     const role = (req.query.role as string) || 'all';
-
     const skip = (page - 1) * limit;
 
     const whereClause: any = {
@@ -26,7 +26,7 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
           OR: [
             { name: { contains: search, mode: 'insensitive' } },
             { email: { contains: search, mode: 'insensitive' } },
-          ],
+          ]
         } : {},
         role !== 'all' ? { role: role } : {},
       ],
@@ -36,15 +36,15 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
       prisma.user.count({ where: whereClause }),
       prisma.user.findMany({
         where: whereClause,
-        select: { 
-          id: true, 
-          name: true, 
-          email: true, 
-          role: true, 
-          status: true, 
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          status: true,
           createdAt: true,
-          updatedAt: true, // ✅ ADDED THIS LINE
-          avatar: true 
+          updatedAt: true,
+          avatar: true
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -61,7 +61,6 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
         totalPages: Math.ceil(total / limit),
       },
     });
-
   } catch (error) {
     console.error("Get Users Error:", error);
     res.status(500).json({ message: 'Error fetching users' });
@@ -72,13 +71,13 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
 export const approveUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { role } = req.body; 
+    const { role } = req.body;
 
     await prisma.user.update({
       where: { id },
-      data: { 
+      data: {
         status: 'ACTIVE',
-        role: role || 'viewer' 
+        role: role || 'viewer'
       },
     });
 
@@ -108,8 +107,8 @@ export const updateUserRole = async (req: Request, res: Response): Promise<void>
     // Safety: Ensure only valid roles are passed
     const validRoles = ['admin', 'editor', 'viewer'];
     if (!validRoles.includes(role)) {
-        res.status(400).json({ message: 'Invalid role provided' });
-        return;
+      res.status(400).json({ message: 'Invalid role provided' });
+      return;
     }
 
     await prisma.user.update({
@@ -142,7 +141,7 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
         password: hashedPassword,
         name,
         role,
-        status: 'ACTIVE', 
+        status: 'ACTIVE',
       },
     });
 
@@ -152,7 +151,7 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-// 6. Update Profile (Preserved & Safe)
+// 6. Update Profile
 export const updateProfile = async (req: Request, res: Response): Promise<void> => {
   const multerReq = req as MulterRequest;
   const user = (req as any).user;
@@ -160,8 +159,8 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
   const { name } = req.body;
 
   if (!userId) {
-     res.status(401).json({ message: 'User not authenticated or ID missing' });
-     return;
+    res.status(401).json({ message: 'User not authenticated or ID missing' });
+    return;
   }
 
   try {
@@ -170,12 +169,14 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
     if (multerReq.file) {
       const { path: tempPath, mimetype } = multerReq.file;
       
+      // ✅ Using the new storage service (MinIO)
       avatarPath = await uploadToSupabase(
-        tempPath, 
-        `avatars/${userId}-${Date.now()}`, 
+        tempPath,
+        `avatars/${userId}-${Date.now()}`,
         mimetype
       );
 
+      // Cleanup local temp file
       await fs.remove(tempPath).catch(() => {});
     }
 
@@ -183,17 +184,16 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
       where: { id: userId },
       data: {
         name: name,
-        ...(avatarPath && { avatar: avatarPath }), 
+        ...(avatarPath && { avatar: avatarPath }),
       },
     });
 
     const { password, ...userWithoutPassword } = updatedUser;
     res.json(userWithoutPassword);
-
   } catch (error) {
     console.error("Profile Update Error:", error);
     if (multerReq.file?.path) {
-        await fs.remove(multerReq.file.path).catch(() => {});
+      await fs.remove(multerReq.file.path).catch(() => {});
     }
     res.status(500).json({ message: 'Failed to update profile' });
   }
@@ -203,7 +203,6 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
 export const getUserById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    
     const user = await prisma.user.findUnique({
       where: { id },
       include: {
@@ -229,45 +228,45 @@ export const getUserById = async (req: Request, res: Response): Promise<void> =>
     res.status(500).json({ message: 'Error fetching user details' });
   }
 };
-  
+
 // 8. Delete User (Transaction Safe)
 export const deleteUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    
     const currentUserId = (req as any).user?.id;
+
     if (id === currentUserId) {
-        res.status(400).json({ message: 'You cannot delete your own admin account.' });
-        return;
+      res.status(400).json({ message: 'You cannot delete your own admin account.' });
+      return;
     }
 
     const userAssets = await prisma.asset.findMany({
-        where: { userId: id },
-        select: { id: true }
+      where: { userId: id },
+      select: { id: true }
     });
-    
+
     const assetIds = userAssets.map(a => a.id);
 
     await prisma.$transaction([
-        // Remove asset links in collections
-        prisma.assetOnCollection.deleteMany({
-            where: { assetId: { in: assetIds } }
-        }),
-        // Remove collections owned by user
-        prisma.assetOnCollection.deleteMany({
-            where: { collection: { userId: id } }
-        }),
-        prisma.collection.deleteMany({
-            where: { userId: id }
-        }),
-        // Remove assets owned by user
-        prisma.asset.deleteMany({
-            where: { userId: id }
-        }),
-        // Finally, delete user
-        prisma.user.delete({
-            where: { id }
-        })
+      // Remove asset links in collections
+      prisma.assetOnCollection.deleteMany({
+        where: { assetId: { in: assetIds } }
+      }),
+      // Remove collections owned by user
+      prisma.assetOnCollection.deleteMany({
+        where: { collection: { userId: id } }
+      }),
+      prisma.collection.deleteMany({
+        where: { userId: id }
+      }),
+      // Remove assets owned by user
+      prisma.asset.deleteMany({
+        where: { userId: id }
+      }),
+      // Finally, delete user
+      prisma.user.delete({
+        where: { id }
+      })
     ]);
 
     res.json({ message: 'User and all associated data deleted successfully' });
