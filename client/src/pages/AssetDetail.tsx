@@ -364,7 +364,7 @@ const AssetDetail = () => {
               {/* ✅ CENTER: LIVE SEARCH SPOTLIGHT */}
               <div className="flex-1 max-w-xl mx-auto hidden md:block group relative" ref={searchRef}>
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search size={16} className="text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                      <Search size={16} className="text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                   </div>
                   <input
                     type="text"
@@ -381,7 +381,7 @@ const AssetDetail = () => {
                       <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
                           {isSearching ? (
                               <div className="p-4 flex items-center justify-center text-gray-400 gap-2 text-sm">
-                                  <Loader2 size={16} className="animate-spin" /> Searching...
+                                   <Loader2 size={16} className="animate-spin" /> Searching...
                               </div>
                           ) : searchResults.length > 0 ? (
                               <div className="py-2">
@@ -394,12 +394,12 @@ const AssetDetail = () => {
                                       >
                                           {/* Tiny Thumbnail */}
                                           <div className="h-8 w-8 rounded bg-gray-200 dark:bg-white/10 overflow-hidden shrink-0">
-                                               {result.mimeType.startsWith('image') ? (
+                                              {result.mimeType.startsWith('image') ? (
                                                    <img src={result.thumbnailPath || result.path} className="w-full h-full object-cover" />
                                                ) : (
                                                    <div className="w-full h-full flex items-center justify-center text-gray-500">
-                                                       {result.mimeType.startsWith('video') ? <Video size={14} /> : <FileText size={14} />}
-                                                   </div>
+                                                        {result.mimeType.startsWith('video') ? <Video size={14} /> : <FileText size={14} />}
+                                                    </div>
                                                )}
                                           </div>
                                           <div className="min-w-0">
@@ -414,7 +414,7 @@ const AssetDetail = () => {
                                           onClick={() => navigate(`/library?search=${encodeURIComponent(searchQuery)}`)}
                                           className="w-full px-4 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-center"
                                       >
-                                          View all results for "{searchQuery}"
+                                           View all results for "{searchQuery}"
                                       </button>
                                   </div>
                               </div>
@@ -432,7 +432,7 @@ const AssetDetail = () => {
                   {/* DELETE BUTTON */}
                   {canDelete && (
                       <button 
-                        onClick={() => setShowDeleteConfirm(true)} 
+                          onClick={() => setShowDeleteConfirm(true)} 
                         className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors border border-transparent"
                         title="Move to Recycle Bin"
                       >
@@ -448,7 +448,7 @@ const AssetDetail = () => {
 
                   {/* PRIMARY: DOWNLOAD (Blue) */}
                   <button onClick={handleDownload} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md hover:scale-105 transition-transform active:scale-95">
-                      <Download size={18} /> Download
+                       <Download size={18} /> Download
                   </button>
               </div>
           </div>
@@ -458,7 +458,7 @@ const AssetDetail = () => {
       <div className="md:hidden px-6 pt-4 pb-2">
            <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search size={16} className="text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                 <Search size={16} className="text-gray-400 group-focus-within:text-blue-500 transition-colors" />
               </div>
               <input
                 type="text"
@@ -486,7 +486,7 @@ const AssetDetail = () => {
                           <video src={asset.path} poster={asset.thumbnailPath || undefined} controls className="w-full h-auto max-h-[75vh]" />
                       ) : (
                           <div className="h-96 flex flex-col items-center justify-center text-gray-400">
-                              <FileText size={64} />
+                               <FileText size={64} />
                               <p className="mt-4 font-medium">Preview not available</p>
                           </div>
                       )}
@@ -498,14 +498,14 @@ const AssetDetail = () => {
                   ) : relatedAssets.length > 0 && (
                       <div>
                           <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                             More Like This
+                              More Like This
                           </h3>
                           <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-4" columnClassName="pl-4 bg-clip-padding">
                               {relatedAssets.map(item => (
                                   <div key={item.id} className="block mb-4 group cursor-pointer" onClick={() => navigate(`/assets/${item.id}`)}>
                                       <div className="rounded-xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] shadow-sm hover:shadow-md transition-all">
                                           <AssetThumbnail 
-                                            mimeType={item.mimeType} 
+                                              mimeType={item.mimeType} 
                                             thumbnailPath={item.thumbnailPath || item.path} 
                                             className="w-full h-auto object-cover group-hover:opacity-90 transition-opacity" 
                                           />
@@ -534,7 +534,7 @@ const AssetDetail = () => {
                                   autoFocus 
                                   className="w-full text-xl font-bold bg-white dark:bg-[#1A1D21] border-b-2 border-blue-500 outline-none text-gray-900 dark:text-white pb-1 min-w-0"
                               />
-                              <button onClick={handleRename} className="shrink-0 p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200"><Check size={18} /></button>
+                               <button onClick={handleRename} className="shrink-0 p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200"><Check size={18} /></button>
                               <button onClick={() => setIsRenaming(false)} className="shrink-0 p-2 bg-gray-100 dark:bg-white/10 text-gray-500 rounded-lg hover:bg-gray-200"><X size={18} /></button>
                           </div>
                       ) : (
@@ -651,17 +651,24 @@ const AssetDetail = () => {
                           {visibleTags.length > 0 ? (
                               <>
                                   {visibleTags.map((tag: string) => (
-                                      <span key={tag} className="group flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-full border border-gray-200 dark:border-white/5 max-w-full">
+                                      <div 
+                                          key={tag} 
+                                          className="group flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-full border border-gray-200 dark:border-white/5 max-w-full hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-200 dark:hover:border-blue-800 transition-colors cursor-pointer"
+                                          onClick={() => navigate(`/library?search=${encodeURIComponent(tag)}`)}
+                                      >
                                           <Hash size={10} className="opacity-50 shrink-0" /> 
-                                          <span className="truncate">{tag}</span>
+                                          <span className="truncate hover:text-blue-600 dark:hover:text-blue-400">{tag}</span>
                                           {canManageAsset && (
-                                              <button onClick={() => handleRemoveTag(tag)} className="ml-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                              <button 
+                                                onClick={(e) => { e.stopPropagation(); handleRemoveTag(tag); }} 
+                                                className="ml-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                              >
                                                   <X size={10} />
                                               </button>
                                           )}
-                                      </span>
+                                      </div>
                                   ))}
-                                  
+                                   
                                   {effectiveTags.length > 10 && (
                                       <button 
                                           onClick={() => setShowAllTags(!showAllTags)}
@@ -692,7 +699,7 @@ const AssetDetail = () => {
                   </div>
 
               </div>
-          </div>
+      </div>
       )}
 
       {/* SELECTION MODAL */}
@@ -732,7 +739,7 @@ const AssetDetail = () => {
                                       onClick={() => addToCollection(c.id, c.name)}
                                       disabled={!!addingToId} 
                                       className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors group
-                                        ${addingToId && addingToId !== c.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'}
+                                         ${addingToId && addingToId !== c.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-50 dark:hover:bg-blue-900/20'}
                                       `}
                                   >
                                       <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
@@ -750,7 +757,7 @@ const AssetDetail = () => {
                                       onClick={() => addToTopic(c.id, c.name)}
                                       disabled={!!addingToId}
                                       className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors group
-                                        ${addingToId && addingToId !== c.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-50 dark:hover:bg-purple-900/20'}
+                                         ${addingToId && addingToId !== c.id ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-50 dark:hover:bg-purple-900/20'}
                                       `}
                                   >
                                       <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
@@ -760,6 +767,7 @@ const AssetDetail = () => {
                                   </button>
                               ))
                           ) : <div className="p-6 text-center text-gray-400 text-sm">No topics found</div>
+                  
                       )}
                   </div>
               </div>
