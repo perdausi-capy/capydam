@@ -46,7 +46,7 @@ app.use(cors({
     'http://localhost:5173', 
     process.env.CLIENT_URL || "" 
   ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true 
 }));
 

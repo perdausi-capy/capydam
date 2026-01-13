@@ -12,7 +12,8 @@ import {
     MoreVertical,
     Edit2,
     Sparkles,
-    UploadCloud
+    UploadCloud,
+    ExternalLink // ✅ Added Icon
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -20,13 +21,22 @@ import ConfirmModal from '../components/ConfirmModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
+// ✅ Updated Interface
 interface Category {
   id: string;
   name: string;
   group: string;
   coverImage?: string;
+  link?: string; // ✅ New Field for Hyperlinks
   _count: { assets: number };
 }
+
+// ⚡️ HELPER: Resize images on the fly to save bandwidth
+const getOptimizedUrl = (url: string | undefined) => {
+    if (!url) return undefined;
+    if (url.includes('supabase.co')) return `${url}?width=600&resize=cover&quality=70`;
+    return url;
+};
 
 // --- 🦴 SKELETON COMPONENT ---
 const CategorySkeleton = React.memo(() => (
@@ -42,11 +52,12 @@ const CategorySkeleton = React.memo(() => (
 // --- 🎥 SMART MEDIA COMPONENT ---
 const CardMedia = React.memo(({ src, alt, className }: { src: string, alt: string, className: string }) => {
     const isVideo = useMemo(() => src.match(/\.(mp4|webm|mov)$/i), [src]);
+    const optimizedSrc = useMemo(() => isVideo ? src : getOptimizedUrl(src), [src, isVideo]);
 
     if (isVideo) {
         return (
             <video
-                src={src} 
+                src={src}
                 className={className}
                 muted loop playsInline autoPlay
                 style={{ transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}
@@ -56,7 +67,7 @@ const CardMedia = React.memo(({ src, alt, className }: { src: string, alt: strin
 
     return (
         <img 
-            src={src} 
+            src={optimizedSrc} 
             alt={alt} 
             className={className}
             loading="lazy"
@@ -66,67 +77,99 @@ const CardMedia = React.memo(({ src, alt, className }: { src: string, alt: strin
 });
 
 // --- 💎 MEMOIZED CARD COMPONENT ---
-const CategoryCard = React.memo(({ cat, icon: Icon, colorClass, canManage, onEdit, onDelete }: any) => (
-    <motion.div 
-        layout
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3 }}
-        className="group relative flex flex-col rounded-3xl border border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-300 overflow-hidden h-64 transform-gpu"
-    >
-        <Link to={`/categories/${cat.id}`} className="flex-1 flex flex-col h-full z-0">
-            {/* COVER AREA */}
-            <div className={`relative flex-1 w-full overflow-hidden ${colorClass} flex items-center justify-center`}>
-                {cat.coverImage ? (
-                    <>
-                        <CardMedia 
-                            src={cat.coverImage} 
-                            alt={cat.name} 
-                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                        />
-                        <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors duration-300" />
-                    </>
-                ) : (
-                    <div className="p-4 rounded-2xl bg-white/20 dark:bg-black/10 backdrop-blur-sm shadow-inner relative z-10">
-                        <Icon size={40} className="text-white drop-shadow-sm" />
-                    </div>
-                )}
-                
-                {/* Count Badge */}
-                <div className="absolute top-4 right-4 rounded-full bg-white/90 dark:bg-black/60 px-3 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 shadow-sm backdrop-blur-md border border-transparent dark:border-white/10 z-10">
-                    {cat._count.assets}
-                </div>
-            </div>
+const CategoryCard = React.memo(({ cat, icon: Icon, colorClass, canManage, onEdit, onDelete }: any) => {
+    // ✅ Logic: Is this an external link?
+    const isLink = cat.group === 'Inspiration' && cat.link;
 
-            {/* FOOTER */}
-            <div className="relative z-10 flex items-center justify-between p-5 bg-white dark:bg-[#1A1D21] border-t border-gray-50 dark:border-white/5">
-                <div className="min-w-0 pr-2">
-                    <h3 className="font-bold text-gray-900 dark:text-white text-lg leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
-                        {cat.name}
-                    </h3>
-                    <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-gray-400 font-medium">
-                        <ImageIcon size={12} /> {cat._count.assets} assets
+    // ✅ Wrapper: Renders <a> if link, <Link> if folder
+    const CardWrapper = ({ children }: { children: React.ReactNode }) => {
+        if (isLink) {
+            return (
+                <a 
+                    href={cat.link} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="flex-1 flex flex-col h-full z-0"
+                >
+                    {children}
+                </a>
+            );
+        }
+        return <Link to={`/categories/${cat.id}`} className="flex-1 flex flex-col h-full z-0">{children}</Link>;
+    };
+
+    return (
+        <motion.div 
+            layout
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+            className="group relative flex flex-col rounded-3xl border border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 hover:-translate-y-1 transition-all duration-300 overflow-hidden h-64 transform-gpu"
+        >
+            <CardWrapper>
+                {/* COVER AREA */}
+                <div className={`relative flex-1 w-full overflow-hidden ${colorClass} flex items-center justify-center`}>
+                    {cat.coverImage ? (
+                        <>
+                            <CardMedia 
+                                src={cat.coverImage} 
+                                alt={cat.name} 
+                                className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                            />
+                            <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors duration-300" />
+                        </>
+                    ) : (
+                        <div className="p-4 rounded-2xl bg-white/20 dark:bg-black/10 backdrop-blur-sm shadow-inner relative z-10">
+                            {/* ✅ Show Link Icon for Inspiration */}
+                            {isLink ? <ExternalLink size={40} className="text-white drop-shadow-sm" /> : <Icon size={40} className="text-white drop-shadow-sm" />}
+                        </div>
+                    )}
+                    
+                    {/* Count Badge (Hide if it's just a link) */}
+                    {!isLink && (
+                        <div className="absolute top-4 right-4 rounded-full bg-white/90 dark:bg-black/60 px-3 py-1 text-xs font-bold text-gray-700 dark:text-gray-200 shadow-sm backdrop-blur-md border border-transparent dark:border-white/10 z-10">
+                            {cat._count.assets}
+                        </div>
+                    )}
+                </div>
+
+                {/* FOOTER */}
+                <div className="relative z-10 flex items-center justify-between p-5 bg-white dark:bg-[#1A1D21] border-t border-gray-50 dark:border-white/5">
+                    <div className="min-w-0 pr-2">
+                        <h3 className="font-bold text-gray-900 dark:text-white text-lg leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
+                            {cat.name}
+                        </h3>
+                        <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-gray-400 font-medium">
+                            {/* ✅ Show URL or Asset Count */}
+                            {isLink ? (
+                                <span className="flex items-center gap-1"><ExternalLink size={10} /> External Resource</span>
+                            ) : (
+                                <span className="flex items-center gap-1"><ImageIcon size={12} /> {cat._count.assets} assets</span>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {/* If it's a link, show arrow, otherwise show options dots */}
+                    <div className="h-8 w-8 shrink-0 rounded-full bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 dark:group-hover:bg-indigo-900/20 dark:group-hover:text-indigo-400 transition-colors">
+                        {isLink ? <ExternalLink size={16} /> : <MoreVertical size={16} />}
                     </div>
                 </div>
-                <div className="h-8 w-8 shrink-0 rounded-full bg-gray-50 dark:bg-white/5 flex items-center justify-center text-gray-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 dark:group-hover:bg-indigo-900/20 dark:group-hover:text-indigo-400 transition-colors">
-                    <MoreVertical size={16} />
-                </div>
-            </div>
-        </Link>
+            </CardWrapper>
 
-        {/* ACTIONS */}
-        {canManage && (
-            <div className="absolute top-3 left-3 flex gap-2 opacity-0 transform scale-90 transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 z-20">
-                <button onClick={(e) => onEdit(e, cat)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 dark:bg-black/80 text-gray-600 dark:text-gray-300 shadow-md backdrop-blur-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 transition-colors" title="Edit">
-                    <Edit2 size={14} />
-                </button>
-                <button onClick={(e) => { e.preventDefault(); onDelete(cat.id); }} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 dark:bg-black/80 text-gray-400 dark:text-gray-400 shadow-md backdrop-blur-sm hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-600 transition-colors" title="Delete">
-                    <Trash2 size={14} />
-                </button>
-            </div>
-        )}
-    </motion.div>
-));
+            {/* ACTIONS */}
+            {canManage && (
+                <div className="absolute top-3 left-3 flex gap-2 opacity-0 transform scale-90 transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 z-20">
+                    <button onClick={(e) => onEdit(e, cat)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 dark:bg-black/80 text-gray-600 dark:text-gray-300 shadow-md backdrop-blur-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 transition-colors" title="Edit">
+                        <Edit2 size={14} />
+                    </button>
+                    <button onClick={(e) => { e.preventDefault(); onDelete(cat.id); }} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 dark:bg-black/80 text-gray-400 dark:text-gray-400 shadow-md backdrop-blur-sm hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-600 transition-colors" title="Delete">
+                        <Trash2 size={14} />
+                    </button>
+                </div>
+            )}
+        </motion.div>
+    );
+});
 
 const Categories = () => {
   const { user } = useAuth();
@@ -140,7 +183,7 @@ const Categories = () => {
           const { data } = await client.get('/categories');
           return data;
       },
-      staleTime: 1000 * 60 * 10, // ✅ Data stays fresh for 10 minutes (Instant load on return)
+      staleTime: 1000 * 60 * 10,
       refetchOnWindowFocus: false,
   });
   
@@ -148,7 +191,8 @@ const Categories = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formName, setFormName] = useState('');
-  const [formGroup, setFormGroup] = useState('Inspiration');
+  const [formGroup, setFormGroup] = useState('Inspiration'); // Default
+  const [formLink, setFormLink] = useState(''); // ✅ New Link State
   const [formFile, setFormFile] = useState<File | null>(null);
   const [formPreview, setFormPreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -156,10 +200,9 @@ const Categories = () => {
 
   // --- 2. OPTIMIZED MUTATIONS ---
   const createMutation = useMutation({
-      // ✅ FIX: Send JSON for creation (Backend POST /categories expects JSON, not FormData)
-      mutationFn: (data: { name: string; group: string }) => client.post('/categories', data),
+      mutationFn: (formData: FormData) => client.post('/categories', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
       onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['categories'] });
+          queryClient.invalidateQueries(['categories'] as any);
           toast.success("Topic created!");
           setIsModalOpen(false);
       },
@@ -167,10 +210,9 @@ const Categories = () => {
   });
 
   const updateMutation = useMutation({
-      // ✅ Update supports FormData because PATCH /categories/:id has upload middleware
       mutationFn: ({ id, data }: { id: string, data: FormData }) => client.patch(`/categories/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
       onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['categories'] });
+          queryClient.invalidateQueries(['categories'] as any);
           toast.success("Topic updated!");
           setIsModalOpen(false);
       }
@@ -179,7 +221,7 @@ const Categories = () => {
   const deleteMutation = useMutation({
       mutationFn: (id: string) => client.delete(`/categories/${id}`),
       onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['categories'] });
+          queryClient.invalidateQueries(['categories'] as any);
           toast.success("Topic deleted");
           setDeleteId(null);
       }
@@ -187,7 +229,13 @@ const Categories = () => {
 
   // --- HANDLERS (Memoized) ---
   const openCreate = useCallback(() => {
-      setEditingId(null); setFormName(''); setFormGroup('Features'); setFormFile(null); setFormPreview(null); setIsModalOpen(true);
+      setEditingId(null); 
+      setFormName(''); 
+      setFormGroup('Features'); 
+      setFormLink(''); // ✅ Reset Link
+      setFormFile(null); 
+      setFormPreview(null); 
+      setIsModalOpen(true);
   }, []);
 
   const openEdit = useCallback((e: React.MouseEvent, cat: Category) => {
@@ -195,6 +243,7 @@ const Categories = () => {
       setEditingId(cat.id); 
       setFormName(cat.name); 
       setFormGroup(cat.group); 
+      setFormLink(cat.link || ''); // ✅ Pre-fill Link
       setFormFile(null); 
       setFormPreview(cat.coverImage || null); 
       setIsModalOpen(true);
@@ -213,24 +262,22 @@ const Categories = () => {
     if (!formName.trim()) return;
     setIsSubmitting(true);
     
+    const formData = new FormData();
+    formData.append('name', formName);
+    formData.append('group', formGroup);
+    
+    // ✅ Append link only if group is Inspiration
+    if (formGroup === 'Inspiration') {
+        formData.append('link', formLink);
+    }
+
+    if (formFile) formData.append('cover', formFile);
+
     try {
         if (editingId) {
-            // ✅ Update: Use FormData to support image change
-            const formData = new FormData();
-            formData.append('name', formName);
-            formData.append('group', formGroup);
-            if (formFile) formData.append('cover', formFile);
-            
             await updateMutation.mutateAsync({ id: editingId, data: formData });
         } else {
-            // ✅ Create: Send JSON (Image upload not supported on create in this version)
-            // If user selected a file, we warn them or just create without it.
-            // Future improvement: Create -> Then Upload in background.
-            await createMutation.mutateAsync({ name: formName, group: formGroup });
-            
-            if (formFile) {
-                toast.info("Topic created! To add a cover image, please edit the topic.");
-            }
+            await createMutation.mutateAsync(formData);
         }
     } finally {
         setIsSubmitting(false);
@@ -241,7 +288,7 @@ const Categories = () => {
     if (deleteId) deleteMutation.mutate(deleteId);
   };
 
-  // Memoize Filtered Lists to prevent recalc on every render
+  // Memoize Filtered Lists
   const features = useMemo(() => categories.filter(c => c.group === 'Features'), [categories]);
   const inspiration = useMemo(() => categories.filter(c => c.group === 'Inspiration'), [categories]);
 
@@ -274,7 +321,7 @@ const Categories = () => {
       {/* CONTENT AREA */}
       <div className="max-w-7xl mx-auto px-8 py-12 space-y-16">
         
-        {/* SECTION 1: FEATURES */}
+        {/* SECTION 1: FEATURES (Folders) */}
         <div>
             <div className="flex items-center gap-3 mb-8">
                 <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
@@ -302,7 +349,7 @@ const Categories = () => {
             </div>
         </div>
 
-        {/* SECTION 2: INSPIRATION */}
+        {/* SECTION 2: INSPIRATION (Hyperlinks) */}
         <div>
             <div className="flex items-center gap-3 mb-8">
                 <div className="p-2 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
@@ -361,6 +408,24 @@ const Categories = () => {
                                 ))}
                             </div>
                         </div>
+
+                        {/* ✅ LINK INPUT: Only show if Inspiration is selected */}
+                        {formGroup === 'Inspiration' && (
+                            <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                                <label className="text-xs font-bold text-purple-500 dark:text-purple-400 uppercase block mb-1">Destination URL</label>
+                                <div className="flex items-center bg-gray-50 dark:bg-black/20 border border-purple-200 dark:border-purple-900/30 rounded-xl px-4 py-2.5 focus-within:ring-2 focus-within:ring-purple-500/30">
+                                    <ExternalLink size={16} className="text-purple-500 mr-2" />
+                                    <input 
+                                        type="url" 
+                                        value={formLink} 
+                                        onChange={e => setFormLink(e.target.value)} 
+                                        className="w-full bg-transparent text-sm text-gray-900 dark:text-white outline-none" 
+                                        placeholder="https://example.com/gallery" 
+                                    />
+                                </div>
+                                <p className="text-[10px] text-gray-400 mt-1">This will open in a new tab when clicked.</p>
+                            </div>
+                        )}
 
                         <div>
                             <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase block mb-1">Cover Image (Optional)</label>

@@ -63,6 +63,7 @@ model Category {
   name      String   @unique
   group     String   
   coverImage String?
+  link      String?
   assets    AssetOnCategory[]
   createdAt DateTime @default(now())
 }
