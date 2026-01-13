@@ -73,10 +73,10 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
   // 💎 BRAND TITLE COMPONENT (Icon + Text)
   const BrandTitle = () => (
-    <div className="flex items-center gap-3 animate-fadeIn">
+    <div className="flex items-center gap-3 animate-fadeIn select-none">
       <img src={logo} alt="CapyTech" className="h-8 w-8 object-contain" />
-      <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white select-none whitespace-nowrap">
-        CapyDAM
+      <h1 className="font-heading text-xl font-extrabold tracking-tight text-gray-900 dark:text-white">
+        CAPY<span className="text-blue-600 dark:text-blue-400">DAM</span>
       </h1>
     </div>
   );

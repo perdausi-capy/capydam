@@ -1,12 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useTheme } from '../context/ThemeContext'; 
-import Lottie from "lottie-react";
 
-// ✅ Import your animation
-import WitchAnimation from '../assets/witch.json';
+// ✅ Import your GIF
+import capybara from '../assets/nA3Up1.gif';
 
 // --- CONFIGURATION ---
-const FAIRY_SIZE = 80;
+const FAIRY_SIZE = 75;
 const DAMPING = 0.95; 
 const MAX_VELOCITY = 15;
 const WANDER_STRENGTH = 0.05; 
@@ -193,18 +192,16 @@ const FloatingThemeToggle = () => {
     }
 
     // 2. Calculate the "Explosion" math
-    // We want the circle to start from the center of the Witch (pos.current)
     const x = pos.current.x + FAIRY_SIZE / 2;
     const y = pos.current.y + FAIRY_SIZE / 2;
 
-    // Calculate distance to furthest corner so the circle covers entire screen
     const right = window.innerWidth - x;
     const bottom = window.innerHeight - y;
     const radius = Math.hypot(Math.max(x, right), Math.max(y, bottom));
 
     // 3. Start the Transition
     const transition = document.startViewTransition(() => {
-        toggleTheme(e); // React updates the DOM here
+        toggleTheme(e); 
     });
 
     // 4. Animate the Circle Clip Path
@@ -234,7 +231,6 @@ const FloatingThemeToggle = () => {
 
     if (isClick.current) {
         vel.current = { x: 0, y: 0 };
-        // ✅ Call the new Transition Handler instead of direct toggle
         handleTransition(e);
     }
   };
@@ -274,12 +270,13 @@ const FloatingThemeToggle = () => {
             ${theme === 'light' ? 'bg-yellow-400' : 'bg-purple-600'}
         `} />
 
-        {/* LOTTIE */}
+        {/* ✅ NEW: GIF IMAGE (Replaced Lottie) */}
         <div className="relative z-10 w-full h-full drop-shadow-xl transform transition-transform group-hover:scale-110">
-            <Lottie 
-                animationData={WitchAnimation} 
-                loop={true} 
-                className="w-full h-full"
+            <img 
+                src={capybara} 
+                alt="Capybara Theme Toggle" 
+                className="w-full h-full object-contain pointer-events-none transform -scale-x-100"
+                draggable={false}
             />
         </div>
       </div>
