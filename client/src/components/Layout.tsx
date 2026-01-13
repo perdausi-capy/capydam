@@ -7,6 +7,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import client from '../api/client';
+import { motion, type Variants } from 'framer-motion'; // ✅ Import Framer Motion
 import { 
   LayoutDashboard, 
   UploadCloud, 
@@ -31,6 +32,89 @@ interface AdminStats {
   pendingUsers: number;
   newFeedback: number;
 }
+
+// 💎 ANIMATED BRAND TITLE (Falling Letters Effect)
+const BrandTitle = ({ isOpen }: { isOpen: boolean }) => {
+  
+  // ✅ 2. Explicitly type as Variants
+  const containerVars: Variants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { 
+        staggerChildren: 0.05, 
+        delayChildren: 0.1 
+      }
+    }
+  };
+
+  // ✅ 3. Explicitly type as Variants
+  const letterVars: Variants = {
+    visible: {
+      y: 0,
+      opacity: 1,
+      transition: {
+        type: "spring",
+        damping: 12,
+        stiffness: 200,
+      }
+    },
+    hidden: {
+      y: -25,
+      opacity: 0,
+      transition: {
+        type: "spring",
+        damping: 12,
+        stiffness: 200
+      }
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-3 select-none overflow-hidden h-10">
+      {/* LOGO (Rotates in) */}
+      <motion.div
+        layout
+        transition={{ duration: 0.5, type: 'spring' }}
+        className="relative z-20 flex-shrink-0"
+      >
+        <img src={logo} alt="CapyTech" className="h-8 w-8 object-contain" />
+      </motion.div>
+
+      {/* TEXT (Only renders if sidebar is Open) */}
+      {isOpen && (
+        <motion.div
+          className="flex items-center"
+          variants={containerVars}
+          initial="hidden"
+          animate="visible"
+        >
+          {/* "CAPY" - Dark/White */}
+          {"CAPY".split("").map((char, index) => (
+            <motion.span 
+              key={`c-${index}`} 
+              variants={letterVars} 
+              className="font-heading text-xl font-extrabold tracking-tight text-gray-900 dark:text-white"
+            >
+              {char}
+            </motion.span>
+          ))}
+          
+          {/* "DAM" - Blue */}
+          {"DAM".split("").map((char, index) => (
+            <motion.span 
+              key={`d-${index}`} 
+              variants={letterVars} 
+              className="font-heading text-xl font-extrabold tracking-tight text-blue-600 dark:text-blue-400"
+            >
+              {char}
+            </motion.span>
+          ))}
+        </motion.div>
+      )}
+    </div>
+  );
+};
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const { logout, user } = useAuth();
@@ -70,16 +154,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     if (path !== '/' && location.pathname.startsWith(path)) return true;
     return false;
   };
-
-  // 💎 BRAND TITLE COMPONENT (Icon + Text)
-  const BrandTitle = () => (
-    <div className="flex items-center gap-3 animate-fadeIn select-none">
-      <img src={logo} alt="CapyTech" className="h-8 w-8 object-contain" />
-      <h1 className="font-heading text-xl font-extrabold tracking-tight text-gray-900 dark:text-white">
-        CAPY<span className="text-blue-600 dark:text-blue-400">DAM</span>
-      </h1>
-    </div>
-  );
 
   return (
     <div className="flex min-h-screen bg-[#F3F4F6] dark:bg-[#0B0D0F] transition-colors duration-500 ease-in-out">
@@ -130,8 +204,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                      className="h-8 w-8 object-contain transition-transform hover:scale-110" 
                    />
                ) : (
-                   // 2. EXPANDED: Logo + Text
-                   <BrandTitle />
+                   // 2. EXPANDED: Animated Title ✅
+                   <BrandTitle isOpen={!isCollapsed} />
                )}
            </Link>
         </div>
