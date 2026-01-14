@@ -1,4 +1,4 @@
-import React from 'react';
+
 
 export default function ScormExtractor() {
   // The URL of your external app
