@@ -21,6 +21,7 @@ import uploadRoutes from './routes/uploadRoutes'; // ✅ Imported
 // Import Services
 import { initCronJobs } from './services/cron.service';
 import { setupSocketIO } from './socket/socketHandler';
+import gsapRoutes from './routes/gsap.routes';
 
 const app: Express = express();
 const PORT = process.env.PORT || 5000;
@@ -64,7 +65,7 @@ app.use('/api/feedback', feedbackRoutes);
 
 // ✅ NEW: Chat Upload Route (This was missing!)
 app.use('/api/upload', uploadRoutes); 
-
+app.use('/api/gsap-library', gsapRoutes);
 // ✅ Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
@@ -83,6 +84,7 @@ server.listen(PORT, () => {
   console.log(`   - Auth Routes: /api/auth`);
   console.log(`   - Asset Routes: /api/assets`);
   console.log(`   - Upload Route: /api/upload`); // ✅ Verify this shows up
+   console.log(`   - GSAP Routes: /api/gsap-library`); // ✅ Confirmed
   console.log(`   - Socket.io: Enabled 🟢`);
 
   // Initialize Cron Jobs

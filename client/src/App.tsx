@@ -28,6 +28,8 @@ import RecycleBin from './pages/RecycleBin';
 // ✅ NEW CHAT PAGE IMPORT
 import { SocketProvider } from './context/SocketContext'; 
 import Chat from './pages/Chat'; // 1. Full Page Chat (Replaces floating widget)
+import JrdAssets from './pages/jrdAssets';
+import ScormExtractor from './pages/ScormExtractor';
 
 // --- WRAPPERS ---
 
@@ -84,7 +86,9 @@ function App() {
 
                 {/* 5. ✅ NEW CHAT ROUTE (Discord-style Page) */}
                 <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
-
+ {/* 6. ✅ NEW CHAT ScormExtractor */}
+                <Route path="/scorm-extractor" element={<ProtectedRoute><ScormExtractor /></ProtectedRoute>} />
+                 <Route path="/jrd-assets" element={<ProtectedRoute><JrdAssets /></ProtectedRoute>} />
                 {/* --- Admin Routes (Restricted) --- */}
                 <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
                 <Route path="/admin/feedback" element={<AdminRoute><AdminFeedback /></AdminRoute>} />
