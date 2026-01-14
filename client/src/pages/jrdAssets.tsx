@@ -38,7 +38,7 @@ interface GsapContextType {
 const GsapContext = createContext<GsapContextType | undefined>(undefined);
 
 // ⚠️ CHANGE THIS TO YOUR ACTUAL SERVER URL
-const API_URL = 'http://localhost:5000/api/gsap-library'; 
+const API_URL = 'https://dam.capy-dev.com/api/gsap-library'; 
 
 const GsapProvider = ({ children }: { children: React.ReactNode }) => {
   const [searchQuery, setSearchQuery] = useState('');
