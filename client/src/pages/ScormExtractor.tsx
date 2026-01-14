@@ -2,7 +2,7 @@
 
 export default function ScormExtractor() {
   // The URL of your external app
-  const embedUrl = "http://192.168.100.10:3000/";
+  const embedUrl = "https://dam.capy-dev.com/scorm/";
 
   return (
     <div style={{ width: '100%', height: '100vh', overflow: 'hidden' }}>
