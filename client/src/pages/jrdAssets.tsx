@@ -79,7 +79,7 @@ const GsapProvider = ({ children }: { children: React.ReactNode }) => {
       });
       return { previousData };
     },
-    onError: (err, newTodo, context) => {
+    onError: (_err, _newTodo, context) => {
       if (context?.previousData) queryClient.setQueryData(['gsap-library'], context.previousData);
       toast.error("Failed to update like");
     },
