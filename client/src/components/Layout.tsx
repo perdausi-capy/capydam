@@ -128,8 +128,11 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
 
-  // 1. FETCH ADMIN STATS
-  const isAdmin = user?.role === 'admin' || user?.role === 'editor';
+  // 🔴 OLD (The Bug): 
+  // const isAdmin = user?.role === 'admin' || user?.role === 'editor';
+  
+  // ✅ NEW (The Fix): Strictly check for 'admin' only
+  const isAdmin = user?.role === 'admin';
   
   const { data: stats } = useQuery<AdminStats>({
     queryKey: ['admin-stats'],
@@ -137,8 +140,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       const { data } = await client.get('/admin/stats');
       return data;
     },
-    enabled: isAdmin,
-    refetchInterval: 30000,
+    enabled: isAdmin, // This will now be false for Editors
     staleTime: 1000 * 60 * 1
   });
 
