@@ -98,9 +98,17 @@ const AssetCard = React.memo(({
     const { tags, link } = useMemo(() => parseAiData(asset.aiData), [asset.aiData]);
 
     return (
+        // 1. The 'group' is here on the OUTER container (which stays stationary)
         <div className="group relative mb-8 block transition-all duration-300 w-full min-w-0 transform-gpu">
+            
             <div className="relative">
-                <div className="relative w-full rounded-2xl overflow-hidden transition-all duration-300 bg-gray-100 dark:bg-[#1A1D21] shadow-sm hover:shadow-xl hover:-translate-y-1">
+                {/* 2. ✅ THE FIX: 
+                   We changed 'hover:' to 'group-hover:'.
+                   Now, the card lifts up when you hover the STATIONARY parent wrapper.
+                   Even if the card moves physically, the mouse is still inside the parent 'group',
+                   so it won't flicker or drop back down.
+                */}
+                <div className="relative w-full rounded-2xl overflow-hidden transition-all duration-300 bg-gray-100 dark:bg-[#1A1D21] shadow-sm group-hover:shadow-xl group-hover:-translate-y-1">
                     <Link to={`/assets/${asset.id}`} className="block cursor-pointer" onClick={() => onClick(asset.id, index)}>
                         <div className="group-hover:opacity-95 transition-opacity">
                             <AssetThumbnail 
