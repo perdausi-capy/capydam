@@ -104,38 +104,73 @@ const saveAiData = async (id: string, data: any) => {
   }
 };
 
+// ✅ UPDATED: Robust Keyframe Extraction (Fixes .m4v empty tags)
 const extractKeyFrames = async (videoPath: string): Promise<string[]> => {
   const screenshots: string[] = [];
   const absoluteVideoPath = path.resolve(videoPath);
 
-  const duration = await new Promise<number>((resolve, reject) => {
+  // 1. Try to get Duration
+  const duration = await new Promise<number>((resolve) => {
     ffmpeg.ffprobe(absoluteVideoPath, (err, metadata) => {
-      if (err) return reject(err);
+      // If error or missing duration, return 0
+      if (err || !metadata || !metadata.format || !metadata.format.duration) {
+          resolve(0);
+          return;
+      }
       const d = parseFloat(metadata.format.duration as any);
       resolve(isNaN(d) ? 0 : d);
     });
   });
 
-  let timestamps: number[] = [];
+  // 2. Decide Timestamps (Use Percentages if duration fails!)
+  let timestamps: (number | string)[] = [];
+  
   if (duration > 0) {
-      // Extract more frames if video is long
-      if (duration > 60) timestamps = [duration * 0.1, duration * 0.5, duration * 0.9];
-      else timestamps = [duration * 0.2, duration * 0.8];
+      // Good metadata? Use exact seconds
+      if (duration > 60) {
+          timestamps = [duration * 0.1, duration * 0.5, duration * 0.9];
+      } else {
+          timestamps = [duration * 0.2, duration * 0.8];
+      }
   } else {
-      timestamps = [0]; 
+      // ⚠️ FIX: If duration is 0 (common with .m4v), use percentages!
+      // This forces FFmpeg to scan the file stream instead of relying on broken metadata.
+      console.log("⚠️ Duration not detected. Using percentage fallbacks for AI frames.");
+      timestamps = ['20%', '50%', '80%']; 
   }
 
+  // 3. Extract Frames
   for (let i = 0; i < timestamps.length; i++) {
     const filename = `frame-${i}-${Date.now()}.jpg`;
     const outPath = path.join(path.dirname(absoluteVideoPath), filename);
+    
     await new Promise((resolve, reject) => {
       ffmpeg(absoluteVideoPath)
-        .screenshots({ timestamps: [timestamps[i]], filename, folder: path.dirname(absoluteVideoPath), size: '400x?' })
+        .screenshots({ 
+            // ✅ FIX: Wrap in String() or template literal
+            // This turns 15.5 (number) into "15.5" (string), which ffmpeg accepts.
+            timestamps: [String(timestamps[i])], 
+            filename, 
+            folder: path.dirname(absoluteVideoPath), 
+            size: '400x?' 
+        })
         .on('end', resolve)
-        .on('error', reject);
+        .on('error', (err) => {
+            console.warn(`Frame ${i} extraction failed:`, err);
+            resolve(null); // Continue even if one frame fails
+        });
     });
-    screenshots.push(outPath);
+
+    // Only add if file was actually created
+    if (await fs.pathExists(outPath)) {
+        screenshots.push(outPath);
+    }
   }
+
+  if (screenshots.length === 0) {
+      console.error("❌ No frames extracted for AI analysis.");
+  }
+
   return screenshots;
 };
 
