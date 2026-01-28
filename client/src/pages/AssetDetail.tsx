@@ -538,16 +538,25 @@ const AssetDetail = () => {
                               <button onClick={() => setIsRenaming(false)} className="shrink-0 p-2 bg-gray-100 dark:bg-white/10 text-gray-500 rounded-lg hover:bg-gray-200"><X size={18} /></button>
                           </div>
                       ) : (
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                              <h1 className="text-xl font-bold text-gray-900 dark:text-white leading-tight break-words" title={asset.originalName || asset.filename}>
-                                  {asset.originalName || asset.filename}
-                              </h1>
-                              {canManageAsset && (
-                                  <button onClick={() => setIsRenaming(true)} className="shrink-0 mt-1 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Rename Asset">
-                                      <Edit2 size={16} />
-                                  </button>
-                              )}
-                          </div>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                            <h1 
+                                // ✅ FIX: Added 'flex-1', 'min-w-0', and changed to 'break-all'
+                                className="text-xl font-bold text-gray-900 dark:text-white leading-tight break-all flex-1 min-w-0" 
+                                title={asset.originalName || asset.filename}
+                                >
+                                {asset.originalName || asset.filename}
+                            </h1>
+                        
+                            {canManageAsset && (
+                                <button 
+                                    onClick={() => setIsRenaming(true)} 
+                                    className="shrink-0 mt-1 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" 
+                                    title="Rename Asset"
+                                >
+                                    <Edit2 size={16} />
+                                </button>
+                            )}
+                        </div>
                       )}
                       
                       <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-gray-400 font-medium">

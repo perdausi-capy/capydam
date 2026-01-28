@@ -25,7 +25,8 @@ import {
   Trash2,
   Hash, 
   LibraryBig,
-  FileArchive
+  FileArchive,
+  Box
 } from 'lucide-react';
 import FloatingThemeToggle from './FloatingThemeToggle';
 
@@ -243,8 +244,19 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           />
 
           <NavItem to="/support" icon={<HelpCircle size={20} />} label="Support" isCollapsed={isCollapsed} active={isActive('/support')} onClick={handleNavClick} />
- <NavItem to="/jrd-assets" icon={<LibraryBig size={20} />} label="JRD Assets" isCollapsed={isCollapsed} active={isActive('/jrd')} onClick={handleNavClick} />
-          <NavItem to="/scorm-extractor" icon={<FileArchive size={20} />} label="Scorm Extractor" isCollapsed={isCollapsed} active={isActive('/scorm-extractor')} onClick={handleNavClick} />
+          
+          {/* ✅ NEW: Apps Link */}
+          <NavItem 
+            to="/apps" 
+            icon={<Box size={20} />} 
+            label="Apps" 
+            isCollapsed={isCollapsed}
+            // Keeps "Apps" highlighted even if you are inside a specific app tool
+            active={isActive('/apps') || isActive('/scorm-extractor') || isActive('/jrd-assets')} 
+            onClick={handleNavClick} 
+          />
+          {/* <NavItem to="/jrd-assets" icon={<LibraryBig size={20} />} label="JRD Assets" isCollapsed={isCollapsed} active={isActive('/jrd-assets')} onClick={handleNavClick} /> */}
+          {/* <NavItem to="/scorm-extractor" icon={<FileArchive size={20} />} label="Scorm Extractor" isCollapsed={isCollapsed} active={isActive('/scorm-extractor')} onClick={handleNavClick} /> */}
          
           {/* Admin Section */}
           {isAdmin && (
