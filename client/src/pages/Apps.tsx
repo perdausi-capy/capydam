@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { useNavigate } from 'react-router-dom';
 import { Box, FileCode, Database, ArrowRight, Link as LinkIcon } from 'lucide-react';
 

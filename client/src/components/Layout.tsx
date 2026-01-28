@@ -24,8 +24,6 @@ import {
   TrendingUp,
   Trash2,
   Hash, 
-  LibraryBig,
-  FileArchive,
   Box
 } from 'lucide-react';
 import FloatingThemeToggle from './FloatingThemeToggle';
