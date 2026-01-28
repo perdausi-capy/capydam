@@ -257,7 +257,7 @@ export const analyzeAudioVideo = async (assetId: string, filePath: string, optio
     const stats = await fs.stat(absolutePath);
     const ext = path.extname(absolutePath).toLowerCase();
     
-    const isVideo = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.gif'].includes(ext);
+    const isVideo = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.gif', '.m4v'].includes(ext);
 
     if (isVideo) {
       console.log(`🎥 Starting Motion Analysis for: ${assetId}`);
