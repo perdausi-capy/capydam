@@ -98,19 +98,16 @@ const AssetCard = React.memo(({
     const { tags, link } = useMemo(() => parseAiData(asset.aiData), [asset.aiData]);
 
     return (
-        // 1. The 'group' is here on the OUTER container (which stays stationary)
-        <div className="group relative mb-8 block transition-all duration-300 w-full min-w-0 transform-gpu">
-            
+        <div className="group relative mb-8 block w-full min-w-0">
             <div className="relative">
-                {/* 2. ✅ THE FIX: 
-                   We changed 'hover:' to 'group-hover:'.
-                   Now, the card lifts up when you hover the STATIONARY parent wrapper.
-                   Even if the card moves physically, the mouse is still inside the parent 'group',
-                   so it won't flicker or drop back down.
-                */}
-                <div className="relative w-full rounded-2xl overflow-hidden transition-all duration-300 bg-gray-100 dark:bg-[#1A1D21] shadow-sm group-hover:shadow-xl group-hover:-translate-y-1">
+                
+                {/* ✅ FIX: Removed 'hover:-translate-y-1'. The card is now stationary. */}
+                <div className="relative w-full rounded-2xl overflow-hidden transition-all duration-300 bg-gray-100 dark:bg-[#1A1D21] shadow-sm hover:shadow-md">
+                    
                     <Link to={`/assets/${asset.id}`} className="block cursor-pointer" onClick={() => onClick(asset.id, index)}>
-                        <div className="group-hover:opacity-95 transition-opacity">
+                        {/* We use group-hover on the parent to trigger the scrub opacity if needed, 
+                            but VideoThumbnail handles its own internal scrubbing logic. */}
+                        <div className="transition-opacity">
                             <AssetThumbnail 
                                 mimeType={asset.mimeType} 
                                 thumbnailPath={asset.thumbnailPath || asset.path} 
@@ -123,7 +120,8 @@ const AssetCard = React.memo(({
                     </Link>
                 </div>
 
-                <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-2 group-hover:translate-y-0">
+                {/* Floating Action Buttons (Fade in only, no movement) */}
+                <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                     {link && (
                         <a href={link} target="_blank" rel="noopener noreferrer" className="rounded-full bg-white/90 dark:bg-black/60 p-2 text-indigo-500 dark:text-indigo-400 shadow-sm backdrop-blur-md transition-colors hover:bg-indigo-600 hover:text-white" onClick={(e) => e.stopPropagation()}>
                             <ExternalLink size={16} />
@@ -138,6 +136,7 @@ const AssetCard = React.memo(({
                 </div>
             </div>
             
+            {/* Meta Info */}
             <div className="mt-3 px-1 w-full min-w-0">
                 <Link to={`/assets/${asset.id}`} onClick={() => onClick(asset.id, index)} className="group/link block w-full">
                     <p className="truncate font-bold text-sm text-gray-800 dark:text-gray-100 group-hover/link:underline decoration-gray-400 underline-offset-2 transition-all w-full block" title={asset.originalName}>
