@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Sparkles, Send } from 'lucide-react';
 import client from '../api/client';

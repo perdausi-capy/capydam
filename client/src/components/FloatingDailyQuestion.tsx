@@ -3,10 +3,10 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Lottie from 'lottie-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import witchAnimation from '../assets/witch.json';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import client from '../api/client';
 import DailyQuestionModal from './DailyQuestionModal';
-import { toast } from 'react-toastify';
+// import { toast } from 'react-toastify';
 
 const FAIRY_SIZE = 85;
 const DAMPING = 0.95; 
@@ -14,7 +14,7 @@ const MAX_VELOCITY = 15;
 const WANDER_STRENGTH = 0.05; 
 
 const FloatingDailyQuestion = () => {
-  const queryClient = useQueryClient();
+//   const queryClient = useQueryClient();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [displayedText, setDisplayedText] = useState("");
