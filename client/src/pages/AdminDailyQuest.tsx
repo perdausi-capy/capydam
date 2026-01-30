@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { 
-  Sparkles, Send, Trash2, ArrowLeft, Loader2, 
+  Sparkles, Send, ArrowLeft, Loader2, 
   BarChart3, TimerOff, UserCheck, Clock, ShieldCheck 
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -18,7 +18,7 @@ interface Option {
 const AdminDailyQuest = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+//   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Form State
   const [question, setQuestion] = useState('');

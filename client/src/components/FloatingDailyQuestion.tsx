@@ -116,7 +116,7 @@ const FloatingDailyQuestion = () => {
     }
   };
 
-  const handlePointerUp = (e: React.PointerEvent) => {
+  const handlePointerUp = (_e: React.PointerEvent) => {
     if (!isDragging.current) return;
     isDragging.current = false;
     if (isClick.current) setIsOpen(true);
