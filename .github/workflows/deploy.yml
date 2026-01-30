@@ -20,33 +20,33 @@ jobs:
             set -e
 
             # 2. Navigate to project folder
-            # (Make sure this matches the folder you cloned into on your server)
             cd /var/www/capydam
 
-            # 3. Pull latest code
-            echo "⬇️ Pulling latest changes..."
-            git pull origin main
+            # ✅ 3. FORCE RESET LOCAL STATE
+            # This discards the modified package-lock.json and any other local debris
+            echo "🧹 Resetting local environment to match remote..."
+            git fetch origin main
+            git reset --hard origin/main
 
-            # 4. Backend: Install, Migrate & Build
+            # ✅ 4. BACKEND: Strict Install & Migration
             echo "🛠️ Building Backend..."
             cd server
-            npm install
-            # ✅ Apply database changes safely in production
+            # 'npm ci' is safer than 'npm install' in production as it won't change the lockfile
+            npm ci 
             npx prisma migrate deploy
             npx prisma generate
             npm run build
             cd ..
 
-            # 5. Frontend: Install & Build
+            # ✅ 5. FRONTEND: Strict Install
             echo "🎨 Building Frontend..."
             cd client
-            npm install
+            npm ci
             npm run build
             cd ..
 
             # 6. Restart PM2 (Backend)
             echo "🔄 Restarting Server..."
-            # Try to restart, if it fails (doesn't exist), start it new
             pm2 restart capydam-api || pm2 start server/dist/index.js --name capydam-api
             pm2 save
 
