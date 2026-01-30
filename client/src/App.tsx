@@ -31,8 +31,11 @@ import Chat from './pages/Chat'; // 1. Full Page Chat (Replaces floating widget)
 import JrdAssets from './pages/jrdAssets';
 import ScormExtractor from './pages/ScormExtractor';
 
+
 // ✅ NEW APPS PAGES IMPORT
 import Apps from './pages/Apps';
+import DdlGenerator from './pages/DdlGenerator';
+
 // --- WRAPPERS ---
 
 // 1. Standard Protected Route (Any logged-in user)
@@ -91,6 +94,7 @@ function App() {
 
                 {/* 6. ✅ NEW APPS ROUTES */}
                 <Route path="/apps" element={<ProtectedRoute><Apps /></ProtectedRoute>} />
+                <Route path="/ddl-generator" element={<ProtectedRoute><DdlGenerator /></ProtectedRoute>} />
 
                 {/* 6. ✅ NEW CHAT ScormExtractor */}
                 <Route path="/scorm-extractor" element={<ProtectedRoute><ScormExtractor /></ProtectedRoute>} />

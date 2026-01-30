@@ -23,13 +23,13 @@ const apps = [
   },
   {
     id: 'ddl-gen',
-    name: 'Google DDL Generator', 
-    description: 'Generate direct download links for files stored in Capytech Google Drive. Bypasses the preview screen so files download immediately.',
+    name: 'Google DDL Generator',
+    description: 'Generate direct download links for files stored in Capytech Google Drive.',
     icon: <LinkIcon size={32} className="text-green-500" />,
-    route: 'https://sites.google.com/capytech.com/capy-ddl-generator/home',
+    route: '/ddl-generator', // ✅ Point to the new internal route
     color: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',
-    isExternal: true,
-    openInNewTab: true // 👈 ✅ Add this flag to force a new tab
+    isExternal: false,       // ✅ Change to false
+    openInNewTab: false      // ✅ Change to false
   }
 ];
 
