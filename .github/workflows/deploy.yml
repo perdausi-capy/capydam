@@ -27,10 +27,12 @@ jobs:
             echo "⬇️ Pulling latest changes..."
             git pull origin main
 
-            # 4. Backend: Install & Build
+            # 4. Backend: Install, Migrate & Build
             echo "🛠️ Building Backend..."
             cd server
             npm install
+            # ✅ Apply database changes safely in production
+            npx prisma migrate deploy
             npx prisma generate
             npm run build
             cd ..

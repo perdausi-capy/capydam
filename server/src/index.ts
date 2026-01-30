@@ -22,6 +22,7 @@ import uploadRoutes from './routes/uploadRoutes'; // ✅ Imported
 import { initCronJobs } from './services/cron.service';
 import { setupSocketIO } from './socket/socketHandler';
 import gsapRoutes from './routes/gsap.routes';
+import dailyRoutes from './routes/daily.routes';
 
 const app: Express = express();
 const PORT = process.env.PORT || 5000;
@@ -68,6 +69,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/gsap-library', gsapRoutes);
 // ✅ Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/api/daily', dailyRoutes)
 
 // ✅ SOCKET LOGIC (Only call this once)
 console.log('🛠️ [Server] Initializing Socket.io...');

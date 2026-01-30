@@ -36,6 +36,9 @@ import ScormExtractor from './pages/ScormExtractor';
 import Apps from './pages/Apps';
 import DdlGenerator from './pages/DdlGenerator';
 
+import FloatingDailyQuestion from './components/FloatingDailyQuestion';
+import AdminDailyQuest from './pages/AdminDailyQuest';
+
 // --- WRAPPERS ---
 
 // 1. Standard Protected Route (Any logged-in user)
@@ -104,6 +107,7 @@ function App() {
                 <Route path="/admin/feedback" element={<AdminRoute><AdminFeedback /></AdminRoute>} />
                 <Route path="/admin/analytics" element={<AdminRoute><AdminAnalytics /></AdminRoute>} />
                 <Route path="/admin/recycle-bin" element={<AdminRoute><RecycleBin /></AdminRoute>} />
+                <Route path="/admin/daily-quest" element={<AdminRoute><AdminDailyQuest /></AdminRoute>} />
                 
                 
                 {/* Fallback */}
@@ -112,6 +116,7 @@ function App() {
 
               {/* ✅ GLOBAL COMPONENTS (Persist across pages) */}
               <GlobalTerminal />
+              <FloatingDailyQuestion />
               
               {/* 🗑️ REMOVED: <GlobalChat /> (Floating widget no longer needed) */}
 

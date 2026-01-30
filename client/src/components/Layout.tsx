@@ -24,7 +24,8 @@ import {
   TrendingUp,
   Trash2,
   Hash, 
-  Box
+  Box,
+  Sparkles
 } from 'lucide-react';
 import FloatingThemeToggle from './FloatingThemeToggle';
 
@@ -298,6 +299,16 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 active={isActive('/admin/recycle-bin')} 
                 onClick={handleNavClick} 
               />
+
+              <NavItem 
+              to="/admin/daily-quest" 
+              icon={<Sparkles size={20} />} 
+              label="Daily Quest" 
+              isCollapsed={isCollapsed} 
+              active={isActive('/admin/daily-quest')} 
+              onClick={handleNavClick} 
+            />
+            
             </>
           )}
         </nav>

@@ -36,6 +36,8 @@ model User {
   notifications Notification[]
 
   reactions     Reaction[]
+
+  dailyResponses DailyResponse[]
 }
 
 // ✅ FEEDBACK MODEL
@@ -229,4 +231,38 @@ model Notification {
   senderName String
   read       Boolean  @default(false)
   createdAt  DateTime @default(now())
+}
+
+// prisma/schema.prisma
+
+model DailyQuestion {
+  id          String           @id @default(uuid())
+  question    String
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  expiresAt   DateTime?
+  options     QuestionOption[]
+  responses   DailyResponse[]
+}
+
+model QuestionOption {
+  id         String          @id @default(uuid())
+  text       String
+  isCorrect  Boolean         @default(false)
+  questionId String
+  question   DailyQuestion   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  responses  DailyResponse[]
+}
+
+model DailyResponse {
+  id         String         @id @default(uuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionId String
+  question   DailyQuestion  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  optionId   String
+  option     QuestionOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  createdAt  DateTime       @default(now())
+
+  @@unique([userId, questionId]) // Prevents multiple votes per question
 }
