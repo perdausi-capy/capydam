@@ -1,5 +1,5 @@
-import React from 'react';
-import { Link as LinkIcon, Sparkles, Info, AlertCircle, ExternalLink } from 'lucide-react';
+
+import { Link as LinkIcon, Sparkles, Info, AlertCircle } from 'lucide-react';
 
 // ✅ Import Step Images
 import step1Img from '../assets/step1.jpg';
