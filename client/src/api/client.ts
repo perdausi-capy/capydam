@@ -1,16 +1,12 @@
 import axios from 'axios';
 
-// ✅ CORRECT LOGIC:
-// Use the environment variable if it exists.
-// Fallback to localhost only if the variable is missing (dev mode).
 const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const client = axios.create({
   baseURL,
-  withCredentials: true, // Important for CORS cookies if you use them
+  withCredentials: true,
 });
 
-// ... keep the rest of your interceptors below ...
 client.interceptors.request.use((config) => {
   const token = localStorage.getItem('token'); 
   if (token) {
@@ -22,10 +18,21 @@ client.interceptors.request.use((config) => {
 client.interceptors.response.use(
   (response) => response,
   (error) => {
+    // 🛡️ SHIELD: If the daily question fails, DO NOT redirect to login.
+    // This stops the reload loop even if the server has a 502/500/404/401 error.
+    if (error.config?.url?.includes('/daily')) {
+      console.warn("Daily Question failed, but we are preventing a reload loop.");
+      return Promise.resolve({ data: null }); 
+    }
+
+    // 🚪 Standard logout logic for other critical APIs
     if (error.response?.status === 401 || error.response?.status === 403) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      // Only redirect if we aren't already on the login page
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
