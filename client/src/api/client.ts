@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// ✅ Logic: Environment variable with local fallback [cite: 1142, 1143]
+// ✅ Logic: Environment variable with local fallback
 const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const client = axios.create({
@@ -8,7 +8,7 @@ const client = axios.create({
   withCredentials: true,
 });
 
-// Request Interceptor: Attach JWT [cite: 1143]
+// --- REQUEST INTERCEPTOR: Attach JWT ---
 client.interceptors.request.use((config) => {
   const token = localStorage.getItem('token'); 
   if (token) {
@@ -17,7 +17,7 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-// Response Interceptor: Error Handling & Loop Prevention 
+// --- RESPONSE INTERCEPTOR: Error Handling & Loop Prevention ---
 client.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -25,13 +25,14 @@ client.interceptors.response.use(
     const status = response?.status;
 
     // 🛡️ SHIELD 1: Background Quest Silence
-    // Prevents the Floating Witch from triggering redirects if her specific API fails.
-    if (config?.url?.includes('/daily')) {
-      console.warn("🛡️ Daily Quest API silent failure - preventing reload loop.");
+    // We ONLY silence GET requests (the Witch checking for questions).
+    // We ALLOW POST/PATCH requests (voting/admin) to throw errors so we can see toasts.
+    if (config?.url?.includes('/daily') && config.method === 'get') { 
+      console.warn("🛡️ Daily Quest background fetch silenced to prevent reload loops.");
       return Promise.resolve({ data: null }); 
     }
 
-    // 🛡️ SHIELD 2: Auth Logic Guard 
+    // 🛡️ SHIELD 2: Auth Logic Guard (401/403)
     if (status === 401 || status === 403) {
       // 1. Clear credentials from local storage 
       localStorage.removeItem('token');

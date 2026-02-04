@@ -131,6 +131,11 @@ export const submitVote = async (req: Request, res: Response) => {
     const { questionId, optionId } = req.body;
     const userId = (req as any).user?.id;
 
+    // ✅ ADD THIS: Explicit validation check
+    if (!questionId || !optionId) {
+      return res.status(400).json({ message: "Missing questionId or optionId" });
+    }
+
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -160,5 +165,6 @@ export const submitVote = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Failed to record vote" });
   }
 };
+
 
 

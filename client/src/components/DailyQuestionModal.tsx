@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Sparkles, Send } from 'lucide-react';
+import { X, Sparkles, Send, Loader2 } from 'lucide-react';
 import client from '../api/client';
-import { toast } from 'react-hot-toast';
+import { toast } from 'react-toastify';
+import { useQueryClient } from '@tanstack/react-query'; // ✅ Import this
 
 const DailyQuestionModal = ({ isOpen, onClose, question, onVoteSuccess }: any) => {
+  const queryClient = useQueryClient(); // ✅ Initialize
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -18,8 +20,15 @@ const DailyQuestionModal = ({ isOpen, onClose, question, onVoteSuccess }: any) =
         questionId: question.id, 
         optionId: selected 
       });
+
+      // ✅ Update the Witch's status immediately
+      await queryClient.invalidateQueries({ queryKey: ['active-question'] });
+
       toast.success("Your spell has been cast!");
-      onVoteSuccess();
+      
+      // ✅ Call the parent function to close modal
+      if (onVoteSuccess) onVoteSuccess();
+      
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to vote");
     } finally {
@@ -39,12 +48,12 @@ const DailyQuestionModal = ({ isOpen, onClose, question, onVoteSuccess }: any) =
             <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-2xl text-purple-600">
               <Sparkles size={24} />
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-full transition-colors">
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-full transition-colors dark:text-white">
               <X size={20} />
             </button>
           </div>
 
-          <h3 className="text-2xl font-black mb-6 dark:text-white leading-tight">
+          <h3 className="text-2xl font-black mb-6 text-gray-900 dark:text-white leading-tight">
             {question.question}
           </h3>
 
@@ -53,6 +62,7 @@ const DailyQuestionModal = ({ isOpen, onClose, question, onVoteSuccess }: any) =
               <button
                 key={opt.id}
                 onClick={() => setSelected(opt.id)}
+                disabled={loading}
                 className={`w-full p-4 rounded-2xl border-2 text-left font-bold transition-all
                   ${selected === opt.id 
                     ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600' 
@@ -69,8 +79,7 @@ const DailyQuestionModal = ({ isOpen, onClose, question, onVoteSuccess }: any) =
             onClick={handleVote}
             className="w-full mt-8 py-4 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-2xl font-black flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-500/20"
           >
-            {loading ? "Casting..." : "Submit Answer"}
-            <Send size={18} />
+            {loading ? <Loader2 className="animate-spin" size={20} /> : <>Submit Answer <Send size={18} /></>}
           </button>
         </div>
       </motion.div>

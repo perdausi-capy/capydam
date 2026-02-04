@@ -1,4 +1,3 @@
-// src/components/FloatingDailyQuestion.tsx
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Lottie from 'lottie-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -6,7 +5,6 @@ import witchAnimation from '../assets/witch.json';
 import { useQuery } from '@tanstack/react-query';
 import client from '../api/client';
 import DailyQuestionModal from './DailyQuestionModal';
-// import { toast } from 'react-toastify';
 
 const FAIRY_SIZE = 85;
 const DAMPING = 0.95; 
@@ -14,7 +12,6 @@ const MAX_VELOCITY = 15;
 const WANDER_STRENGTH = 0.05; 
 
 const FloatingDailyQuestion = () => {
-//   const queryClient = useQueryClient();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [displayedText, setDisplayedText] = useState("");
@@ -24,9 +21,12 @@ const FloatingDailyQuestion = () => {
     queryFn: async () => {
       const res = await client.get('/daily/active');
       return res.data;
-    }
+    },
+    // Don't retry if 404/offline, just hide
+    retry: false
   });
 
+  // Check if user has voted in the response list
   const hasVoted = question?.responses?.length > 0;
 
   // --- PHYSICS STATE ---
@@ -139,7 +139,6 @@ const FloatingDailyQuestion = () => {
           willChange: 'transform'
         }}
       >
-        {/* FIXED TOOLTIP: Added -translate-x-1/3 to shift the arrow over the head */}
         <AnimatePresence>
             <motion.div 
                 initial={{ opacity: 0, y: 10, scale: 0.8 }}
@@ -148,8 +147,6 @@ const FloatingDailyQuestion = () => {
             >
                 <span className="font-mono">{displayedText}</span>
                 <span className="animate-pulse text-blue-500 font-bold ml-1">|</span>
-                
-                {/* Arrow shifted to point to the left side of the bubble (the head) */}
                 <div className="absolute -bottom-1 left-1/3 -translate-x-1/2 w-2 h-2 bg-white dark:bg-gray-800 rotate-45 border-r border-b border-gray-100 dark:border-gray-700"></div>
             </motion.div>
         </AnimatePresence>
@@ -161,7 +158,8 @@ const FloatingDailyQuestion = () => {
         isOpen={isOpen} 
         onClose={() => setIsOpen(false)} 
         question={question}
-        userVoted={hasVoted}
+        // ✅ CRITICAL FIX: Pass this function so the modal can close itself
+        onVoteSuccess={() => setIsOpen(false)}
       />
     </>
   );

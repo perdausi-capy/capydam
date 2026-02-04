@@ -1,16 +1,18 @@
 import { Router } from 'express';
 import { verifyJWT, requireAdmin } from '../middleware/auth.middleware';
-import { createDailyQuestion, getActiveQuestion, submitVote } from '../controllers/daily.controller';
+import { createDailyQuestion, getActiveQuestion, submitVote, closeQuest } from '../controllers/daily.controller';
 
 const router = Router();
 
-// ✅ FIX: This allows the base /api/daily to work
+// Public / User Routes
 router.get('/', verifyJWT, getActiveQuestion);
-// Users can see active questions and vote
 router.get('/active', verifyJWT, getActiveQuestion);
 router.post('/vote', verifyJWT, submitVote);
 
-// Only Admins can create new questions
+// Admin Routes
 router.post('/create', verifyJWT, requireAdmin, createDailyQuestion);
+
+// ✅ ADD THIS LINE to fix the "Force Close" button
+router.patch('/:id/close', verifyJWT, requireAdmin, closeQuest);
 
 export default router;
