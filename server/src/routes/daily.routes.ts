@@ -4,6 +4,8 @@ import { createDailyQuestion, getActiveQuestion, submitVote } from '../controlle
 
 const router = Router();
 
+// ✅ FIX: This allows the base /api/daily to work
+router.get('/', verifyJWT, getActiveQuestion);
 // Users can see active questions and vote
 router.get('/active', verifyJWT, getActiveQuestion);
 router.post('/vote', verifyJWT, submitVote);
