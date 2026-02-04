@@ -167,28 +167,48 @@ export const submitVote = async (req: Request, res: Response) => {
 };
 
 /**
- * 5. GET QUEST STATS (Admin Only)
- * Fetches the active question with ALL responses for the live feed.
+ * 5. GET QUEST STATS (Admin Dashboard Data)
+ * Returns Active Quest, User Engagement Stats, and History.
  */
 export const getQuestStats = async (req: Request, res: Response) => {
   try {
-    const question = await prisma.dailyQuestion.findFirst({
+    // 1. Fetch Active Quest with full details
+    const activeQuest = await prisma.dailyQuestion.findFirst({
       where: { isActive: true },
       include: { 
         options: true,
-        // ✅ CRITICAL FIX: No 'where: { userId }' filter here.
-        // We want ALL responses so the admin can see the total count.
         responses: {
           include: { 
-            user: { select: { name: true, avatar: true } } 
+            user: { select: { id: true, name: true, avatar: true } },
+            option: true // Include the selected option details
           },
-          orderBy: { createdAt: 'desc' } // Show newest votes top
+          orderBy: { createdAt: 'desc' }
         }
       }
     });
 
-    res.json(question);
+    // 2. Fetch Total User Count (For "Didn't Answer" calculation)
+    const totalUsers = await prisma.user.count({
+      where: { status: 'ACTIVE' } // Only count active users
+    });
+
+    // 3. Fetch History (Last 10 inactive questions)
+    const history = await prisma.dailyQuestion.findMany({
+      where: { isActive: false },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      include: {
+        _count: { select: { responses: true } }
+      }
+    });
+
+    res.json({
+      activeQuest,
+      totalUsers,
+      history
+    });
   } catch (error) {
+    console.error("Stats Error:", error);
     res.status(500).json({ message: "Error fetching quest stats" });
   }
 };
