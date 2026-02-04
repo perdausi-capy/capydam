@@ -166,5 +166,32 @@ export const submitVote = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * 5. GET QUEST STATS (Admin Only)
+ * Fetches the active question with ALL responses for the live feed.
+ */
+export const getQuestStats = async (req: Request, res: Response) => {
+  try {
+    const question = await prisma.dailyQuestion.findFirst({
+      where: { isActive: true },
+      include: { 
+        options: true,
+        // ✅ CRITICAL FIX: No 'where: { userId }' filter here.
+        // We want ALL responses so the admin can see the total count.
+        responses: {
+          include: { 
+            user: { select: { name: true, avatar: true } } 
+          },
+          orderBy: { createdAt: 'desc' } // Show newest votes top
+        }
+      }
+    });
+
+    res.json(question);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching quest stats" });
+  }
+};
+
 
 

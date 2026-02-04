@@ -34,10 +34,11 @@ const AdminDailyQuest = () => {
   const { data: activeQuest, isLoading: loadingActive } = useQuery({
     queryKey: ['admin-active-quest'],
     queryFn: async () => {
-      const res = await client.get('/daily/active');
+      // ✅ FIX: Use the new stats endpoint that returns ALL votes
+      const res = await client.get('/daily/stats'); 
       return res.data;
     },
-    refetchInterval: 5000, // Poll every 5 seconds for live results
+    refetchInterval: 3000, // Poll every 3 seconds for live results
   });
 
   // --- 2. MUTATIONS ---
