@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { motion  } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Send, ArrowLeft, Loader2, Clock,
+  Sparkles, Send, ArrowLeft, Loader2, 
+  Clock, Users, UserCheck, UserX, 
   History, StopCircle, Plus, X,
-  ChevronLeft, ChevronRight, Wand2, CheckCircle2,
-  Database, Bot, Swords, Scroll, Skull, Trophy, Flame, Medal, Crown, Trash2
+  ChevronLeft, ChevronRight, Calendar, BarChart2, Wand2, CheckCircle2,
+  Database, Upload, FileJson, Bot, Eye, Swords, Scroll, Skull, Trophy, Flame, Medal, Crown, Trash2, AlertTriangle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
@@ -564,16 +565,25 @@ const LeaderboardModal = ({ isOpen, onClose }: any) => {
                 <div className="p-4 overflow-y-auto custom-scrollbar flex-1 bg-gray-50 dark:bg-slate-900">
                     <div className="space-y-3">
                         {leaders?.map((user: any, index: number) => {
+                            const isUnranked = user.score === 0;
+
                             let rankStyle = "bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-700";
                             let rankIcon = <span className="font-mono font-bold text-gray-500">#{index + 1}</span>;
 
-                            if (index === 0) {
+                            if (isUnranked) {
+                                // 🔒 UNRANKED (0 Score)
+                                rankStyle = "bg-gray-100 dark:bg-slate-900 border-gray-200 dark:border-slate-800 opacity-60";
+                                rankIcon = <span className="font-mono font-bold text-gray-400 text-[10px]">N/A</span>;
+                            } else if (index === 0) {
+                                // 🥇 GOLD
                                 rankStyle = "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-500 shadow-md";
                                 rankIcon = <Crown size={20} className="text-yellow-600 dark:text-yellow-400" fill="currentColor" />;
                             } else if (index === 1) {
+                                // 🥈 SILVER
                                 rankStyle = "bg-gray-50 dark:bg-slate-800 border-gray-400";
                                 rankIcon = <Medal size={20} className="text-gray-400" fill="currentColor" />;
                             } else if (index === 2) {
+                                // 🥉 BRONZE
                                 rankStyle = "bg-orange-50 dark:bg-orange-900/10 border-orange-400";
                                 rankIcon = <Medal size={20} className="text-orange-500" fill="currentColor" />;
                             }
@@ -589,12 +599,14 @@ const LeaderboardModal = ({ isOpen, onClose }: any) => {
                                     <div className="flex-1">
                                         <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{user.name}</p>
                                         <div className="flex items-center gap-2 mt-0.5">
-                                            <span className="text-[10px] font-bold text-orange-500 flex items-center gap-0.5"><Flame size={10} fill="currentColor"/> {user.streak} Streak</span>
+                                            <span className={`text-[10px] font-bold flex items-center gap-0.5 ${isUnranked ? 'text-gray-400' : 'text-orange-500'}`}>
+                                                <Flame size={10} fill="currentColor"/> {user.streak} Streak
+                                            </span>
                                         </div>
                                     </div>
 
                                     <div className="text-right">
-                                        <span className="block text-lg font-black text-indigo-600 dark:text-indigo-400">{user.score}</span>
+                                        <span className={`block text-lg font-black ${isUnranked ? 'text-gray-400' : 'text-indigo-600 dark:text-indigo-400'}`}>{user.score}</span>
                                         <span className="text-[9px] font-bold text-gray-400 uppercase">PTS</span>
                                     </div>
                                 </div>
