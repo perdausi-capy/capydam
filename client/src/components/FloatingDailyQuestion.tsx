@@ -1,36 +1,57 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import Lottie from 'lottie-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import witchAnimation from '../assets/witch.json';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import client from '../api/client';
 import DailyQuestionModal from './DailyQuestionModal';
+import LeaderboardModal from './LeaderboardModal';
+import { Flame, Trophy } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
-const FAIRY_SIZE = 85;
+// ✅ IMPORT YOUR GIF
+import robotGif from '../assets/robot.gif';
+
+const BOX_SIZE = 80; 
 const DAMPING = 0.95; 
 const MAX_VELOCITY = 15;
 const WANDER_STRENGTH = 0.05; 
 
 const FloatingDailyQuestion = () => {
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const { user } = useAuth(); // Get current user state
+  const queryClient = useQueryClient();
+  const buttonRef = useRef<HTMLDivElement>(null);
+  
+  // State
   const [isOpen, setIsOpen] = useState(false);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
   const [displayedText, setDisplayedText] = useState("");
 
+  // 1. Get Active Question (Updated with Polling & User Dependency)
   const { data: question } = useQuery({
-    queryKey: ['active-question'],
+    queryKey: ['active-question', user?.id], // ✅ Key changes on login -> Forces instant fetch
     queryFn: async () => {
-      const res = await client.get('/daily/active');
-      return res.data;
+      try {
+        const res = await client.get('/daily/active');
+        return res.data;
+      } catch (err) {
+        return null; // Return null on 404/Error so we don't crash
+      }
     },
-    // Don't retry if 404/offline, just hide
+    refetchInterval: 5000, // ✅ Checks for new quest every 5 seconds (No reload needed)
     retry: false
   });
 
-  // Check if user has voted in the response list
-  const hasVoted = question?.responses?.length > 0;
+  // 2. Get User Streak
+  const { data: userData } = useQuery({
+      queryKey: ['user-streak', user?.id],
+      queryFn: async () => (await client.get('/auth/me')).data,
+      enabled: !!user
+  });
 
-  // --- PHYSICS STATE ---
-  const pos = useRef({ x: window.innerWidth - 150, y: window.innerHeight - 150 });
+  const streak = userData?.streak || 0;
+  const hasVoted = question?.responses?.some((r: any) => r.userId === user?.id);
+
+  // --- PHYSICS ENGINE ---
+  const pos = useRef({ x: window.innerWidth - 100, y: window.innerHeight - 150 });
   const vel = useRef({ x: 1, y: 1 });
   const isDragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
@@ -43,7 +64,7 @@ const FloatingDailyQuestion = () => {
   // --- TYPEWRITER EFFECT ---
   useEffect(() => {
     if (!question) return;
-    const targetText = hasVoted ? "I'm resting... 💤" : "New Quest! Click me! ✨";
+    const targetText = hasVoted ? "System Standby..." : "New Data Available!";
     let timeout: ReturnType<typeof setTimeout>;
     let charIndex = 0;
 
@@ -58,12 +79,13 @@ const FloatingDailyQuestion = () => {
     return () => clearTimeout(timeout);
   }, [question, hasVoted]);
 
+  // --- ANIMATION LOOP ---
   const update = useCallback(() => {
     if (!buttonRef.current || !question) return;
     if (!isDragging.current) {
         const padding = 20;
-        const maxX = window.innerWidth - FAIRY_SIZE - padding;
-        const maxY = window.innerHeight - FAIRY_SIZE - padding;
+        const maxX = window.innerWidth - BOX_SIZE - padding;
+        const maxY = window.innerHeight - BOX_SIZE - padding;
 
         pos.current.x += vel.current.x;
         pos.current.y += vel.current.y;
@@ -90,6 +112,7 @@ const FloatingDailyQuestion = () => {
     return () => cancelAnimationFrame(animationFrame.current);
   }, [update]);
 
+  // --- HANDLERS ---
   const handlePointerDown = (e: React.PointerEvent) => {
     isDragging.current = true;
     isClick.current = true;
@@ -116,50 +139,99 @@ const FloatingDailyQuestion = () => {
     }
   };
 
-  const handlePointerUp = (_e: React.PointerEvent) => {
+  const handlePointerUp = (e: React.PointerEvent) => {
     if (!isDragging.current) return;
     isDragging.current = false;
-    if (isClick.current) setIsOpen(true);
+
+    if (isClick.current) {
+        const target = e.target as HTMLElement;
+        if (target.closest('.leaderboard-btn')) {
+            setIsLeaderboardOpen(true);
+        } else {
+            setIsOpen(true);
+        }
+    }
   };
 
   if (!question) return null;
 
   return (
     <>
-      <button
+      <div
         ref={buttonRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         className="fixed top-0 left-0 z-[9998] group cursor-grab touch-none select-none outline-none"
-        style={{ 
-          width: FAIRY_SIZE, 
-          height: FAIRY_SIZE, 
-          filter: hasVoted ? 'grayscale(100%) opacity(0.5)' : 'none',
-          willChange: 'transform'
-        }}
+        style={{ width: BOX_SIZE, height: BOX_SIZE, willChange: 'transform' }}
       >
+        {/* Tooltip Bubble */}
         <AnimatePresence>
             <motion.div 
                 initial={{ opacity: 0, y: 10, scale: 0.8 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                className="absolute -top-10 -left-7 -translate-x-1/3 -translate-y-full whitespace-nowrap px-4 py-2 rounded-2xl text-xs font-bold shadow-xl bg-white dark:bg-gray-800 text-gray-800 dark:text-white border border-gray-100 dark:border-gray-700 pointer-events-none"
+                className="absolute -top-10 -left-12 w-48 flex justify-center pointer-events-none"
             >
-                <span className="font-mono">{displayedText}</span>
-                <span className="animate-pulse text-blue-500 font-bold ml-1">|</span>
-                <div className="absolute -bottom-1 left-1/3 -translate-x-1/2 w-2 h-2 bg-white dark:bg-gray-800 rotate-45 border-r border-b border-gray-100 dark:border-gray-700"></div>
+                <div className="bg-slate-900 text-green-400 border-2 border-green-500 text-[10px] font-mono font-bold px-3 py-1.5 rounded shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] uppercase tracking-wide">
+                    {displayedText}
+                    {/* Pixel Triangle */}
+                    <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 border-r-2 border-b-2 border-green-500 rotate-45"></div>
+                </div>
             </motion.div>
         </AnimatePresence>
 
-        <Lottie animationData={witchAnimation} loop={true} />
-      </button>
+        {/* 🤖 THE ROBOT */}
+        <motion.div 
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9, y: 5 }}
+            className="w-full h-full relative"
+        >
+            <img 
+                src={robotGif} 
+                alt="Quest Robot"
+                draggable={false} 
+                className={`
+                    w-full h-full object-contain drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)]
+                    scale-x-[-1] 
+                    ${hasVoted ? 'grayscale opacity-70' : ''}
+                `}
+            />
 
+            {/* Streak Badge (Attached to Corner) */}
+            {streak > 0 && (
+                <div className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded border-2 border-black shadow-sm flex items-center gap-0.5 z-10">
+                    <Flame size={10} fill="currentColor" /> {streak}
+                </div>
+            )}
+        </motion.div>
+
+        {/* 🏆 LEADERBOARD BUTTON (Hanging Below) */}
+        <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            className="leaderboard-btn absolute -bottom-2 -left-2 w-8 h-8 bg-yellow-400 hover:bg-yellow-300 text-black rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)] flex items-center justify-center z-20"
+            title="View Rankings"
+        >
+            <Trophy size={14} className="text-black" />
+        </motion.button>
+
+      </div>
+
+      {/* Modals */}
       <DailyQuestionModal 
         isOpen={isOpen} 
         onClose={() => setIsOpen(false)} 
         question={question}
-        // ✅ CRITICAL FIX: Pass this function so the modal can close itself
-        onVoteSuccess={() => setIsOpen(false)}
+        onVoteSuccess={() => {
+            setIsOpen(false);
+            queryClient.invalidateQueries({ queryKey: ['user-streak'] });
+            queryClient.invalidateQueries({ queryKey: ['active-question'] });
+        }}
+      />
+      
+      <LeaderboardModal 
+        isOpen={isLeaderboardOpen} 
+        onClose={() => setIsLeaderboardOpen(false)} 
       />
     </>
   );

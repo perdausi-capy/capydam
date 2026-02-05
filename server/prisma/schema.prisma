@@ -38,6 +38,11 @@ model User {
   reactions     Reaction[]
 
   dailyResponses DailyResponse[]
+  
+  // ✅ GAMIFICATION FIELDS
+  streak        Int       @default(0)
+  lastDailyDate DateTime? // To track if they voted yesterday
+  score         Int      @default(0)
 }
 
 // ✅ FEEDBACK MODEL

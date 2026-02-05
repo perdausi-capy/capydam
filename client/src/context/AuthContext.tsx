@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { AnimatePresence, motion } from 'framer-motion'; // 1. Import Animation Libs
-import { LogOut, Loader2 } from 'lucide-react'; // 2. Import Icons
+import { AnimatePresence, motion } from 'framer-motion'; 
+import { LogOut, Loader2 } from 'lucide-react';
 
 export interface User {
   id: string;
@@ -8,6 +8,7 @@ export interface User {
   email: string;
   role: string;
   avatar?: string;
+  streak?: number; // ✅ ADDED: Gamification Field
 }
 
 interface AuthContextType {
@@ -24,7 +25,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   
-  // 3. New State: Tracks if the animation is currently playing
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Hydrate user state on refresh
@@ -42,21 +42,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(newUser);
   };
 
-  // 4. Updated Logout Function with Delay
   const logout = () => {
-    // A. Start the animation
     setIsLoggingOut(true);
-
-    // B. Wait 1.2 seconds for animation to play
     setTimeout(() => {
-        // C. Actually clear data
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setToken(null);
         setUser(null);
         setIsLoggingOut(false);
-        
-        // D. Force Redirect to Login (Clears all app cache)
         window.location.href = '/login';
     }, 1200);
   };
@@ -65,7 +58,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated: !!token }}>
       {children}
 
-      {/* 5. Full Screen Exit Animation */}
       <AnimatePresence>
         {isLoggingOut && (
             <motion.div
@@ -81,15 +73,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     transition={{ delay: 0.1, duration: 0.4 }}
                     className="flex flex-col items-center gap-6"
                 >
-                    {/* Glowing Icon */}
                     <div className="relative">
                         <div className="absolute inset-0 bg-red-500/20 blur-xl rounded-full animate-pulse" />
                         <div className="relative bg-white dark:bg-black/40 p-6 rounded-full shadow-2xl border border-red-100 dark:border-red-900/30">
                             <LogOut size={48} className="text-red-500" />
                         </div>
                     </div>
-
-                    {/* Farewell Text */}
                     <div className="text-center space-y-2">
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                             Signing Out...
@@ -98,8 +87,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                             See you soon{user?.name ? `, ${user.name.split(' ')[0]}` : ''}! 👋
                         </p>
                     </div>
-
-                    {/* Loading Spinner */}
                     <motion.div 
                         animate={{ rotate: 360 }}
                         transition={{ duration: 1, repeat: Infinity, ease: "linear" }}

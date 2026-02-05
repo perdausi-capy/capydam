@@ -331,3 +331,83 @@ export const analyzeAudioVideo = async (assetId: string, filePath: string, optio
     }
   } catch (e) { console.error(`AV Analysis failed`, e); }
 };
+
+
+// Add this to the bottom of src/services/ai.service.ts
+
+export const generateQuestWithAI = async (topic: string = "Instructional Design, E-Learning, or Creative Tech") => {
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0.7,
+      messages: [
+        { 
+          role: "system", 
+          content: `You are a Trivia Master for a creative tech agency. 
+          Generate a "Question of the Day".
+          Output JSON ONLY format:
+          {
+            "question": "The question text?",
+            "options": [
+              { "text": "Option A", "isCorrect": false },
+              { "text": "Option B", "isCorrect": true },
+              { "text": "Option C", "isCorrect": false },
+              { "text": "Option D", "isCorrect": false }
+            ]
+          }
+          Keep it witty, short, and engaging.` 
+        },
+        { role: "user", content: `Generate a question about ${topic}.` }
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    return JSON.parse(response.choices[0].message.content || '{}');
+  } catch (error) {
+    console.error("AI Quest Gen Error:", error);
+    return null;
+  }
+};
+
+
+export const parseQuestionsWithAI = async (rawText: string) => {
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", // Stronger model needed for parsing logic
+      temperature: 0.2, // Low temperature = strictly follow instructions, no creativity
+      messages: [
+        { 
+          role: "system", 
+          content: `You are a Data Parsing Assistant. 
+          The user will provide raw text containing a list of questions (multiple choice or simple).
+          
+          YOUR TASK:
+          Extract every question and formatted it into this JSON array structure:
+          [
+            {
+              "question": "The Question Text?",
+              "options": [
+                { "text": "Option A", "isCorrect": false },
+                { "text": "Option B", "isCorrect": true } 
+                // Ensure there are always 2-4 options. If none provided, generate plausible ones based on the answer.
+                // If no answer is marked in text, assume the first one is correct (or make a best guess).
+              ]
+            }
+          ]
+          
+          Output JSON ONLY. No markdown, no chat.` 
+        },
+        { role: "user", content: `Here is the raw document text:\n\n${rawText}` }
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    // The model might return { "questions": [...] } or just [...] depending on training
+    // We try to parse efficiently
+    const content = JSON.parse(response.choices[0].message.content || '{}');
+    return content.questions || content; // Handle both wrapper styles
+  } catch (error) {
+    console.error("AI Parse Error:", error);
+    return null;
+  }
+};
