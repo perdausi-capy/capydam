@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion  } from 'framer-motion';
 import { 
-  Sparkles, Send, ArrowLeft, Loader2, 
-  Clock, Users, UserCheck, UserX, 
+  Send, ArrowLeft, Loader2, Clock,
   History, StopCircle, Plus, X,
-  ChevronLeft, ChevronRight, Calendar, BarChart2, Wand2, CheckCircle2,
-  Database, Upload, FileJson, Bot, Eye, Swords, Scroll, Skull, Trophy, Flame, Medal, Crown, Trash2, AlertTriangle
+  ChevronLeft, ChevronRight, Wand2, CheckCircle2,
+  Database, Bot, Swords, Scroll, Skull, Trophy, Flame, Medal, Crown, Trash2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';

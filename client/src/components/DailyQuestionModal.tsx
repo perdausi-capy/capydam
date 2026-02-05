@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles, Send, Loader2, CheckCircle2, BarChart3, Trophy, AlertCircle, Skull } from 'lucide-react';
+import { X, Sparkles, Send, Loader2, CheckCircle2, Trophy, Skull } from 'lucide-react';
 import client from '../api/client';
 import { toast } from 'react-toastify';
 import { useQueryClient } from '@tanstack/react-query';
