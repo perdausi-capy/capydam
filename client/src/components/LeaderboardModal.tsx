@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { motion } from 'framer-motion';
 import { X, Trophy, Flame, Medal, Crown } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
