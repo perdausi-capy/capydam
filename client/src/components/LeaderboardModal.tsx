@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Trophy, Flame, Medal, Crown, Shield, Star, Timer, Target, Play, Square, AlertOctagon, Gift } from 'lucide-react';
 import client from '../api/client';
