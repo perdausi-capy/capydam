@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { History, Skull, X, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import client from '../../../api/client';
