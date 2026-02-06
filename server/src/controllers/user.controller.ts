@@ -229,7 +229,7 @@ export const getUserById = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// 8. Delete User (Transaction Safe)
+// 8. Delete User (Transaction Safe - Nukes Everything)
 export const deleteUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -240,14 +240,28 @@ export const deleteUser = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
+    // 1. Find assets owned by the user (to clean up their links)
     const userAssets = await prisma.asset.findMany({
       where: { userId: id },
       select: { id: true }
     });
-
     const assetIds = userAssets.map(a => a.id);
 
+    // 2. GIANT TRANSACTION: Clean up EVERY table linked to User
     await prisma.$transaction([
+      // A. Quest & Gamification
+      prisma.dailyResponse.deleteMany({ where: { userId: id } }),
+
+      // B. Communication & Social
+      prisma.reaction.deleteMany({ where: { userId: id } }),
+      prisma.notification.deleteMany({ where: { userId: id } }),
+      prisma.message.deleteMany({ where: { userId: id } }),
+      prisma.membership.deleteMany({ where: { userId: id } }),
+      
+      // C. Support
+      prisma.feedback.deleteMany({ where: { userId: id } }),
+
+      // D. Asset Management (Complex)
       // Remove asset links in collections
       prisma.assetOnCollection.deleteMany({
         where: { assetId: { in: assetIds } }
@@ -259,11 +273,14 @@ export const deleteUser = async (req: Request, res: Response): Promise<void> => 
       prisma.collection.deleteMany({
         where: { userId: id }
       }),
+      // Remove click tracking
+      prisma.assetClick.deleteMany({ where: { userId: id } }),
       // Remove assets owned by user
       prisma.asset.deleteMany({
         where: { userId: id }
       }),
-      // Finally, delete user
+
+      // E. Finally, delete the user
       prisma.user.delete({
         where: { id }
       })
@@ -272,6 +289,6 @@ export const deleteUser = async (req: Request, res: Response): Promise<void> => 
     res.json({ message: 'User and all associated data deleted successfully' });
   } catch (error) {
     console.error("Delete User Error:", error);
-    res.status(500).json({ message: 'Error deleting user. Ensure all dependencies are cleared.' });
+    res.status(500).json({ message: 'Error deleting user. Ensure all dependencies are cleared.', error });
   }
 };
