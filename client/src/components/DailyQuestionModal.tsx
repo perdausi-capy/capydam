@@ -8,9 +8,8 @@ import confetti from 'canvas-confetti';
 
 // 🔊 SOUNDS
 const WIN_SOUND = "https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3";
-// const LOSE_SOUND = "https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3"; 
 
-// --- GAME BUTTON COMPONENT (Same as Admin) ---
+// --- GAME BUTTON COMPONENT ---
 const GameButton = ({ onClick, disabled, className, children, variant = 'primary' }: any) => {
   const colors = {
     primary: "bg-indigo-600 hover:bg-indigo-500 border-indigo-900 text-white",
@@ -91,14 +90,13 @@ const DailyQuestionModal = ({ isOpen, onClose, question, onVoteSuccess }: any) =
       setIsCorrect(data.isCorrect);
       setEarnedPoints(data.points || 0);
 
-      // ✅ FIX: Use JSX Components instead of strings for the icon
       if (data.isCorrect) {
         toast.success(`VICTORY! +${data.points} XP`, { 
-            icon: <Trophy size={20} className="text-yellow-400" /> // Using Lucide Icon
+            icon: <Trophy size={20} className="text-yellow-400" />
         });
       } else {
         toast.error("MISSION FAILED", { 
-            icon: <Skull size={20} className="text-gray-400" /> // Using Lucide Icon
+            icon: <Skull size={20} className="text-gray-400" />
         });
       }
 
@@ -232,7 +230,11 @@ const DailyQuestionModal = ({ isOpen, onClose, question, onVoteSuccess }: any) =
                         {question.options.map((opt: any, idx: number) => {
                             const { count, pct } = getStats(opt.id);
                             const isSelected = selected === opt.id;
-                            const isWinner = opt.isCorrect; // Server should return this in 'stats' or we assume logic
+                            
+                            // 🔒 ANTI-CHEAT LOGIC:
+                            // If user won, show the green checkmark on the correct answer.
+                            // If user lost, show NO green checkmarks. Only the red X on their wrong choice.
+                            const isWinner = opt.isCorrect && isCorrect === true;
 
                             return (
                                 <div key={opt.id} className="relative">

@@ -2,17 +2,30 @@ import multer from 'multer';
 import { Router } from 'express';
 import { verifyJWT, requireAdmin } from '../middleware/auth.middleware';
 import { 
-  createDailyQuestion, 
+  // Core Game
   getActiveQuestion, 
   submitVote, 
+  
+  // Admin Dashboard
+  createDailyQuestion, 
   closeQuest, 
   getQuestStats, 
+  
+  // Season & Leaderboard
   getLeaderboard, 
+  startSeason, // ✅ Updated
+  endSeason,   // ✅ Updated
+  resetAllTimeStats,
+
+  // Tools & Vault
+  generateDailyQuestion, 
   aiSmartImport,
-  generateDailyQuestion, // ✅ Import the new Vault Generator
+  unscheduleQuest,
+
+  // Cleanup
+  deleteDailyQuestion,
   clearVault,
-  clearHistory,
-  deleteDailyQuestion
+  clearHistory
 } from '../controllers/daily.controller';
 
 const router = Router();
@@ -20,30 +33,40 @@ const router = Router();
 // Setup Multer (Memory Storage) for File Uploads
 const upload = multer({ storage: multer.memoryStorage() });
 
-// --- PUBLIC / USER ROUTES ---
-router.get('/', verifyJWT, getActiveQuestion);
-router.get('/active', verifyJWT, getActiveQuestion);
-router.get('/leaderboard', verifyJWT, getLeaderboard);
-router.post('/vote', verifyJWT, submitVote);
+/* =========================================
+   PUBLIC / USER ROUTES
+   ========================================= */
+router.get('/', verifyJWT, getActiveQuestion);         // Get currently active quest
+router.get('/active', verifyJWT, getActiveQuestion);   // Alias for above
+router.get('/leaderboard', verifyJWT, getLeaderboard); // Get rankings (Season/AllTime)
+router.post('/vote', verifyJWT, submitVote);           // Submit a vote
 
-// ✅ NEW DELETE ROUTES
-router.delete('/vault/clear', verifyJWT, requireAdmin, clearVault);
-router.delete('/history/clear', verifyJWT, requireAdmin, clearHistory);
-router.delete('/:id', verifyJWT, requireAdmin, deleteDailyQuestion);
+/* =========================================
+   ADMIN: DASHBOARD & MANAGEMENT
+   ========================================= */
+router.get('/stats', verifyJWT, requireAdmin, getQuestStats);        // Dashboard Stats
+router.post('/create', verifyJWT, requireAdmin, createDailyQuestion);// Create/Schedule
+router.patch('/:id/close', verifyJWT, requireAdmin, closeQuest);     // Manual Stop
 
-// --- ADMIN ROUTES ---
-router.post('/create', verifyJWT, requireAdmin, createDailyQuestion);
+/* =========================================
+   ADMIN: SEASON CONTROL
+   ========================================= */
+router.post('/season/start', verifyJWT, requireAdmin, startSeason);      // 🟢 Start New Season
+router.post('/season/end', verifyJWT, requireAdmin, endSeason);          // 🔴 End/Freeze Season
+router.post('/admin/nuke-all', verifyJWT, requireAdmin, resetAllTimeStats); // ☢️ Factory Reset
 
-// ✅ UPDATED: Points to Vault Generator instead of OpenAI
-router.post('/generate', verifyJWT, requireAdmin, generateDailyQuestion); 
+/* =========================================
+   ADMIN: TOOLS & VAULT
+   ========================================= */
+router.post('/generate', verifyJWT, requireAdmin, generateDailyQuestion); // Random from Vault
+router.post('/import-ai', verifyJWT, requireAdmin, upload.single('file'), aiSmartImport); // Import File
+router.patch('/:id/unschedule', verifyJWT, requireAdmin, unscheduleQuest);// Move Schedule -> Vault
 
-// ✅ UPDATED: Single definition with Multer middleware
-router.post('/import-ai', verifyJWT, requireAdmin, upload.single('file'), aiSmartImport);
-
-// Manual Close
-router.patch('/:id/close', verifyJWT, requireAdmin, closeQuest);
-
-// Stats & Vault Data
-router.get('/stats', verifyJWT, requireAdmin, getQuestStats);
+/* =========================================
+   ADMIN: CLEANUP & DELETE
+   ========================================= */
+router.delete('/vault/clear', verifyJWT, requireAdmin, clearVault);     // Clear unused drafts
+router.delete('/history/clear', verifyJWT, requireAdmin, clearHistory); // Clear past logs
+router.delete('/:id', verifyJWT, requireAdmin, deleteDailyQuestion);    // Delete specific item
 
 export default router;

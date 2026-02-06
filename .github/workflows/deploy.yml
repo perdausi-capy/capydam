@@ -33,7 +33,7 @@ jobs:
             cd server
             # 'npm ci' is safer than 'npm install' in production as it won't change the lockfile
             npm ci 
-            npx prisma migrate deploy
+            npx prisma db push
             npx prisma generate
             npm run build
             cd ..

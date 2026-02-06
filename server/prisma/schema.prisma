@@ -248,6 +248,9 @@ model DailyQuestion {
   expiresAt   DateTime?
   options     QuestionOption[]
   responses   DailyResponse[]
+
+  // ✅ NEW FIELD: For scheduling
+  scheduledFor DateTime?
 }
 
 model QuestionOption {
@@ -270,4 +273,23 @@ model DailyResponse {
   createdAt  DateTime       @default(now())
 
   @@unique([userId, questionId]) // Prevents multiple votes per question
+}
+
+// Store global settings like "SEASON_START_DATE"
+model SystemConfig {
+  key   String @id
+  value String
+}
+
+// 🏆 Stores history of past season winners
+model SeasonArchive {
+  id           String   @id @default(uuid())
+  seasonName   String   // e.g. "February 2026"
+  endedAt      DateTime @default(now())
+  
+  winnerId     String
+  winnerName   String
+  winnerAvatar String?
+  winnerScore  Int      // The score they achieved during that season
+  prizeAwarded Int      // XP amount given (e.g. 5000)
 }

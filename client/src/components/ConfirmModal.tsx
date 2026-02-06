@@ -11,7 +11,7 @@ interface ConfirmModalProps {
   cancelText?: string;
   isDangerous?: boolean;
   isLoading?: boolean;
-  confirmColor?: string; // ✅ Added: Fixes the TypeScript error
+  confirmColor?: string;
 }
 
 const ConfirmModal: React.FC<ConfirmModalProps> = ({
@@ -24,14 +24,10 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   cancelText = "Cancel",
   isDangerous = false,
   isLoading = false,
-  confirmColor, // Destructure the new prop
+  confirmColor,
 }) => {
   if (!isOpen) return null;
 
-  // Determine button style priority:
-  // 1. Custom Color (e.g. Green for Restore)
-  // 2. Dangerous (Red for Delete)
-  // 3. Default (Blue)
   const buttonClass = confirmColor 
     ? `${confirmColor} text-white`
     : isDangerous 
@@ -39,7 +35,8 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
       : 'bg-blue-600 hover:bg-blue-700 text-white';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    // ✅ FIX: Changed z-50 to z-[2000] to ensure it appears above all other modals
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div 
         className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" 
@@ -52,9 +49,8 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/10 px-6 py-4">
           <div className="flex items-center gap-3">
-             {/* Icon Logic */}
              <div className={`rounded-full p-2 ${isDangerous ? 'bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'}`}>
-                <AlertTriangle size={20} />
+                 <AlertTriangle size={20} />
              </div>
              <h3 className="text-lg font-bold text-gray-800 dark:text-white">{title}</h3>
           </div>
@@ -77,7 +73,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
             disabled={isLoading}
             className="rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-transparent px-4 py-2 font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 disabled:opacity-50 transition-colors"
           >
-            {cancelText}
+             {cancelText}
           </button>
           
           <button
