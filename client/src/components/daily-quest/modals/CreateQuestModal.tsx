@@ -8,7 +8,6 @@ import { GameButton } from '../ui/GameButton';
 
 export const CreateQuestModal = ({ isOpen, onClose, onSuccess, initialData }: any) => {
     const [question, setQuestion] = useState('');
-    // We default to saving to vault
     const [options, setOptions] = useState([
         { text: '', isCorrect: false }, 
         { text: '', isCorrect: false },
@@ -48,15 +47,8 @@ export const CreateQuestModal = ({ isOpen, onClose, onSuccess, initialData }: an
 
     const launchMutation = useMutation({
         mutationFn: async (payload: any) => client.post('/daily/create', payload),
-        onSuccess: (_, variables) => {
+        onSuccess: () => {
             onSuccess();
-            // Show different toast based on action
-            const isImmediate = !variables.scheduledFor; // Actually, we reuse this logic
-            // In this new UI, we will distinguishing via button clicks probably, 
-            // but for now, let's assume everything goes to Vault unless "Launch Now" is clicked.
-            
-            // Wait, the backend logic for 'Launch Now' (isActive: true) is still valid for manual overrides.
-            
             toast.success("Quest Saved!");
             setQuestion('');
             setOptions([{ text: '', isCorrect: false }, { text: '', isCorrect: false }, { text: '', isCorrect: false }, { text: '', isCorrect: false }]);
@@ -70,49 +62,11 @@ export const CreateQuestModal = ({ isOpen, onClose, onSuccess, initialData }: an
         e.preventDefault();
         if (!validateForm()) return;
 
-        const payload = { 
-            question, 
-            options: options.filter(o => o.text.trim()),
-            isActive: false, // Save as draft
-            scheduledFor: null // Ensure no schedule
-        };
-        // We use the same endpoint, backend handles it
-        // Actually, your backend `createDailyQuestion` sets `isActive: true` if `!scheduledFor`.
-        // We might need to adjust the backend to explicitly accept `isActive` status if we want to save drafts via API.
-        
-        // *Self-Correction*: The backend `createDailyQuestion` logic:
-        // if (!scheduledFor) -> isActive: true (Launch Now)
-        // else -> isActive: false (Schedule)
-        
-        // Since we removed scheduling, we need a way to "Save Draft".
-        // Use a dummy date in the far future? Or update backend?
-        
-        // Let's stick to the current backend logic for a second:
-        // If we want to "Save to Vault", we technically need to "Schedule" it for null?
-        // No, looking at `createDailyQuestion`:
-        // It creates `isActive: true` if no schedule.
-        
-        // WORKAROUND WITHOUT BACKEND CHANGE:
-        // We can send a `scheduledFor` date of "9999-01-01". 
-        // OR better: The "Import AI" feature saves drafts. 
-        
-        // BETTER FIX: Let's assume you want to MANUALLY launch quests sometimes (Override).
-        // So "Launch Now" is still useful.
-        
-        // But for "Save to Vault", we need a slight backend tweak OR use the `scheduledFor` hack.
-        // Let's use the hack for now to avoid re-deploying backend:
-        // Send `scheduledFor: new Date().toISOString()` (but active: false).
-        // Wait, the backend forces it.
-        
-        // OK, let's just keep "Launch Now" (Manual Override) and maybe repurpose "Schedule" button to "Save Draft".
-        // To save a draft with current backend, we must send a `scheduledFor` date.
-        // Let's just send tomorrow's date. The Cron job IGNORES the date anyway and picks random drafts!
-        // So effectively, "Scheduling" = "Saving to Vault".
-        
+        // We send a dummy scheduledFor date to trick the backend into creating it as "inactive" (Draft)
         const payloadDraft = {
             question,
             options: options.filter(o => o.text.trim()),
-            scheduledFor: new Date().toISOString() // This effectively saves it as inactive in DB
+            scheduledFor: new Date().toISOString() 
         };
         launchMutation.mutate(payloadDraft);
     };
@@ -124,7 +78,7 @@ export const CreateQuestModal = ({ isOpen, onClose, onSuccess, initialData }: an
         const payload = {
             question,
             options: options.filter(o => o.text.trim()),
-            // No scheduledFor = Launch Immediate
+            // No scheduledFor = Launch Immediate (isActive: true)
         };
         launchMutation.mutate(payload);
     };
