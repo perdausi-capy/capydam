@@ -64,7 +64,7 @@ const FloatingDailyQuestion = () => {
   // --- TYPEWRITER EFFECT ---
   useEffect(() => {
     if (!question) return;
-    const targetText = hasVoted ? "System Standby..." : "New Data Available!";
+    const targetText = hasVoted ? "System Standby..." : "Capydam Quest Available!";
     let timeout: ReturnType<typeof setTimeout>;
     let charIndex = 0;
 

@@ -62,11 +62,12 @@ export const CreateQuestModal = ({ isOpen, onClose, onSuccess, initialData }: an
         e.preventDefault();
         if (!validateForm()) return;
 
-        // We send a dummy scheduledFor date to trick the backend into creating it as "inactive" (Draft)
+        // ✅ FIX: Send clean "Draft" payload
         const payloadDraft = {
             question,
             options: options.filter(o => o.text.trim()),
-            scheduledFor: new Date().toISOString() 
+            isActive: false,      // Explicitly inactive
+            scheduledFor: null    // Explicitly NULL (Vault Item)
         };
         launchMutation.mutate(payloadDraft);
     };
@@ -75,10 +76,12 @@ export const CreateQuestModal = ({ isOpen, onClose, onSuccess, initialData }: an
     const handleLaunchNow = () => {
         if (!validateForm()) return;
         
+        // ✅ FIX: Send clean "Active" payload
         const payload = {
             question,
             options: options.filter(o => o.text.trim()),
-            // No scheduledFor = Launch Immediate (isActive: true)
+            isActive: true,       // Explicitly Active
+            scheduledFor: null
         };
         launchMutation.mutate(payload);
     };
