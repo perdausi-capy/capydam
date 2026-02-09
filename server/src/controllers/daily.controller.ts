@@ -8,10 +8,7 @@ import { extractTextFromFile } from '../services/file.service';
    CORE GAME LOOP (Public)
    ========================================= */
 
-/**
- * 1. GET ACTIVE QUESTION
- * Fetches current question and checks if the requesting user has already voted.
- */
+// 1. GET ACTIVE QUESTION
 export const getActiveQuestion = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id; 
@@ -22,14 +19,14 @@ export const getActiveQuestion = async (req: Request, res: Response) => {
         isActive: true,
         OR: [
           { expiresAt: null },
-          { expiresAt: { gt: now } } // Must be Greater Than 'now'
+          { expiresAt: { gt: now } } 
         ]
       },
       include: { 
         options: true,
         responses: {
           where: { userId },
-          include: { user: { select: { name: true, avatar: true } } } // Include for Admin View
+          include: { user: { select: { name: true, avatar: true } } } 
         }
       }
     });
@@ -40,10 +37,7 @@ export const getActiveQuestion = async (req: Request, res: Response) => {
   }
 };
 
-/**
- * 2. SUBMIT VOTE
- * Saves the user's response, calculates streaks, and updates score.
- */
+// 2. SUBMIT VOTE
 export const submitVote = async (req: Request, res: Response) => {
   try {
     const { questionId, optionId } = req.body;
@@ -51,42 +45,34 @@ export const submitVote = async (req: Request, res: Response) => {
 
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    // 1. Check if correct
     const option = await prisma.questionOption.findUnique({ where: { id: optionId } });
     const isCorrect = option?.isCorrect || false;
-    const points = isCorrect ? 10 : 0; // 10 Points for correct answer
+    const points = isCorrect ? 10 : 0; 
 
-    // 2. Record Vote (Will throw P2002 if already voted today for this specific question)
     const vote = await prisma.dailyResponse.create({
       data: { userId, questionId, optionId }
     });
 
-    // 3. --- 🏆 SCORE & STREAK LOGIC ---
     const user = await prisma.user.findUnique({ where: { id: userId } });
     
     if (user) {
       const now = new Date();
-      // Normalize dates to midnight to ignore time differences
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       
-      let newStreak = 1; // Default reset
+      let newStreak = 1; 
 
       if (user.lastDailyDate) {
         const lastDate = new Date(user.lastDailyDate);
         const lastMidnight = new Date(lastDate.getFullYear(), lastDate.getMonth(), lastDate.getDate());
         
-        // Calculate difference in days
         const diffTime = Math.abs(today.getTime() - lastMidnight.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
 
         if (diffDays === 1) {
-          // Voted yesterday -> Streak Continues 🔥
           newStreak = (user.streak || 0) + 1;
         } else if (diffDays === 0) {
-          // Voted today already (Shouldn't happen due to DB unique constraint, but safe fallback)
           newStreak = user.streak || 1; 
         }
-        // If diffDays > 1, streak remains 1 (Reset)
       }
 
       await prisma.user.update({
@@ -94,12 +80,11 @@ export const submitVote = async (req: Request, res: Response) => {
         data: { 
           score: { increment: points },
           streak: newStreak,
-          lastDailyDate: now // Update last activity to now
+          lastDailyDate: now 
         }
       });
     }
 
-    // 4. Return stats + correctness
     const stats = await prisma.questionOption.findMany({
       where: { questionId },
       include: { _count: { select: { responses: true } } }
@@ -120,23 +105,17 @@ export const submitVote = async (req: Request, res: Response) => {
    ADMIN DASHBOARD & CREATE (Protected)
    ========================================= */
 
-/**
- * 3. CREATE DAILY QUESTION (Admin Only)
- * Handles both IMMEDIATE launches and FUTURE scheduling.
- */
+// 3. CREATE DAILY QUESTION
 export const createDailyQuestion = async (req: Request, res: Response) => {
   try {
     const { question, options, expiresAt, scheduledFor } = req.body;
 
-    // --- CASE 1: IMMEDIATE LAUNCH (Standard) ---
     if (!scheduledFor) {
-        // A. Deactivate all currently active questions
         await prisma.dailyQuestion.updateMany({
           where: { isActive: true },
           data: { isActive: false }
         });
 
-        // B. Create new question and associated options
         const newQuestion = await prisma.dailyQuestion.create({
           data: {
             question,
@@ -152,7 +131,6 @@ export const createDailyQuestion = async (req: Request, res: Response) => {
           include: { options: true }
         });
 
-        // C. Notify ClickUp Group Chat
         const token = process.env.CLICKUP_API_TOKEN;
         const chatId = process.env.CLICKUP_LIST_ID; 
 
@@ -168,32 +146,18 @@ export const createDailyQuestion = async (req: Request, res: Response) => {
           try {
             await axios.post(
               `https://api.clickup.com/api/v2/view/${chatId}/comment`,
-              { 
-                comment_text: message, 
-                notify_all: true 
-              },
-              { 
-                headers: { 
-                  'Authorization': token, 
-                  'Content-Type': 'application/json' 
-                } 
-              }
+              { comment_text: message, notify_all: true },
+              { headers: { 'Authorization': token, 'Content-Type': 'application/json' } }
             );
-            console.log("✅ Clean system notification sent.");
           } catch (error: any) {
-            console.error("❌ ClickUp API Error:", error.response?.data || error.message);
+            console.error("❌ ClickUp API Error:", error.message);
           }
         }
 
         return res.status(201).json(newQuestion);
     }
-
-    // --- CASE 2: SCHEDULED FOR LATER (New) ---
     else {
-        // 🛑 CONFLICT CHECK: Prevent double booking the same day
         const targetDate = new Date(scheduledFor);
-        
-        // Calculate Start (00:00:00) and End (23:59:59) of that specific day
         const startOfDay = new Date(targetDate);
         startOfDay.setHours(0, 0, 0, 0);
 
@@ -203,10 +167,7 @@ export const createDailyQuestion = async (req: Request, res: Response) => {
         const existingSchedule = await prisma.dailyQuestion.findFirst({
             where: {
                 isActive: false,
-                scheduledFor: {
-                    gte: startOfDay,
-                    lte: endOfDay
-                }
+                scheduledFor: { gte: startOfDay, lte: endOfDay }
             }
         });
 
@@ -214,11 +175,10 @@ export const createDailyQuestion = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "This day is already scheduled." });
         }
 
-        // Proceed to Schedule
         const newScheduled = await prisma.dailyQuestion.create({
           data: {
             question,
-            isActive: false, // Stays inactive until Cron picks it up
+            isActive: false, 
             scheduledFor: targetDate, 
             options: {
               create: options.map((opt: any) => ({
@@ -230,7 +190,6 @@ export const createDailyQuestion = async (req: Request, res: Response) => {
           include: { options: true }
         });
         
-        console.log(`⏰ Quest scheduled for ${scheduledFor}`);
         return res.status(201).json(newScheduled);
     }
 
@@ -240,7 +199,7 @@ export const createDailyQuestion = async (req: Request, res: Response) => {
   }
 };
 
-// 4. MANUAL KILL (Stop current quest)
+// 4. MANUAL KILL
 export const closeQuest = async (req: Request, res: Response) => {
   const { id } = req.params;
   await prisma.dailyQuestion.update({
@@ -250,10 +209,7 @@ export const closeQuest = async (req: Request, res: Response) => {
   res.json({ success: true });
 };
 
-/**
- * 5. GET QUEST STATS (Admin Dashboard Data)
- * Returns Active Quest, User Engagement Stats, and History.
- */
+// 5. GET QUEST STATS
 export const getQuestStats = async (req: Request, res: Response) => {
   try {
     const activeQuest = await prisma.dailyQuestion.findFirst({
@@ -273,31 +229,29 @@ export const getQuestStats = async (req: Request, res: Response) => {
     const totalUsers = await prisma.user.count({ where: { status: 'ACTIVE' } });
 
     const history = await prisma.dailyQuestion.findMany({
-      where: { isActive: false, scheduledFor: null }, // ✅ Exclude scheduled
+      where: { isActive: false, scheduledFor: null }, 
       orderBy: { createdAt: 'desc' },
       take: 10,
       include: { _count: { select: { responses: true } } }
     });
 
     const drafts = await prisma.dailyQuestion.findMany({
-      where: { isActive: false, responses: { none: {} }, scheduledFor: null }, // ✅ Exclude scheduled
+      where: { isActive: false, responses: { none: {} }, scheduledFor: null },
       include: { options: true },
       orderBy: { createdAt: 'desc' }
     });
 
-    // ✅ NEW: Fetch Scheduled Queue
     const scheduled = await prisma.dailyQuestion.findMany({
       where: { 
         isActive: false, 
         scheduledFor: { not: null } 
       },
-      orderBy: { scheduledFor: 'asc' }, // Soonest first
+      orderBy: { scheduledFor: 'asc' }, 
       include: { options: true }
     });
 
     res.json({ activeQuest, totalUsers, history, drafts, scheduled });
   } catch (error) {
-    console.error("Stats Error:", error);
     res.status(500).json({ message: "Error fetching quest stats" });
   }
 };
@@ -306,41 +260,34 @@ export const getQuestStats = async (req: Request, res: Response) => {
    SEASON & LEADERBOARD MANAGEMENT
    ========================================= */
 
-// 6. GET LEADERBOARD (Dynamic Season Support)
+// 6. GET LEADERBOARD
 export const getLeaderboard = async (req: Request, res: Response) => {
   try {
     const currentUserId = (req as any).user?.id;
-    const { range } = req.query; // 'monthly' (Season) or 'all'
+    const { range } = req.query; 
 
-    // 1. Get Season Config
     const statusConfig = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_STATUS' } });
     const startConfig = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_START' } });
     const endConfig = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_END' } });
 
-    const status = statusConfig?.value || 'ACTIVE'; // Default to ACTIVE
+    const status = statusConfig?.value || 'ACTIVE'; 
     const seasonStart = startConfig ? new Date(startConfig.value) : new Date(0);
-    const seasonEnd = endConfig ? new Date(endConfig.value) : new Date(); // If ended, use end date. If active, use Now.
+    const seasonEnd = endConfig ? new Date(endConfig.value) : new Date();
 
     let rankedUsers: any[] = [];
     
     // --- SEASON LOGIC ---
     if (range === 'monthly') {
-        // If Season is ENDED, we show the static results (History)
-        // If Season is ACTIVE, we show live results
         const endDateFilter = status === 'ENDED' ? seasonEnd : new Date();
 
         const seasonResponses = await prisma.dailyResponse.findMany({
             where: {
-                createdAt: { 
-                    gte: seasonStart,
-                    lte: endDateFilter 
-                },
+                createdAt: { gte: seasonStart, lte: endDateFilter },
                 option: { isCorrect: true }
             },
             include: { user: { select: { id: true, name: true, avatar: true, streak: true } } }
         });
 
-        // Calculate Scores
         const scoreMap = new Map<string, any>();
         seasonResponses.forEach(r => {
             const existing = scoreMap.get(r.userId) || { ...r.user, score: 0 };
@@ -350,28 +297,36 @@ export const getLeaderboard = async (req: Request, res: Response) => {
         rankedUsers = Array.from(scoreMap.values());
 
     } else {
-        // ALL TIME (Unchanged)
+        // ALL TIME
         rankedUsers = await prisma.user.findMany({
             where: { status: 'ACTIVE', score: { gt: 0 } },
             select: { id: true, name: true, avatar: true, streak: true, score: true }
         });
     }
 
-    // Sort & Rank
-    rankedUsers.sort((a, b) => b.score - a.score || b.streak - a.streak);
-    const top10 = rankedUsers.slice(0, 10).map((u, i) => ({ ...u, rank: i + 1 }));
+    // ✅ FIX: Sort by Score > Streak
+    rankedUsers.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return b.streak - a.streak;
+    });
+
+    // ✅ FIX: Top 50 & Unranked
+    const topList = rankedUsers.slice(0, 50).map((u, i) => ({ 
+        ...u, 
+        rank: u.score > 0 ? i + 1 : 0 // 0 = Unranked
+    }));
     
     // Find Current User
-    let currentUserStat = top10.find(u => u.id === currentUserId);
+    let currentUserStat = topList.find(u => u.id === currentUserId);
     if (!currentUserStat && currentUserId) {
         const userDetails = await prisma.user.findUnique({ where: { id: currentUserId }, select: { id: true, name: true, avatar: true, streak: true, score: true } });
-        if(userDetails) currentUserStat = { ...userDetails, score: 0, rank: 999 }; 
+        if(userDetails) currentUserStat = { ...userDetails, score: 0, rank: 0 }; 
     }
 
     res.json({
-        leaders: top10,
+        leaders: topList,
         user: currentUserStat,
-        status: status // ✅ Send status to frontend
+        status: status 
     });
 
   } catch (error) {
@@ -379,15 +334,12 @@ export const getLeaderboard = async (req: Request, res: Response) => {
   }
 };
 
-// 7. START SEASON (Action)
+// 7. START SEASON
 export const startSeason = async (req: Request, res: Response) => {
     try {
         await prisma.$transaction([
-            // Set Status to ACTIVE
             prisma.systemConfig.upsert({ where: { key: 'SEASON_STATUS' }, update: { value: 'ACTIVE' }, create: { key: 'SEASON_STATUS', value: 'ACTIVE' } }),
-            // Set Start Date to NOW
             prisma.systemConfig.upsert({ where: { key: 'SEASON_START' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_START', value: new Date().toISOString() } }),
-            // Clear End Date
             prisma.systemConfig.deleteMany({ where: { key: 'SEASON_END' } }) 
         ]);
         res.json({ message: "🚀 Season Started! Score tracking is live." });
@@ -396,28 +348,31 @@ export const startSeason = async (req: Request, res: Response) => {
     }
 };
 
-// 8. END SEASON (Action)
+// 8. END SEASON
 export const endSeason = async (req: Request, res: Response) => {
     try {
-        // 1. Find Start Date
         const startConfig = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_START' } });
         const startDate = startConfig ? new Date(startConfig.value) : new Date(0);
 
-        // 2. Find Winner
         const responses = await prisma.dailyResponse.findMany({
             where: { createdAt: { gte: startDate }, option: { isCorrect: true } },
             include: { user: true }
         });
 
-        // 3. Process Winner (if any)
         if (responses.length > 0) {
             const scoreMap = new Map<string, any>();
             responses.forEach(r => {
                 const existing = scoreMap.get(r.userId) || { ...r.user, score: 0 };
                 existing.score += 10;
+                existing.streak = r.user.streak || 0;
                 scoreMap.set(r.userId, existing);
             });
-            const winner = Array.from(scoreMap.values()).sort((a, b) => b.score - a.score)[0];
+            
+            // ✅ FIX: Tie Breaker Logic (Score > Streak)
+            const winner = Array.from(scoreMap.values()).sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                return b.streak - a.streak;
+            })[0];
 
             if (winner) {
                 await prisma.seasonArchive.create({
@@ -430,7 +385,6 @@ export const endSeason = async (req: Request, res: Response) => {
             }
         }
 
-        // 4. Set Status to ENDED
         await prisma.$transaction([
             prisma.systemConfig.upsert({ where: { key: 'SEASON_STATUS' }, update: { value: 'ENDED' }, create: { key: 'SEASON_STATUS', value: 'ENDED' } }),
             prisma.systemConfig.upsert({ where: { key: 'SEASON_END' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_END', value: new Date().toISOString() } })
@@ -442,31 +396,20 @@ export const endSeason = async (req: Request, res: Response) => {
     }
 };
 
-// 9. FACTORY RESET (Wipe All Gamification Data)
+// 9. FACTORY RESET
 export const resetAllTimeStats = async (req: Request, res: Response) => {
   try {
-    // 1. Wipe all vote history (Battle Logs)
     await prisma.dailyResponse.deleteMany({});
-
-    // 2. Reset every user's score and streak to 0
     await prisma.user.updateMany({
-      data: {
-        score: 0,
-        streak: 0,
-        lastDailyDate: null // Reset streak tracking date
-      }
+      data: { score: 0, streak: 0, lastDailyDate: null }
     });
-
-    // 3. Reset the "Season Start" config too, just to be clean
     await prisma.systemConfig.upsert({
         where: { key: 'SEASON_START' },
         update: { value: new Date().toISOString() },
         create: { key: 'SEASON_START', value: new Date().toISOString() }
     });
-
     res.json({ message: "⚠️ GLOBAL RESET COMPLETE. All scores and history wiped." });
   } catch (error) {
-    console.error("Reset Error:", error);
     res.status(500).json({ message: "Failed to reset all-time stats" });
   }
 };
@@ -475,23 +418,14 @@ export const resetAllTimeStats = async (req: Request, res: Response) => {
    AI, VAULT & TOOLS
    ========================================= */
 
-// 10. GENERATE QUESTION (FROM VAULT)
+// 10. GENERATE FROM VAULT
 export const generateDailyQuestion = async (req: Request, res: Response) => {
   try {
-    const whereCondition = { 
-      isActive: false,
-      responses: { none: {} },
-      scheduledFor: null 
-    };
-
+    const whereCondition = { isActive: false, responses: { none: {} }, scheduledFor: null };
     const count = await prisma.dailyQuestion.count({ where: whereCondition });
-
-    if (count === 0) {
-      return res.status(404).json({ message: "Vault is empty! No unscheduled drafts found." });
-    }
+    if (count === 0) return res.status(404).json({ message: "Vault is empty!" });
 
     const skip = Math.floor(Math.random() * count);
-
     const randomQuestion = await prisma.dailyQuestion.findFirst({
       where: whereCondition,
       include: { options: true },
@@ -499,28 +433,24 @@ export const generateDailyQuestion = async (req: Request, res: Response) => {
     });
 
     res.json(randomQuestion);
-
   } catch (error) {
-    console.error("Vault Gen Error:", error);
     res.status(500).json({ message: "Failed to fetch from Vault" });
   }
 };
 
-// 11. OLD AI GENERATOR (Optional)
+// 11. AI GENERATE (Optional)
 export const generateQuest = async (req: Request, res: Response) => {
   try {
     const { topic } = req.body;
     const aiData = await generateQuestWithAI(topic);
-    
     if (!aiData) return res.status(500).json({ message: "AI failed to generate quest" });
-
     res.json(aiData);
   } catch (error) {
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// 12. AI SMART IMPORT (File -> DB)
+// 12. AI IMPORT
 export const aiSmartImport = async (req: Request, res: Response) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
@@ -550,14 +480,12 @@ export const aiSmartImport = async (req: Request, res: Response) => {
     );
 
     res.json({ message: `✨ Magic! Extracted ${created.length} quests.`, count: created.length });
-
   } catch (error: any) {
-    console.error("Import Error:", error);
     res.status(500).json({ message: error.message || "Server error during import" });
   }
 };
 
-// 13. UNSCHEDULE QUEST (Move back to Vault)
+// 13. UNSCHEDULE
 export const unscheduleQuest = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -571,7 +499,7 @@ export const unscheduleQuest = async (req: Request, res: Response) => {
   }
 };
 
-// 14. DELETE SINGLE QUESTION (Vault/History)
+// 14. DELETE
 export const deleteDailyQuestion = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;

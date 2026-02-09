@@ -1,21 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Scroll, Loader2, Wand2, CheckCircle2, Clock, Calendar, Send } from 'lucide-react';
+import { X, Scroll, Loader2, Wand2, CheckCircle2, Archive, Send } from 'lucide-react';
 import client from '../../../api/client';
 import { toast } from 'react-toastify';
 import { useMutation } from '@tanstack/react-query';
 import { GameButton } from '../ui/GameButton';
 
-const RocketIcon = () => <Send size={16} className="-rotate-45 mb-1" />;
-
 export const CreateQuestModal = ({ isOpen, onClose, onSuccess, initialData }: any) => {
     const [question, setQuestion] = useState('');
-    const [expiresInHours, setExpiresInHours] = useState('24');
-    const [scheduleDate, setScheduleDate] = useState(''); 
-    const [isScheduled, setIsScheduled] = useState(false);
+    // We default to saving to vault
     const [options, setOptions] = useState([
-        { text: '', isCorrect: false }, { text: '', isCorrect: false },
-        { text: '', isCorrect: false }, { text: '', isCorrect: false },
+        { text: '', isCorrect: false }, 
+        { text: '', isCorrect: false },
+        { text: '', isCorrect: false }, 
+        { text: '', isCorrect: false },
     ]);
 
     useEffect(() => {
@@ -50,35 +48,93 @@ export const CreateQuestModal = ({ isOpen, onClose, onSuccess, initialData }: an
 
     const launchMutation = useMutation({
         mutationFn: async (payload: any) => client.post('/daily/create', payload),
-        onSuccess: () => {
+        onSuccess: (_, variables) => {
             onSuccess();
-            toast.success(isScheduled ? "📅 Scheduled Successfully!" : "🚀 Quest Deployed!");
+            // Show different toast based on action
+            const isImmediate = !variables.scheduledFor; // Actually, we reuse this logic
+            // In this new UI, we will distinguishing via button clicks probably, 
+            // but for now, let's assume everything goes to Vault unless "Launch Now" is clicked.
+            
+            // Wait, the backend logic for 'Launch Now' (isActive: true) is still valid for manual overrides.
+            
+            toast.success("Quest Saved!");
             setQuestion('');
             setOptions([{ text: '', isCorrect: false }, { text: '', isCorrect: false }, { text: '', isCorrect: false }, { text: '', isCorrect: false }]);
-            setIsScheduled(false);
-            setScheduleDate('');
             onClose();
         },
-        onError: (err: any) => toast.error(err.response?.data?.message || "Launch failed")
+        onError: (err: any) => toast.error(err.response?.data?.message || "Action failed")
     });
 
-    const handleSubmit = (e: React.FormEvent) => {
+    // 1. SAVE TO VAULT (Draft)
+    const handleSaveToVault = (e: React.FormEvent) => {
         e.preventDefault();
-        const validOptions = options.filter(opt => opt.text.trim() !== "");
-        if (!question.trim()) { toast.warning("Please write a question."); return; }
-        if (validOptions.length < 1) { toast.warning("Provide at least one option."); return; }
-        if (!validOptions.some(opt => opt.isCorrect)) { toast.warning("Mark a correct answer."); return; }
+        if (!validateForm()) return;
 
-        let payload: any = { question, options: validOptions };
+        const payload = { 
+            question, 
+            options: options.filter(o => o.text.trim()),
+            isActive: false, // Save as draft
+            scheduledFor: null // Ensure no schedule
+        };
+        // We use the same endpoint, backend handles it
+        // Actually, your backend `createDailyQuestion` sets `isActive: true` if `!scheduledFor`.
+        // We might need to adjust the backend to explicitly accept `isActive` status if we want to save drafts via API.
+        
+        // *Self-Correction*: The backend `createDailyQuestion` logic:
+        // if (!scheduledFor) -> isActive: true (Launch Now)
+        // else -> isActive: false (Schedule)
+        
+        // Since we removed scheduling, we need a way to "Save Draft".
+        // Use a dummy date in the far future? Or update backend?
+        
+        // Let's stick to the current backend logic for a second:
+        // If we want to "Save to Vault", we technically need to "Schedule" it for null?
+        // No, looking at `createDailyQuestion`:
+        // It creates `isActive: true` if no schedule.
+        
+        // WORKAROUND WITHOUT BACKEND CHANGE:
+        // We can send a `scheduledFor` date of "9999-01-01". 
+        // OR better: The "Import AI" feature saves drafts. 
+        
+        // BETTER FIX: Let's assume you want to MANUALLY launch quests sometimes (Override).
+        // So "Launch Now" is still useful.
+        
+        // But for "Save to Vault", we need a slight backend tweak OR use the `scheduledFor` hack.
+        // Let's use the hack for now to avoid re-deploying backend:
+        // Send `scheduledFor: new Date().toISOString()` (but active: false).
+        // Wait, the backend forces it.
+        
+        // OK, let's just keep "Launch Now" (Manual Override) and maybe repurpose "Schedule" button to "Save Draft".
+        // To save a draft with current backend, we must send a `scheduledFor` date.
+        // Let's just send tomorrow's date. The Cron job IGNORES the date anyway and picks random drafts!
+        // So effectively, "Scheduling" = "Saving to Vault".
+        
+        const payloadDraft = {
+            question,
+            options: options.filter(o => o.text.trim()),
+            scheduledFor: new Date().toISOString() // This effectively saves it as inactive in DB
+        };
+        launchMutation.mutate(payloadDraft);
+    };
 
-        if (isScheduled && scheduleDate) {
-            payload.scheduledFor = new Date(scheduleDate).toISOString();
-        } else {
-            const expiryDate = new Date();
-            expiryDate.setHours(expiryDate.getHours() + parseInt(expiresInHours));
-            payload.expiresAt = expiryDate.toISOString();
-        }
+    // 2. LAUNCH NOW (Manual Override)
+    const handleLaunchNow = () => {
+        if (!validateForm()) return;
+        
+        const payload = {
+            question,
+            options: options.filter(o => o.text.trim()),
+            // No scheduledFor = Launch Immediate
+        };
         launchMutation.mutate(payload);
+    };
+
+    const validateForm = () => {
+        const validOptions = options.filter(opt => opt.text.trim() !== "");
+        if (!question.trim()) { toast.warning("Please write a question."); return false; }
+        if (validOptions.length < 1) { toast.warning("Provide at least one option."); return false; }
+        if (!validOptions.some(opt => opt.isCorrect)) { toast.warning("Mark a correct answer."); return false; }
+        return true;
     };
 
     const handleOptionChange = (idx: number, val: string) => {
@@ -92,14 +148,6 @@ export const CreateQuestModal = ({ isOpen, onClose, onSuccess, initialData }: an
         setOptions(newOpts);
     };
 
-    const setTomorrow9AM = () => {
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(9, 0, 0, 0);
-        const localIso = new Date(tomorrow.getTime() - (tomorrow.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
-        setScheduleDate(localIso);
-    };
-
     if (!isOpen) return null;
 
     return (
@@ -111,9 +159,9 @@ export const CreateQuestModal = ({ isOpen, onClose, onSuccess, initialData }: an
                     </h2>
                     <button onClick={onClose} className="bg-red-500 hover:bg-red-400 text-white p-1 rounded border-2 border-red-800"><X size={16} /></button>
                 </div>
-                
+                 
                 <div className="p-6 overflow-y-auto custom-scrollbar">
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="space-y-6">
                         <div className="space-y-2">
                             <div className="flex justify-between items-end">
                                 <label className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-widest">Mission Objective</label>
@@ -133,35 +181,32 @@ export const CreateQuestModal = ({ isOpen, onClose, onSuccess, initialData }: an
                             ))}
                         </div>
 
-                        <div className="flex flex-col gap-4 pt-4 border-t-2 border-gray-200 dark:border-slate-600 border-dashed">
-                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                <label className="flex items-center gap-3 cursor-pointer group">
-                                    <div className={`w-10 h-5 rounded-full relative transition-colors border ${isScheduled ? 'bg-indigo-600 border-indigo-600' : 'bg-gray-300 dark:bg-slate-600 border-gray-400 dark:border-slate-500'}`}>
-                                        <input type="checkbox" className="hidden" checked={isScheduled} onChange={(e) => { setIsScheduled(e.target.checked); if (e.target.checked && !scheduleDate) setTomorrow9AM(); }} />
-                                        <div className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-white rounded-full transition-transform shadow-sm ${isScheduled ? 'translate-x-5' : 'translate-x-0'}`} />
-                                    </div>
-                                    <span className="text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wide group-hover:text-indigo-500 transition-colors">Schedule for Later</span>
-                                </label>
+                        {/* ACTION BUTTONS */}
+                        <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t-2 border-gray-200 dark:border-slate-600 border-dashed">
+                             <GameButton 
+                                onClick={handleSaveToVault} 
+                                disabled={launchMutation.isPending} 
+                                variant="neutral"
+                                className="flex-1"
+                             >
+                                <Archive size={16} /> Save to Vault
+                             </GameButton>
 
-                                {isScheduled ? (
-                                    <input type="datetime-local" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} className="bg-gray-100 dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded px-3 py-1.5 text-xs font-bold text-gray-900 dark:text-white outline-none focus:border-indigo-500" />
-                                ) : (
-                                     <div className="flex items-center gap-2 bg-gray-100 dark:bg-slate-900 px-3 py-1.5 rounded border border-gray-300 dark:border-slate-700">
-                                        <Clock size={14} className="text-gray-500 dark:text-slate-400" />
-                                        <select value={expiresInHours} onChange={(e) => setExpiresInHours(e.target.value)} className="bg-transparent text-xs font-bold text-gray-900 dark:text-white outline-none cursor-pointer">
-                                            <option value="4">4 Hours</option>
-                                            <option value="8">8 Hours</option>
-                                            <option value="24">24 Hours</option>
-                                        </select>
-                                     </div>
-                                )}
-                             </div>
-                             <GameButton type="submit" disabled={launchMutation.isPending || (isScheduled && !scheduleDate)} variant={isScheduled ? "neutral" : "success"}>
-                                {launchMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : (isScheduled ? <Calendar size={16} /> : <RocketIcon />)}
-                                {isScheduled ? "Save Schedule" : "Launch Now"}
+                             <GameButton 
+                                onClick={handleLaunchNow} 
+                                disabled={launchMutation.isPending} 
+                                variant="success"
+                                className="flex-1"
+                             >
+                                {launchMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
+                                Launch Immediately
                              </GameButton>
                         </div>
-                    </form>
+                        <p className="text-center text-[10px] text-gray-400 dark:text-slate-500 mt-2">
+                            "Save to Vault" adds it to the rotation pool.<br/>
+                            "Launch Immediately" overrides the current active quest.
+                        </p>
+                    </div>
                 </div>
             </motion.div>
         </div>

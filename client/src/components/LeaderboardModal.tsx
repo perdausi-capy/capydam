@@ -97,6 +97,7 @@ const LeaderboardModal = ({ isOpen, onClose }: any) => {
 
   // --- STYLING ---
   const getRankStyles = (rank: number) => {
+    if (rank === 0) return { bg: "bg-gray-50 dark:bg-slate-900", border: "border-gray-100 dark:border-slate-800", icon: <span className="text-xs font-mono opacity-50">-</span> };
     if (rank === 1) return { bg: "bg-yellow-50 dark:bg-yellow-900/20", border: "border-yellow-500", icon: <Crown size={18} className="text-yellow-600 dark:text-yellow-400" fill="currentColor"/> };
     if (rank <= 3) return { bg: "bg-indigo-50 dark:bg-indigo-900/20", border: "border-indigo-500", icon: <Medal size={18} className="text-indigo-600 dark:text-indigo-400" fill="currentColor"/> };
     if (rank <= 10) return { bg: "bg-white dark:bg-slate-800", border: "border-slate-300 dark:border-slate-600", icon: <Shield size={16} className="text-slate-400" fill="currentColor"/> };
@@ -107,15 +108,25 @@ const LeaderboardModal = ({ isOpen, onClose }: any) => {
     const style = getRankStyles(rank);
     return (
       <div className={`flex items-center gap-3 p-3 rounded-xl border-b-4 border-r-2 border-l-2 border-t-2 transition-transform hover:scale-[1.01] relative ${style.bg} ${style.border} ${isMe ? 'ring-2 ring-indigo-500 ring-offset-2 dark:ring-offset-slate-900 z-10' : ''}`}>
-        <div className="w-8 flex justify-center font-black text-gray-500 dark:text-slate-400">{rank <= 3 ? style.icon : `#${rank}`}</div>
+        <div className="w-8 flex justify-center font-black text-gray-500 dark:text-slate-400">
+            {/* ✅ UNRANKED FIX */}
+            {rank <= 3 && rank > 0 ? style.icon : (rank === 0 ? '-' : `#${rank}`)}
+        </div>
         <div className={`w-10 h-10 rounded-lg border-2 overflow-hidden bg-gray-200 dark:bg-slate-700 ${style.border}`}>
             {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center font-bold text-gray-500">{user.name?.[0]}</div>}
         </div>
         <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2"><span className={`text-sm font-black truncate uppercase ${isMe ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-900 dark:text-white'}`}>{user.name} {isMe && '(YOU)'}</span></div>
-            <div className="flex items-center gap-2"><span className="text-[10px] font-bold text-orange-500 bg-orange-100 dark:bg-orange-900/30 px-1.5 rounded flex items-center gap-1"><Flame size={10} fill="currentColor" /> {user.streak} Streak</span></div>
+            <div className="flex items-center gap-2">
+                <span className={`text-sm font-black truncate uppercase ${isMe ? 'text-indigo-600 dark:text-indigo-400' : (rank === 0 ? 'text-gray-400' : 'text-gray-900 dark:text-white')}`}>
+                    {user.name} {isMe && '(YOU)'}
+                </span>
+            </div>
+            {rank > 0 && <div className="flex items-center gap-2"><span className="text-[10px] font-bold text-orange-500 bg-orange-100 dark:bg-orange-900/30 px-1.5 rounded flex items-center gap-1"><Flame size={10} fill="currentColor" /> {user.streak} Streak</span></div>}
         </div>
-        <div className="text-right"><span className="block text-lg font-black leading-none text-gray-900 dark:text-white">{user.score}</span><span className="text-[9px] font-bold text-gray-400 uppercase">XP</span></div>
+        <div className="text-right">
+            <span className={`block text-lg font-black leading-none ${rank === 0 ? 'text-gray-400' : 'text-gray-900 dark:text-white'}`}>{user.score}</span>
+            <span className="text-[9px] font-bold text-gray-400 uppercase">XP</span>
+        </div>
       </div>
     );
   };
@@ -130,7 +141,6 @@ const LeaderboardModal = ({ isOpen, onClose }: any) => {
         {/* --- LEFT: LADDER --- */}
         <div className="flex-1 flex flex-col border-r-4 border-gray-900 dark:border-slate-500 bg-gray-50 dark:bg-slate-800">
             
-            {/* ✅ RESPONSIVE HEADER: Countdown is now visible on mobile */}
             <div className="p-4 md:p-6 border-b-4 border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 flex justify-between items-center">
                 <div className="flex-1">
                     <div className="flex items-center gap-3">
@@ -138,7 +148,6 @@ const LeaderboardModal = ({ isOpen, onClose }: any) => {
                             <Trophy className="text-yellow-500 hidden md:block" fill="currentColor" size={24} /> 
                             Hall of Fame
                         </h2>
-                        {/* Mobile Countdown Display */}
                         {timeframe === 'monthly' && (
                             <div className="md:hidden">
                                 <SeasonCountdown isEnded={isSeasonEnded} minimal={true} />
@@ -152,7 +161,6 @@ const LeaderboardModal = ({ isOpen, onClose }: any) => {
                 <button onClick={onClose} className="md:hidden p-2 bg-red-500 text-white rounded border-2 border-red-700 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)]"><X size={16}/></button>
             </div>
 
-            {/* Controls */}
             <div className="px-4 py-3 md:px-6 md:py-4 flex items-center justify-between border-b-4 border-gray-200 dark:border-slate-700 bg-gray-100 dark:bg-slate-900">
                 <div className="flex gap-2">
                     <button onClick={() => setTimeframe('monthly')} className={`px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-[10px] md:text-xs font-black uppercase border-2 transition-all shadow-sm active:translate-y-[1px] active:shadow-none ${timeframe === 'monthly' ? 'bg-indigo-500 border-indigo-700 text-white' : 'bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 text-gray-500 hover:bg-gray-50'}`}>Season</button>
@@ -173,12 +181,24 @@ const LeaderboardModal = ({ isOpen, onClose }: any) => {
                 )}
             </div>
 
-            {/* List */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
                 {isLoading ? <div className="text-center py-20 font-bold text-gray-400">Loading...</div> : (
                     <>
+                        {/* ✅ MOBILE CHAMPION CARD (Visible only on mobile) */}
+                        <div className="md:hidden mb-4 p-4 rounded-xl bg-gradient-to-br from-indigo-900 to-slate-900 border-2 border-yellow-500 text-center relative overflow-hidden shadow-lg">
+                             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
+                             <div className="relative z-10 flex flex-col items-center">
+                                <span className="text-[10px] font-black text-yellow-400 uppercase tracking-widest mb-2">{isSeasonEnded ? "SEASON WINNER" : "CURRENT LEADER"}</span>
+                                <div className="w-16 h-16 rounded-full border-2 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)] overflow-hidden mb-2">
+                                     {champion ? <img src={champion.avatar} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-slate-800 flex items-center justify-center"><Target size={24} className="text-slate-600"/></div>}
+                                </div>
+                                <div className="text-white font-black uppercase text-lg leading-none">{champion ? champion.name : "VACANT"}</div>
+                                <div className="text-yellow-500 text-xs font-bold mt-0.5">{champion ? `${champion.score} XP` : "No Data"}</div>
+                             </div>
+                        </div>
+
                         {leaders.length > 0 ? leaders.map((user: any) => <UserRow key={user.id} user={user} rank={user.rank} isMe={user.id === currentUser?.id} />) 
-                        : <div className="text-center py-20 font-bold text-gray-400 uppercase">{isSeasonEnded ? "Season Ended • Awaiting Start" : "No Champions Yet"}</div>}
+                        : <div className="text-center py-20 font-bold text-gray-400 uppercase">{isSeasonEnded ? "Season Ended" : "No Champions Yet"}</div>}
                     </>
                 )}
             </div>
@@ -197,14 +217,12 @@ const LeaderboardModal = ({ isOpen, onClose }: any) => {
              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
                  <div className="mb-8 flex flex-col items-center gap-3">
                      <span className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em]">
-                        {/* ✅ FIXED Q2: Better labeling for active vs ended */}
                         {isSeasonEnded ? "SEASON CHAMPION" : (champion ? "CURRENT LEADER" : "SEASON STATUS")}
                      </span>
                      {timeframe === 'monthly' && <SeasonCountdown isEnded={isSeasonEnded} />}
                  </div>
 
                  <div className="relative mb-6">
-                    {/* Crown only fully lit if season ended, otherwise ghosted */}
                     {champion && <Crown size={56} className={`absolute -top-10 left-1/2 -translate-x-1/2 drop-shadow-md transform -rotate-12 z-10 ${isSeasonEnded ? 'text-yellow-500' : 'text-gray-300 dark:text-slate-600 opacity-50'}`} fill="currentColor" />}
                     
                     <div className={`w-40 h-40 rounded-2xl border-4 bg-white dark:bg-slate-700 flex items-center justify-center shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)] overflow-hidden ${champion ? 'border-yellow-500' : 'border-gray-300 dark:border-slate-600 border-dashed'}`}>
@@ -212,7 +230,6 @@ const LeaderboardModal = ({ isOpen, onClose }: any) => {
                     </div>
                     
                     {champion && <div className={`absolute -bottom-3 left-1/2 -translate-x-1/2 text-xs font-black px-4 py-1 rounded border-2 uppercase tracking-wider shadow-sm whitespace-nowrap z-10 ${isSeasonEnded ? 'bg-yellow-500 text-black border-black' : 'bg-gray-200 text-gray-600 border-gray-400 dark:bg-slate-600 dark:text-white'}`}>
-                        {/* ✅ FIXED Q2: Label change */}
                         {isSeasonEnded ? "WINNER" : "LEADING"}
                     </div>}
                  </div>
@@ -223,7 +240,6 @@ const LeaderboardModal = ({ isOpen, onClose }: any) => {
                  </div>
              </div>
              
-             {/* REWARDS CARD */}
              <div className="p-6 border-t-4 border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
                 <div className="border-2 border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 p-4 rounded-xl relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-2 opacity-10"><Gift size={64}/></div>

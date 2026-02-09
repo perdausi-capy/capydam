@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { 
   ArrowLeft, Loader2, 
   StopCircle, Plus, 
-  Swords, Skull, Trophy, History, Database, CalendarClock
+  Swords, Skull, Trophy, History, Database
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
@@ -19,7 +19,6 @@ import LeaderboardModal from '../components/LeaderboardModal';
 // New Modals
 import { CreateQuestModal } from '../components/daily-quest/modals/CreateQuestModal';
 import { HistoryModal } from '../components/daily-quest/modals/HistoryModal';
-import { ScheduledModal } from '../components/daily-quest/modals/ScheduledModal';
 import { VaultModal } from '../components/daily-quest/modals/VaultModal';
 import { VoteDetailModal } from '../components/daily-quest/modals/VoteDetailModal';
 
@@ -27,7 +26,7 @@ interface DashboardData {
   activeQuest: any;
   totalUsers: number;
   history: any[];
-  scheduled: any[];
+  scheduled: any[]; // Kept in interface just in case API returns it, but ignored in UI
   drafts?: any[];
 }
 
@@ -40,7 +39,6 @@ const AdminDailyQuest = () => {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isVaultOpen, setIsVaultOpen] = useState(false);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
-  const [isScheduledOpen, setIsScheduledOpen] = useState(false);
   
   const [selectedVote, setSelectedVote] = useState<any>(null);
   const [draftToEquip, setDraftToEquip] = useState<any>(null);
@@ -55,7 +53,6 @@ const AdminDailyQuest = () => {
   const activeQuest = data?.activeQuest;
   const totalVotes = activeQuest?.responses?.length || 0;
   const pendingVotes = Math.max(0, (data?.totalUsers || 0) - totalVotes);
-  const scheduledCount = data?.scheduled?.length || 0;
 
   const closeMutation = useMutation({
     mutationFn: async () => client.patch(`/daily/${activeQuest?.id}/close`),
@@ -101,13 +98,8 @@ const AdminDailyQuest = () => {
                 </h1>
             </div>
             <div className="flex gap-4 flex-wrap">
-                <GameButton onClick={() => setIsScheduledOpen(true)} variant="neutral">
-                    <CalendarClock size={16} /> 
-                    Schedule
-                    {scheduledCount > 0 && <span className="ml-1 bg-indigo-600 text-white text-[10px] px-1.5 rounded-full">{scheduledCount}</span>}
-                </GameButton>
                 <GameButton onClick={() => setIsLeaderboardOpen(true)} variant="gold"><Trophy size={16} /> Rankings</GameButton>
-                <GameButton onClick={() => setIsVaultOpen(true)} variant="neutral"><Database size={16} /> Vault</GameButton>
+                <GameButton onClick={() => setIsVaultOpen(true)} variant="neutral"><Database size={16} /> Manage Vault</GameButton>
                 <GameButton onClick={() => setIsHistoryOpen(true)} variant="neutral"><History size={16} /> Logs</GameButton>
                 <GameButton onClick={() => setIsCreateOpen(true)} variant="primary"><Plus size={16} /> New Quest</GameButton>
             </div>
@@ -121,11 +113,11 @@ const AdminDailyQuest = () => {
                     <GameCard className="p-8 relative overflow-hidden min-h-[500px] flex flex-col bg-gray-100 dark:bg-slate-800">
                         <div className="flex justify-between items-start mb-8 border-b-2 border-gray-300 dark:border-slate-700 pb-4">
                              <div className="flex flex-col gap-2">
-                                <div className="flex items-center gap-2">
+                                 <div className="flex items-center gap-2">
                                     <span className="w-3 h-3 bg-red-500 rounded-full animate-ping absolute"></span>
                                     <span className="w-3 h-3 bg-red-500 rounded-full relative"></span>
                                     <span className="font-bold text-red-600 dark:text-red-400 uppercase tracking-widest text-xs">Live Broadcast</span>
-                                </div>
+                                 </div>
                                 <CountdownTimer expiresAt={activeQuest.expiresAt} />
                              </div>
                              <button onClick={() => closeMutation.mutate()} disabled={closeMutation.isPending} className="bg-gray-200 dark:bg-slate-900 hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 p-2 rounded border border-gray-300 dark:border-slate-700 transition-colors" title="Abort Mission">
@@ -185,7 +177,7 @@ const AdminDailyQuest = () => {
                                     <div key={resp.id} onClick={() => setSelectedVote(resp)} className="group flex items-center justify-between p-3 bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-slate-800 border-l-4 border-gray-300 dark:border-slate-700 hover:border-indigo-500 transition-all cursor-pointer shadow-sm">
                                         <div className="flex items-center gap-3">
                                             <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900 border border-indigo-200 dark:border-indigo-700 flex items-center justify-center text-indigo-600 dark:text-indigo-300 font-bold text-xs rounded-sm overflow-hidden">
-                                                {resp.user?.avatar ? <img src={resp.user.avatar} className="w-full h-full object-cover" /> : <span>{resp.user?.name?.[0]}</span>}
+                                                 {resp.user?.avatar ? <img src={resp.user.avatar} className="w-full h-full object-cover" /> : <span>{resp.user?.name?.[0]}</span>}
                                             </div>
                                             <div>
                                                 <div className="font-bold text-xs text-gray-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-white uppercase">{resp.user?.name || 'Unknown'}</div>
@@ -223,7 +215,6 @@ const AdminDailyQuest = () => {
         {/* MODALS */}
         <CreateQuestModal isOpen={isCreateOpen} onClose={handleCreateClose} onSuccess={refreshData} initialData={draftToEquip} />
         <HistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} history={data?.history} />
-        <ScheduledModal isOpen={isScheduledOpen} onClose={() => setIsScheduledOpen(false)} scheduled={data?.scheduled} />
         <VaultModal isOpen={isVaultOpen} onClose={() => setIsVaultOpen(false)} onEquip={handleEquip} />
         <LeaderboardModal isOpen={isLeaderboardOpen} onClose={() => setIsLeaderboardOpen(false)} />
         {selectedVote && <VoteDetailModal vote={selectedVote} onClose={() => setSelectedVote(null)} />}
