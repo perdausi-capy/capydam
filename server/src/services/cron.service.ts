@@ -21,7 +21,6 @@ export const initCronJobs = () => {
   });
 
   // 3. SEASON AUTO-END: Runs at 6:00 AM PH Time (22:00 UTC Previous Day)
-  // Checks if tomorrow is the 1st. If so, ends the season.
   cron.schedule('0 22 * * *', async () => {
     console.log('🕒 [CRON] 6:00 AM PH - Checking Season Status...');
     await checkAndEndSeason();
@@ -73,14 +72,13 @@ const cleanupExpiredAssets = async () => {
 };
 
 /* =========================================
-   TASK 2: DAILY QUEST ROTATION (SIMPLIFIED)
+   TASK 2: DAILY QUEST ROTATION (STRICT FRESHNESS)
    ========================================= */
 const launchDailyQuest = async () => {
   try {
     console.log("🔄 [CRON] Starting Daily Rotation Sequence...");
 
     // 1. KILL SWITCH: Deactivate ALL currently active quests immediately
-    // We don't care about expiration dates. It's 12:00 PM, time for a new one.
     const deactivated = await prisma.dailyQuestion.updateMany({
       where: { isActive: true },
       data: { isActive: false }
@@ -88,16 +86,17 @@ const launchDailyQuest = async () => {
     if (deactivated.count > 0) console.log(`   💀 Deactivated ${deactivated.count} old quest(s).`);
 
     // 2. FETCH RANDOM FROM VAULT
-    // We look for questions that are inactive and have NO responses (fresh)
+    // ✅ NEW RULE: expiresAt must be NULL. 
+    // This guarantees we only pick questions that have NEVER been used.
     const whereCondition = { 
       isActive: false, 
-      responses: { none: {} } // Ensures we don't recycle used questions
+      expiresAt: null 
     };
 
     const count = await prisma.dailyQuestion.count({ where: whereCondition });
 
     if (count === 0) {
-      console.log("   ❌ VAULT IS EMPTY! Cannot launch new quest. Please add drafts.");
+      console.log("   ❌ VAULT IS EMPTY! No fresh questions found. (Used questions are ignored)");
       return;
     }
 
@@ -120,9 +119,9 @@ const launchDailyQuest = async () => {
         where: { id: questToLaunch.id },
         data: {
           isActive: true,
-          scheduledFor: null, // Clear any schedule just in case
-          createdAt: new Date(), // Bump timestamp so it appears top of lists
-          expiresAt: expiresAt
+          scheduledFor: null,
+          createdAt: new Date(), 
+          expiresAt: expiresAt // This marks it as "Used" forever
         }
       });
 
@@ -166,10 +165,9 @@ const checkAndEndSeason = async () => {
   try {
     const now = new Date();
     // 22:00 UTC = 06:00 AM PH (+1 Day).
-    // So if today is Jan 31st 22:00 UTC, it is Feb 1st 06:00 PH.
     const phTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
     
-    if (phTime.getDate() !== 1) return; // Only run on the 1st
+    if (phTime.getDate() !== 1) return; 
 
     console.log("🗓️ [CRON] It is the 1st of the month (PH). Ending season...");
 
@@ -189,7 +187,6 @@ const checkAndEndSeason = async () => {
             scoreMap.set(r.userId, existing);
         });
 
-        // ✅ TIE BREAKER: Score -> Streak
         const winner = Array.from(scoreMap.values()).sort((a, b) => {
              if (b.score !== a.score) return b.score - a.score;
              return b.streak - a.streak;
@@ -205,7 +202,7 @@ const checkAndEndSeason = async () => {
             await prisma.user.update({ where: { id: winner.id }, data: { score: { increment: 5000 } } });
         }
     }
-    
+
     await prisma.$transaction([
         prisma.systemConfig.upsert({ where: { key: 'SEASON_STATUS' }, update: { value: 'ENDED' }, create: { key: 'SEASON_STATUS', value: 'ENDED' } }),
         prisma.systemConfig.upsert({ where: { key: 'SEASON_END' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_END', value: new Date().toISOString() } })

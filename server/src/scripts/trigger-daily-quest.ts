@@ -8,9 +8,6 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const prisma = new PrismaClient();
 
-// --- COPY OF THE LOGIC FROM cron.service.ts ---
-// We copy it to ensure this script runs independently without importing the whole service file (which might start cron listeners)
-
 const triggerQuest = async () => {
   try {
     console.log("🚀 MANUALLY TRIGGERING DAILY QUEST ROTATION...");
@@ -24,16 +21,18 @@ const triggerQuest = async () => {
     console.log(`   ✅ Deactivated ${deactivated.count} quest(s).`);
 
     // 2. FETCH RANDOM FROM VAULT
+    // ✅ NEW RULE: expiresAt must be NULL. 
+    // This guarantees we only pick questions that have NEVER been used.
     console.log("   🔍 Searching Vault for fresh content...");
     const whereCondition = { 
       isActive: false, 
-      responses: { none: {} } // Ensures we don't recycle used questions
+      expiresAt: null 
     };
 
     const count = await prisma.dailyQuestion.count({ where: whereCondition });
 
     if (count === 0) {
-      console.log("   ❌ VAULT IS EMPTY! Cannot launch new quest. Please add drafts via Admin Panel.");
+      console.log("   ❌ VAULT IS EMPTY! No fresh questions found. (Used questions are ignored)");
       return;
     }
 
@@ -57,8 +56,8 @@ const triggerQuest = async () => {
         data: {
           isActive: true,
           scheduledFor: null,
-          createdAt: new Date(), // Bump timestamp
-          expiresAt: expiresAt
+          createdAt: new Date(), // Bump timestamp so it appears at top of lists
+          expiresAt: expiresAt // This marks it as "Used" forever
         }
       });
 

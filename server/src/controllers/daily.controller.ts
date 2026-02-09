@@ -260,12 +260,13 @@ export const getQuestStats = async (req: Request, res: Response) => {
    SEASON & LEADERBOARD MANAGEMENT
    ========================================= */
 
-// 6. GET LEADERBOARD
+// 6. GET LEADERBOARD (Updated: Show ALL users + Tiers)
 export const getLeaderboard = async (req: Request, res: Response) => {
   try {
     const currentUserId = (req as any).user?.id;
     const { range } = req.query; 
 
+    // 1. Get Configs
     const statusConfig = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_STATUS' } });
     const startConfig = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_START' } });
     const endConfig = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_END' } });
@@ -274,62 +275,87 @@ export const getLeaderboard = async (req: Request, res: Response) => {
     const seasonStart = startConfig ? new Date(startConfig.value) : new Date(0);
     const seasonEnd = endConfig ? new Date(endConfig.value) : new Date();
 
+    // 2. Fetch ALL Active Users (Base List)
+    const allUsers = await prisma.user.findMany({
+        where: { status: 'ACTIVE' },
+        select: { id: true, name: true, avatar: true, streak: true, score: true }
+    });
+
     let rankedUsers: any[] = [];
     
     // --- SEASON LOGIC ---
     if (range === 'monthly') {
         const endDateFilter = status === 'ENDED' ? seasonEnd : new Date();
 
+        // Fetch Season Scores
         const seasonResponses = await prisma.dailyResponse.findMany({
             where: {
                 createdAt: { gte: seasonStart, lte: endDateFilter },
                 option: { isCorrect: true }
-            },
-            include: { user: { select: { id: true, name: true, avatar: true, streak: true } } }
+            }
         });
 
-        const scoreMap = new Map<string, any>();
+        // Map Scores
+        const scoreMap = new Map<string, number>();
         seasonResponses.forEach(r => {
-            const existing = scoreMap.get(r.userId) || { ...r.user, score: 0 };
-            existing.score += 10;
-            scoreMap.set(r.userId, existing);
+            const current = scoreMap.get(r.userId) || 0;
+            scoreMap.set(r.userId, current + 10);
         });
-        rankedUsers = Array.from(scoreMap.values());
+
+        // Merge Season Score into User List
+        rankedUsers = allUsers.map(user => ({
+            ...user,
+            score: scoreMap.get(user.id) || 0, // Override total score with season score (default 0)
+        }));
 
     } else {
-        // ALL TIME
-        rankedUsers = await prisma.user.findMany({
-            where: { status: 'ACTIVE', score: { gt: 0 } },
-            select: { id: true, name: true, avatar: true, streak: true, score: true }
-        });
+        // --- ALL TIME LOGIC ---
+        // Just use the users as returned (score is total score)
+        rankedUsers = [...allUsers];
     }
 
-    // ✅ FIX: Sort by Score > Streak
+    // 3. Sort Logic // Score > Streak > first to reach
     rankedUsers.sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        return b.streak - a.streak;
-    });
+      // 1. Higher Score wins
+      if (b.score !== a.score) return b.score - a.score;
+      
+      // 2. Higher Streak wins
+      if (b.streak !== a.streak) return b.streak - a.streak;
+      
+      // 3. "First to Reach" (Lower Date wins)
+      // If we have 'lastDailyDate', use it. Otherwise fall back to 'updatedAt'
+      const dateA = new Date(a.lastDailyDate || a.updatedAt || 0).getTime();
+      const dateB = new Date(b.lastDailyDate || b.updatedAt || 0).getTime();
+      
+      // Ascending sort (Oldest timestamp aka "First" wins)
+      if (dateA !== dateB) return dateA - dateB;
 
-    // ✅ FIX: Top 50 & Unranked
-    const topList = rankedUsers.slice(0, 50).map((u, i) => ({ 
+      // 4. Final Tie-Breaker: Alphabetical (Just to stop jitter)
+      return (a.name || '').localeCompare(b.name || '');
+  });
+
+    // 4. Assign Ranks (Handle 0 Score = Unranked)
+    // We send the whole list (or top 100 to save bandwidth if you grow huge)
+    const processedList = rankedUsers.slice(0, 100).map((u, i) => ({ 
         ...u, 
         rank: u.score > 0 ? i + 1 : 0 // 0 = Unranked
     }));
     
-    // Find Current User
-    let currentUserStat = topList.find(u => u.id === currentUserId);
+    // 5. Find Current User Stats
+    let currentUserStat = processedList.find(u => u.id === currentUserId);
     if (!currentUserStat && currentUserId) {
-        const userDetails = await prisma.user.findUnique({ where: { id: currentUserId }, select: { id: true, name: true, avatar: true, streak: true, score: true } });
+        const userDetails = allUsers.find(u => u.id === currentUserId);
         if(userDetails) currentUserStat = { ...userDetails, score: 0, rank: 0 }; 
     }
 
     res.json({
-        leaders: topList,
+        leaders: processedList,
         user: currentUserStat,
         status: status 
     });
 
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Leaderboard error" });
   }
 };
@@ -450,7 +476,8 @@ export const generateQuest = async (req: Request, res: Response) => {
   }
 };
 
-// 12. AI IMPORT
+
+// 12. AI SMART IMPORT (File -> DB)
 export const aiSmartImport = async (req: Request, res: Response) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
@@ -467,7 +494,7 @@ export const aiSmartImport = async (req: Request, res: Response) => {
           data: {
             question: q.question,
             isActive: false, 
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            expiresAt: null, // ✅ FIX: Explicitly NULL so it counts as "Fresh"
             options: {
               create: q.options.map((opt: any) => ({
                 text: opt.text,
@@ -481,6 +508,7 @@ export const aiSmartImport = async (req: Request, res: Response) => {
 
     res.json({ message: `✨ Magic! Extracted ${created.length} quests.`, count: created.length });
   } catch (error: any) {
+    console.error("Import Error:", error);
     res.status(500).json({ message: error.message || "Server error during import" });
   }
 };
@@ -531,5 +559,35 @@ export const clearHistory = async (req: Request, res: Response) => {
     res.json({ message: `History cleared! Removed ${count} items.` });
   } catch (error) {
     res.status(500).json({ message: "Failed to clear history" });
+  }
+};
+
+// ✅ NEW: GET SINGLE QUEST DETAILS (For History Drill-down)
+export const getQuestDetails = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const quest = await prisma.dailyQuestion.findUnique({
+      where: { id },
+      include: { 
+        options: true,
+        responses: {
+          include: { 
+            user: { select: { id: true, name: true, avatar: true, email: true } },
+            option: true 
+          },
+          orderBy: { createdAt: 'desc' }
+        }
+      }
+    });
+
+    if (!quest) {
+        return res.status(404).json({ message: "Quest not found" });
+    }
+
+    res.json(quest);
+  } catch (error) {
+    console.error("Detail Error:", error);
+    res.status(500).json({ message: "Error fetching quest details" });
   }
 };

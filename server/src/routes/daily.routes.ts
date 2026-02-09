@@ -25,7 +25,8 @@ import {
   // Cleanup
   deleteDailyQuestion,
   clearVault,
-  clearHistory
+  clearHistory,
+  getQuestDetails
 } from '../controllers/daily.controller';
 
 const router = Router();
@@ -45,6 +46,7 @@ router.post('/vote', verifyJWT, submitVote);           // Submit a vote
    ADMIN: DASHBOARD & MANAGEMENT
    ========================================= */
 router.get('/stats', verifyJWT, requireAdmin, getQuestStats);        // Dashboard Stats
+router.get('/:id/details', verifyJWT, requireAdmin, getQuestDetails);
 router.post('/create', verifyJWT, requireAdmin, createDailyQuestion);// Create/Schedule
 router.patch('/:id/close', verifyJWT, requireAdmin, closeQuest);     // Manual Stop
 
