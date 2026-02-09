@@ -108,19 +108,34 @@ export const submitVote = async (req: Request, res: Response) => {
 // 3. CREATE DAILY QUESTION
 export const createDailyQuestion = async (req: Request, res: Response) => {
   try {
-    const { question, options, expiresAt, scheduledFor } = req.body;
+    // We now look at 'isActive' to decide mode. 
+    // If frontend sends scheduledFor: null, we treat it based on isActive status.
+    const { question, options, isActive } = req.body;
 
-    if (!scheduledFor) {
+    const shouldLaunch = isActive === true;
+
+    if (shouldLaunch) {
+        // ==========================================
+        // 🚀 MODE 1: LAUNCH IMMEDIATELY
+        // ==========================================
+        
+        // 1. Deactivate any existing active quests
         await prisma.dailyQuestion.updateMany({
           where: { isActive: true },
           data: { isActive: false }
         });
 
+        // 2. Calculate Expiry (24 Hours from NOW)
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 24);
+
+        // 3. Create the Active Question
         const newQuestion = await prisma.dailyQuestion.create({
           data: {
             question,
-            expiresAt: expiresAt ? new Date(expiresAt) : null,
             isActive: true,
+            expiresAt: expiresAt, // ✅ FIX: Sets timer so it doesn't show as Expired
+            scheduledFor: null,   // Active quests don't need a schedule date
             options: {
               create: options.map((opt: any) => ({
                 text: opt.text,
@@ -131,6 +146,7 @@ export const createDailyQuestion = async (req: Request, res: Response) => {
           include: { options: true }
         });
 
+        // 4. Send Notification
         const token = process.env.CLICKUP_API_TOKEN;
         const chatId = process.env.CLICKUP_LIST_ID; 
 
@@ -157,29 +173,19 @@ export const createDailyQuestion = async (req: Request, res: Response) => {
         return res.status(201).json(newQuestion);
     }
     else {
-        const targetDate = new Date(scheduledFor);
-        const startOfDay = new Date(targetDate);
-        startOfDay.setHours(0, 0, 0, 0);
+        // ==========================================
+        // 📦 MODE 2: SAVE TO VAULT (Draft)
+        // ==========================================
+        
+        // We removed the "Collision Check" (existingSchedule) so you can 
+        // add as many drafts as you want without error.
 
-        const endOfDay = new Date(targetDate);
-        endOfDay.setHours(23, 59, 59, 999);
-
-        const existingSchedule = await prisma.dailyQuestion.findFirst({
-            where: {
-                isActive: false,
-                scheduledFor: { gte: startOfDay, lte: endOfDay }
-            }
-        });
-
-        if (existingSchedule) {
-            return res.status(400).json({ message: "This day is already scheduled." });
-        }
-
-        const newScheduled = await prisma.dailyQuestion.create({
+        const newDraft = await prisma.dailyQuestion.create({
           data: {
             question,
             isActive: false, 
-            scheduledFor: targetDate, 
+            scheduledFor: null, // Keep it null so it floats in the Vault pool
+            expiresAt: null,    // ✅ FIX: Must be NULL to be considered "Fresh" by Cron
             options: {
               create: options.map((opt: any) => ({
                 text: opt.text,
@@ -190,7 +196,7 @@ export const createDailyQuestion = async (req: Request, res: Response) => {
           include: { options: true }
         });
         
-        return res.status(201).json(newScheduled);
+        return res.status(201).json(newDraft);
     }
 
   } catch (error) {
