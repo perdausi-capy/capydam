@@ -216,6 +216,7 @@ export const closeQuest = async (req: Request, res: Response) => {
 };
 
 // 5. GET QUEST STATS
+// 5. GET QUEST STATS
 export const getQuestStats = async (req: Request, res: Response) => {
   try {
     const activeQuest = await prisma.dailyQuestion.findFirst({
@@ -234,15 +235,25 @@ export const getQuestStats = async (req: Request, res: Response) => {
 
     const totalUsers = await prisma.user.count({ where: { status: 'ACTIVE' } });
 
+    // ✅ FIX: HISTORY ONLY shows items that were once active (have an expiry date)
     const history = await prisma.dailyQuestion.findMany({
-      where: { isActive: false, scheduledFor: null }, 
+      where: { 
+          isActive: false, 
+          scheduledFor: null,
+          expiresAt: { not: null } // <--- CRITICAL FIX: Must have run before
+      }, 
       orderBy: { createdAt: 'desc' },
       take: 10,
       include: { _count: { select: { responses: true } } }
     });
 
+    // ✅ FIX: DRAFTS ONLY shows items that have NEVER been active (expiresAt is null)
     const drafts = await prisma.dailyQuestion.findMany({
-      where: { isActive: false, responses: { none: {} }, scheduledFor: null },
+      where: { 
+          isActive: false, 
+          scheduledFor: null,
+          expiresAt: null // <--- CRITICAL FIX: Must be fresh
+      },
       include: { options: true },
       orderBy: { createdAt: 'desc' }
     });
