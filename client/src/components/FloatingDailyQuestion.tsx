@@ -37,7 +37,8 @@ const FloatingDailyQuestion = () => {
       }
     },
     refetchInterval: 5000, // ✅ Checks for new quest every 5 seconds (No reload needed)
-    retry: false
+    retry: false,
+    enabled: !!user // 🛑 CRITICAL FIX: Only run this query if user is logged in!
   });
 
   // 2. Get User Streak
