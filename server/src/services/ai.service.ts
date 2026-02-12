@@ -367,19 +367,42 @@ export const generateQuestWithAI = async (topic: string = "Instructional Design,
 };
 
 // ✅ HELPER: Split text intelligently by newlines to avoid cutting sentences
+// ✅ SMARTER SPLITTER: Respects "Question Blocks" by looking for double newlines
 function splitTextIntoChunks(text: string, maxChunkSize: number = 4000): string[] {
-  const lines = text.split('\n');
+  // 1. Normalize line endings to ensure \n\n is consistent
+  const normalizedText = text.replace(/\r\n/g, '\n');
+  
+  // 2. Split by "Double Newline" (Paragraphs/Blocks) first
+  // This keeps "Question + Options" together in 99% of cases
+  const paragraphs = normalizedText.split(/\n\s*\n/);
+  
   const chunks: string[] = [];
   let currentChunk = '';
 
-  for (const line of lines) {
-    if ((currentChunk.length + line.length) > maxChunkSize) {
-      chunks.push(currentChunk);
-      currentChunk = '';
+  for (const para of paragraphs) {
+    // If a single paragraph is HUGE (bigger than chunk limit), we forced to split it by lines
+    // But usually, a question block is small (< 500 chars)
+    if (para.length > maxChunkSize) {
+        // Fallback: Split massive paragraph by single lines
+        const lines = para.split('\n');
+        for (const line of lines) {
+             if ((currentChunk.length + line.length) > maxChunkSize) {
+                chunks.push(currentChunk);
+                currentChunk = '';
+            }
+            currentChunk += line + '\n';
+        }
+    } else {
+        // Normal case: Add paragraph if it fits
+        if ((currentChunk.length + para.length) > maxChunkSize) {
+            chunks.push(currentChunk);
+            currentChunk = '';
+        }
+        currentChunk += para + '\n\n'; // Re-add the double newline spacing
     }
-    currentChunk += line + '\n';
   }
-  if (currentChunk) chunks.push(currentChunk);
+  
+  if (currentChunk.trim().length > 0) chunks.push(currentChunk);
   
   return chunks;
 }

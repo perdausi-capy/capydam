@@ -141,7 +141,7 @@ const notifyIntegrations = async (questionText: string) => {
 
     const message = 
       `__________________________________________\n` +
-      `🤖 DAILY AUTO-PILOT QUEST\n` +
+      `🤖 DAILY QUEST NA THIS\n` +
       `__________________________________________\n\n` +
       `QUESTION: "${questionText}"\n\n` +
       `👉 ANSWER HERE: https://dam.capy-dev.com\n` +
