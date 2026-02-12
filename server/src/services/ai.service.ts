@@ -148,7 +148,6 @@ const extractKeyFrames = async (videoPath: string): Promise<string[]> => {
       ffmpeg(absoluteVideoPath)
         .screenshots({ 
             // ✅ FIX: Wrap in String() or template literal
-            // This turns 15.5 (number) into "15.5" (string), which ffmpeg accepts.
             timestamps: [String(timestamps[i])], 
             filename, 
             folder: path.dirname(absoluteVideoPath), 
@@ -218,7 +217,6 @@ export const analyzeImage = async (assetId: string, filePath: string, options?: 
     await saveAiData(assetId, aiData);
     console.log(`✅ Image Analysis complete (Spec: ${options?.specificity}, Temp: ${options?.creativity})`);
     
-    // 2. ✅ ADD THIS: Return the data so our script can use the tags
     return aiData;
     
   } catch (e) { 
@@ -332,8 +330,7 @@ export const analyzeAudioVideo = async (assetId: string, filePath: string, optio
   } catch (e) { console.error(`AV Analysis failed`, e); }
 };
 
-
-// Add this to the bottom of src/services/ai.service.ts
+// --- 7. QUEST & IMPORT TOOLS ---
 
 export const generateQuestWithAI = async (topic: string = "Instructional Design, E-Learning, or Creative Tech") => {
   try {
@@ -369,45 +366,77 @@ export const generateQuestWithAI = async (topic: string = "Instructional Design,
   }
 };
 
+// ✅ HELPER: Split text intelligently by newlines to avoid cutting sentences
+function splitTextIntoChunks(text: string, maxChunkSize: number = 4000): string[] {
+  const lines = text.split('\n');
+  const chunks: string[] = [];
+  let currentChunk = '';
 
+  for (const line of lines) {
+    if ((currentChunk.length + line.length) > maxChunkSize) {
+      chunks.push(currentChunk);
+      currentChunk = '';
+    }
+    currentChunk += line + '\n';
+  }
+  if (currentChunk) chunks.push(currentChunk);
+  
+  return chunks;
+}
+
+// ✅ UPDATED: Chunked Parsing Function (Parallel & Safe)
 export const parseQuestionsWithAI = async (rawText: string) => {
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o", // Stronger model needed for parsing logic
-      temperature: 0.2, // Low temperature = strictly follow instructions, no creativity
-      messages: [
-        { 
-          role: "system", 
-          content: `You are a Data Parsing Assistant. 
-          The user will provide raw text containing a list of questions (multiple choice or simple).
-          
-          YOUR TASK:
-          Extract every question and formatted it into this JSON array structure:
-          [
-            {
-              "question": "The Question Text?",
-              "options": [
-                { "text": "Option A", "isCorrect": false },
-                { "text": "Option B", "isCorrect": true } 
-                // Ensure there are always 2-4 options. If none provided, generate plausible ones based on the answer.
-                // If no answer is marked in text, assume the first one is correct (or make a best guess).
-              ]
-            }
-          ]
-          
-          Output JSON ONLY. No markdown, no chat.` 
-        },
-        { role: "user", content: `Here is the raw document text:\n\n${rawText}` }
-      ],
-      response_format: { type: "json_object" },
-    });
+    // 1. Split the massive text into safe chunks (approx 4000 chars)
+    const chunks = splitTextIntoChunks(rawText, 4000);
+    
+    console.log(`🚀 Splitting import into ${chunks.length} chunks to prevent timeouts...`);
 
-    // The model might return { "questions": [...] } or just [...] depending on training
-    // We try to parse efficiently
-    const content = JSON.parse(response.choices[0].message.content || '{}');
-    return content.questions || content; // Handle both wrapper styles
+    // 2. Define the AI Worker for a single chunk
+    const processChunk = async (chunkText: string, index: number) => {
+      try {
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o", 
+          temperature: 0.2, // Low temp for strict parsing
+          messages: [
+            { 
+              role: "system", 
+              content: `You are a Data Parsing Assistant. 
+              Extract questions from the text and return a JSON ARRAY.
+              Format: [{"question": "...", "options": [{"text": "...", "isCorrect": true}]}]
+              If options are missing, generate plausible ones.
+              Output JSON ONLY.` 
+            },
+            { role: "user", content: `Extract questions from this section:\n\n${chunkText}` }
+          ],
+          response_format: { type: "json_object" },
+        });
+
+        const content = JSON.parse(response.choices[0].message.content || '{}');
+        // Handle variations where AI wraps result in { "questions": [...] }
+        const result = content.questions || content;
+        
+        console.log(`   ✅ Chunk ${index + 1}/${chunks.length} processed (${Array.isArray(result) ? result.length : 0} items)`);
+        
+        // Ensure we always return an array
+        return Array.isArray(result) ? result : [];
+      } catch (err) {
+        console.error(`   ❌ Chunk ${index + 1} failed:`, err);
+        return []; // Return empty array so one failure doesn't crash the whole job
+      }
+    };
+
+    // 3. Execute ALL chunks in parallel (The Speed Boost ⚡)
+    const results = await Promise.all(chunks.map((chunk, i) => processChunk(chunk, i)));
+
+    // 4. Flatten the array of arrays into one giant list
+    const allQuestions = results.flat();
+
+    console.log(`✨ AI Import Complete. Total parsed: ${allQuestions.length}`);
+    return allQuestions;
+
   } catch (error) {
     console.error("AI Parse Error:", error);
-    return null;
+    return null; // Return null so controller handles the error gracefully
   }
 };
