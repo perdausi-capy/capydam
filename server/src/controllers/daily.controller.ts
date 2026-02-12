@@ -559,19 +559,26 @@ export const deleteDailyQuestion = async (req: Request, res: Response) => {
 export const clearVault = async (req: Request, res: Response) => {
   try {
     const { count } = await prisma.dailyQuestion.deleteMany({
-      where: { isActive: false, responses: { none: {} } }
+      where: { 
+        isActive: false, 
+        responses: { none: {} },
+        scheduledFor: null,
+        expiresAt: null // ✅ CRITICAL: Only delete items that never had a timer
+      }
     });
     res.json({ message: `Vault cleared! Removed ${count} items.` });
   } catch (error) {
     res.status(500).json({ message: "Failed to clear vault" });
   }
 };
-
 // 16. CLEAR HISTORY
 export const clearHistory = async (req: Request, res: Response) => {
   try {
     const { count } = await prisma.dailyQuestion.deleteMany({
-      where: { isActive: false }
+      where: { 
+        isActive: false,
+        expiresAt: { not: null } // ✅ CRITICAL: Only delete items that WERE active once
+      }
     });
     res.json({ message: `History cleared! Removed ${count} items.` });
   } catch (error) {
