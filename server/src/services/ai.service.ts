@@ -366,43 +366,48 @@ export const generateQuestWithAI = async (topic: string = "Instructional Design,
   }
 };
 
-// ✅ HELPER: Split text intelligently by newlines to avoid cutting sentences
-// ✅ SMARTER SPLITTER: Respects "Question Blocks" by looking for double newlines
+// ✅ FIX: CONTEXT-AWARE SPLITTER
+// This splitter is designed to NEVER cut a question in half.
 function splitTextIntoChunks(text: string, maxChunkSize: number = 4000): string[] {
-  // 1. Normalize line endings to ensure \n\n is consistent
-  const normalizedText = text.replace(/\r\n/g, '\n');
-  
-  // 2. Split by "Double Newline" (Paragraphs/Blocks) first
-  // This keeps "Question + Options" together in 99% of cases
-  const paragraphs = normalizedText.split(/\n\s*\n/);
-  
+  const lines = text.split('\n');
   const chunks: string[] = [];
-  let currentChunk = '';
+  let currentChunkLines: string[] = [];
+  let currentLength = 0;
 
-  for (const para of paragraphs) {
-    // If a single paragraph is HUGE (bigger than chunk limit), we forced to split it by lines
-    // But usually, a question block is small (< 500 chars)
-    if (para.length > maxChunkSize) {
-        // Fallback: Split massive paragraph by single lines
-        const lines = para.split('\n');
-        for (const line of lines) {
-             if ((currentChunk.length + line.length) > maxChunkSize) {
-                chunks.push(currentChunk);
-                currentChunk = '';
-            }
-            currentChunk += line + '\n';
-        }
-    } else {
-        // Normal case: Add paragraph if it fits
-        if ((currentChunk.length + para.length) > maxChunkSize) {
-            chunks.push(currentChunk);
-            currentChunk = '';
-        }
-        currentChunk += para + '\n\n'; // Re-add the double newline spacing
+  // 1. Loop through every line
+  for (const line of lines) {
+    // 2. Identify "Trigger Words" that signify a new question starts
+    // Matches: "Question:", "1. Question:", "[source] Question:", etc.
+    const isNewQuestion = line.toLowerCase().includes('question:');
+
+    // 3. DECISION: Is it time to cut?
+    // We only cut IF:
+    // a) The bucket is getting full (> 80% of max size)
+    // b) AND we just found the start of a NEW question
+    if (currentLength > (maxChunkSize * 0.8) && isNewQuestion) {
+        // Cut the chunk HERE, so the *new* question starts fresh in the next chunk
+        chunks.push(currentChunkLines.join('\n'));
+        currentChunkLines = [];
+        currentLength = 0;
+    }
+
+    // 4. Add line to current bucket
+    currentChunkLines.push(line);
+    currentLength += line.length + 1; // +1 for newline character
+
+    // 5. Emergency Cut: If a single chunk gets absolutely massive (2x limit)
+    // and we STILL haven't found a "Question:" tag, cut it anyway to prevent crash.
+    if (currentLength > (maxChunkSize * 2)) {
+         chunks.push(currentChunkLines.join('\n'));
+         currentChunkLines = [];
+         currentLength = 0;
     }
   }
-  
-  if (currentChunk.trim().length > 0) chunks.push(currentChunk);
+
+  // 6. Push whatever is left in the bucket
+  if (currentChunkLines.length > 0) {
+    chunks.push(currentChunkLines.join('\n'));
+  }
   
   return chunks;
 }
@@ -410,25 +415,42 @@ function splitTextIntoChunks(text: string, maxChunkSize: number = 4000): string[
 // ✅ UPDATED: Chunked Parsing Function (Parallel & Safe)
 export const parseQuestionsWithAI = async (rawText: string) => {
   try {
-    // 1. Split the massive text into safe chunks (approx 4000 chars)
+    // 1. Split text smartly using the new Context-Aware splitter
     const chunks = splitTextIntoChunks(rawText, 4000);
     
     console.log(`🚀 Splitting import into ${chunks.length} chunks to prevent timeouts...`);
 
-    // 2. Define the AI Worker for a single chunk
     const processChunk = async (chunkText: string, index: number) => {
       try {
         const response = await openai.chat.completions.create({
           model: "gpt-4o", 
-          temperature: 0.2, // Low temp for strict parsing
+          temperature: 0.1, // Very low temp for strict data extraction
           messages: [
             { 
               role: "system", 
               content: `You are a Data Parsing Assistant. 
-              Extract questions from the text and return a JSON ARRAY.
-              Format: [{"question": "...", "options": [{"text": "...", "isCorrect": true}]}]
-              If options are missing, generate plausible ones.
-              Output JSON ONLY.` 
+              Extract questions from the provided text and return a valid JSON ARRAY.
+              
+              Input Text Format:
+              Question: [Text]
+              Options: [List]
+              Correct Answer: [Text]
+
+              Output JSON Format:
+              [
+                {
+                  "question": "Question text here?",
+                  "options": [
+                    { "text": "Option A", "isCorrect": false },
+                    { "text": "Option B", "isCorrect": true }
+                  ]
+                }
+              ]
+              
+              CRITICAL: 
+              - Ignore lines like "".
+              - If an option is marked "Correct Answer", mark isCorrect: true.
+              - Output JSON ONLY.` 
             },
             { role: "user", content: `Extract questions from this section:\n\n${chunkText}` }
           ],
@@ -440,19 +462,14 @@ export const parseQuestionsWithAI = async (rawText: string) => {
         const result = content.questions || content;
         
         console.log(`   ✅ Chunk ${index + 1}/${chunks.length} processed (${Array.isArray(result) ? result.length : 0} items)`);
-        
-        // Ensure we always return an array
         return Array.isArray(result) ? result : [];
       } catch (err) {
         console.error(`   ❌ Chunk ${index + 1} failed:`, err);
-        return []; // Return empty array so one failure doesn't crash the whole job
+        return []; 
       }
     };
 
-    // 3. Execute ALL chunks in parallel (The Speed Boost ⚡)
     const results = await Promise.all(chunks.map((chunk, i) => processChunk(chunk, i)));
-
-    // 4. Flatten the array of arrays into one giant list
     const allQuestions = results.flat();
 
     console.log(`✨ AI Import Complete. Total parsed: ${allQuestions.length}`);
@@ -460,6 +477,6 @@ export const parseQuestionsWithAI = async (rawText: string) => {
 
   } catch (error) {
     console.error("AI Parse Error:", error);
-    return null; // Return null so controller handles the error gracefully
+    return null; 
   }
 };
