@@ -366,117 +366,45 @@ export const generateQuestWithAI = async (topic: string = "Instructional Design,
   }
 };
 
-// ✅ FIX: CONTEXT-AWARE SPLITTER
-// This splitter is designed to NEVER cut a question in half.
-function splitTextIntoChunks(text: string, maxChunkSize: number = 4000): string[] {
-  const lines = text.split('\n');
-  const chunks: string[] = [];
-  let currentChunkLines: string[] = [];
-  let currentLength = 0;
 
-  // 1. Loop through every line
-  for (const line of lines) {
-    // 2. Identify "Trigger Words" that signify a new question starts
-    // Matches: "Question:", "1. Question:", "[source] Question:", etc.
-    const isNewQuestion = line.toLowerCase().includes('question:');
-
-    // 3. DECISION: Is it time to cut?
-    // We only cut IF:
-    // a) The bucket is getting full (> 80% of max size)
-    // b) AND we just found the start of a NEW question
-    if (currentLength > (maxChunkSize * 0.8) && isNewQuestion) {
-        // Cut the chunk HERE, so the *new* question starts fresh in the next chunk
-        chunks.push(currentChunkLines.join('\n'));
-        currentChunkLines = [];
-        currentLength = 0;
-    }
-
-    // 4. Add line to current bucket
-    currentChunkLines.push(line);
-    currentLength += line.length + 1; // +1 for newline character
-
-    // 5. Emergency Cut: If a single chunk gets absolutely massive (2x limit)
-    // and we STILL haven't found a "Question:" tag, cut it anyway to prevent crash.
-    if (currentLength > (maxChunkSize * 2)) {
-         chunks.push(currentChunkLines.join('\n'));
-         currentChunkLines = [];
-         currentLength = 0;
-    }
-  }
-
-  // 6. Push whatever is left in the bucket
-  if (currentChunkLines.length > 0) {
-    chunks.push(currentChunkLines.join('\n'));
-  }
-  
-  return chunks;
-}
-
-// ✅ UPDATED: Chunked Parsing Function (Parallel & Safe)
 export const parseQuestionsWithAI = async (rawText: string) => {
   try {
-    // 1. Split text smartly using the new Context-Aware splitter
-    const chunks = splitTextIntoChunks(rawText, 4000);
-    
-    console.log(`🚀 Splitting import into ${chunks.length} chunks to prevent timeouts...`);
-
-    const processChunk = async (chunkText: string, index: number) => {
-      try {
-        const response = await openai.chat.completions.create({
-          model: "gpt-4o", 
-          temperature: 0.1, // Very low temp for strict data extraction
-          messages: [
-            { 
-              role: "system", 
-              content: `You are a Data Parsing Assistant. 
-              Extract questions from the provided text and return a valid JSON ARRAY.
-              
-              Input Text Format:
-              Question: [Text]
-              Options: [List]
-              Correct Answer: [Text]
-
-              Output JSON Format:
-              [
-                {
-                  "question": "Question text here?",
-                  "options": [
-                    { "text": "Option A", "isCorrect": false },
-                    { "text": "Option B", "isCorrect": true }
-                  ]
-                }
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o", // Stronger model needed for parsing logic
+      temperature: 0.2, // Low temperature = strictly follow instructions, no creativity
+      messages: [
+        { 
+          role: "system", 
+          content: `You are a Data Parsing Assistant. 
+          The user will provide raw text containing a list of questions (multiple choice or simple).
+          
+          YOUR TASK:
+          Extract every question and formatted it into this JSON array structure:
+          [
+            {
+              "question": "The Question Text?",
+              "options": [
+                { "text": "Option A", "isCorrect": false },
+                { "text": "Option B", "isCorrect": true } 
+                // Ensure there are always 2-4 options. If none provided, generate plausible ones based on the answer.
+                // If no answer is marked in text, assume the first one is correct (or make a best guess).
               ]
-              
-              CRITICAL: 
-              - Ignore lines like "".
-              - If an option is marked "Correct Answer", mark isCorrect: true.
-              - Output JSON ONLY.` 
-            },
-            { role: "user", content: `Extract questions from this section:\n\n${chunkText}` }
-          ],
-          response_format: { type: "json_object" },
-        });
+            }
+          ]
+          
+          Output JSON ONLY. No markdown, no chat.` 
+        },
+        { role: "user", content: `Here is the raw document text:\n\n${rawText}` }
+      ],
+      response_format: { type: "json_object" },
+    });
 
-        const content = JSON.parse(response.choices[0].message.content || '{}');
-        // Handle variations where AI wraps result in { "questions": [...] }
-        const result = content.questions || content;
-        
-        console.log(`   ✅ Chunk ${index + 1}/${chunks.length} processed (${Array.isArray(result) ? result.length : 0} items)`);
-        return Array.isArray(result) ? result : [];
-      } catch (err) {
-        console.error(`   ❌ Chunk ${index + 1} failed:`, err);
-        return []; 
-      }
-    };
-
-    const results = await Promise.all(chunks.map((chunk, i) => processChunk(chunk, i)));
-    const allQuestions = results.flat();
-
-    console.log(`✨ AI Import Complete. Total parsed: ${allQuestions.length}`);
-    return allQuestions;
-
+    // The model might return { "questions": [...] } or just [...] depending on training
+    // We try to parse efficiently
+    const content = JSON.parse(response.choices[0].message.content || '{}');
+    return content.questions || content; // Handle both wrapper styles
   } catch (error) {
     console.error("AI Parse Error:", error);
-    return null; 
+    return null;
   }
 };
