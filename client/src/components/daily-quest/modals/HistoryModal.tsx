@@ -2,13 +2,14 @@ import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     History, Skull, X, Trash2, ChevronLeft, ChevronRight, 
-    Search, ArrowUpDown, Calendar, Users, CheckCircle2, XCircle, ArrowLeft 
+    Search, ArrowUpDown, Calendar, Users, CheckCircle2, XCircle, ArrowLeft,
+    RefreshCw // Added for Recycle icon
 } from 'lucide-react';
 import client from '../../../api/client';
 import { toast } from 'react-toastify';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-// --- SUB-COMPONENT: DRILL DOWN VIEW ---
+// --- SUB-COMPONENT: DRILL DOWN VIEW (Unchanged) ---
 const QuestDetailView = ({ questId, onBack }: { questId: string, onBack: () => void }) => {
     const { data: quest, isLoading } = useQuery({
         queryKey: ['quest-detail', questId],
@@ -24,7 +25,6 @@ const QuestDetailView = ({ questId, onBack }: { questId: string, onBack: () => v
 
     return (
         <motion.div initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 20, opacity: 0 }} className="flex flex-col h-full">
-            {/* Header */}
             <div className="p-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 flex items-center gap-3">
                 <button onClick={onBack} className="p-1.5 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors border border-transparent hover:border-gray-200 dark:hover:border-slate-600">
                     <ArrowLeft size={18} className="text-gray-500 dark:text-slate-400" />
@@ -40,7 +40,6 @@ const QuestDetailView = ({ questId, onBack }: { questId: string, onBack: () => v
                 </div>
             </div>
 
-            {/* List */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">
                 {quest.responses.length === 0 ? (
                     <div className="text-center py-10 text-gray-400 text-sm">No brave souls attempted this quest.</div>
@@ -49,7 +48,7 @@ const QuestDetailView = ({ questId, onBack }: { questId: string, onBack: () => v
                         <div key={resp.id} className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 rounded-xl">
                             <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
-                                    {resp.user?.avatar ? <img src={resp.user.avatar} className="w-full h-full object-cover"/> : <div className="flex items-center justify-center h-full font-bold text-xs text-gray-500">{resp.user?.name?.[0]}</div>}
+                                    {resp.user?.avatar ? <img src={resp.user.avatar} className="w-full h-full object-cover" alt="avatar"/> : <div className="flex items-center justify-center h-full font-bold text-xs text-gray-500">{resp.user?.name?.[0]}</div>}
                                 </div>
                                 <div>
                                     <p className="text-xs font-bold text-gray-800 dark:text-white">{resp.user?.name}</p>
@@ -75,43 +74,30 @@ const QuestDetailView = ({ questId, onBack }: { questId: string, onBack: () => v
 // --- MAIN MODAL ---
 export const HistoryModal = ({ isOpen, onClose, history }: any) => {
     const queryClient = useQueryClient();
-    
-    // UI State
     const [view, setView] = useState<'list' | 'detail'>('list');
     const [selectedQuestId, setSelectedQuestId] = useState<string | null>(null);
     const [page, setPage] = useState(1);
-    
-    // Filters
     const [search, setSearch] = useState('');
     const [sortDesc, setSortDesc] = useState(true);
 
     const ITEMS_PER_PAGE = 6;
 
-    // Filter Logic
     const filteredHistory = useMemo(() => {
         if (!history) return [];
         let data = [...history];
-
-        // Search
-        if (search) {
-            data = data.filter(h => h.question.toLowerCase().includes(search.toLowerCase()));
-        }
-
-        // Sort
+        if (search) data = data.filter(h => h.question.toLowerCase().includes(search.toLowerCase()));
         data.sort((a, b) => {
             const dateA = new Date(a.createdAt).getTime();
             const dateB = new Date(b.createdAt).getTime();
             return sortDesc ? dateB - dateA : dateA - dateB;
         });
-
         return data;
     }, [history, search, sortDesc]);
 
-    // Pagination
     const totalPages = Math.ceil(filteredHistory.length / ITEMS_PER_PAGE);
     const paginatedData = filteredHistory.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
-    // Mutations
+    // --- MUTATIONS ---
     const deleteMutation = useMutation({
         mutationFn: async (id: string) => client.delete(`/daily/${id}`),
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['quest-stats'] }); toast.success("Log Deleted"); }
@@ -122,22 +108,50 @@ export const HistoryModal = ({ isOpen, onClose, history }: any) => {
         onSuccess: (res) => { queryClient.invalidateQueries({ queryKey: ['quest-stats'] }); toast.success(res.data.message); onClose(); }
     });
 
+    // ✅ NEW: Recycle All History Mutation
+    const recycleAllMutation = useMutation({
+        mutationFn: async () => client.post(`/daily/recycle-all`),
+        onSuccess: (res) => { 
+            queryClient.invalidateQueries({ queryKey: ['quest-stats'] }); 
+            toast.success(res.data.message); 
+            onClose(); 
+        }
+    });
+
+    // ✅ NEW: Recycle Single Quest Mutation
+    const recycleSingleMutation = useMutation({
+        mutationFn: async (id: string) => client.post(`/daily/recycle/${id}`),
+        onSuccess: (res) => { 
+            queryClient.invalidateQueries({ queryKey: ['quest-stats'] }); 
+            toast.success(res.data.message); 
+        }
+    });
+
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white dark:bg-slate-800 w-full max-w-2xl rounded-xl border-4 border-gray-900 dark:border-slate-500 shadow-xl flex flex-col h-[600px] overflow-hidden">
                 
-                {/* Main Header (Always visible) */}
                 <div className="p-4 border-b-4 border-gray-300 dark:border-slate-600 flex justify-between items-center bg-gray-100 dark:bg-slate-700 shrink-0">
                     <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2 uppercase">
                         <History size={20} className="text-purple-600 dark:text-purple-400"/> Quest Archives
                     </h2>
                     <div className="flex gap-2">
                         {view === 'list' && history?.length > 0 && (
-                            <button onClick={() => { if(confirm("NUKE HISTORY?")) clearMutation.mutate(); }} className="bg-red-500 hover:bg-red-400 text-white px-3 py-1 rounded border-2 border-red-800 text-xs font-bold uppercase flex items-center gap-1">
-                                <Skull size={14} /> Nuke Logs
-                            </button>
+                            <>
+                                {/* ✅ RECYCLE ALL BUTTON */}
+                                <button 
+                                    onClick={() => { if(confirm("Move all history back to Vault?")) recycleAllMutation.mutate(); }} 
+                                    className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded border-2 border-purple-800 text-xs font-bold uppercase flex items-center gap-1"
+                                >
+                                    <RefreshCw size={14} className={recycleAllMutation.isPending ? "animate-spin" : ""} /> Recycle All
+                                </button>
+                                
+                                <button onClick={() => { if(confirm("NUKE HISTORY?")) clearMutation.mutate(); }} className="bg-red-500 hover:bg-red-400 text-white px-3 py-1 rounded border-2 border-red-800 text-xs font-bold uppercase flex items-center gap-1">
+                                    <Skull size={14} /> Nuke Logs
+                                </button>
+                            </>
                         )}
                         <button onClick={onClose}><X size={20} className="text-gray-500 dark:text-slate-300 hover:text-black dark:hover:text-white"/></button>
                     </div>
@@ -150,7 +164,6 @@ export const HistoryModal = ({ isOpen, onClose, history }: any) => {
                             initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}
                             className="flex flex-col h-full overflow-hidden"
                         >
-                            {/* Toolbar */}
                             <div className="p-3 bg-white dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700 flex gap-2">
                                 <div className="flex-1 relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
@@ -165,13 +178,11 @@ export const HistoryModal = ({ isOpen, onClose, history }: any) => {
                                 <button 
                                     onClick={() => setSortDesc(!sortDesc)}
                                     className="px-3 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-600 rounded-lg text-gray-500 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-                                    title="Toggle Sort Order"
                                 >
                                     <ArrowUpDown size={14} />
                                 </button>
                             </div>
 
-                            {/* List Content */}
                             <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
                                 {paginatedData?.length > 0 ? paginatedData.map((h: any) => (
                                     <div 
@@ -186,15 +197,28 @@ export const HistoryModal = ({ isOpen, onClose, history }: any) => {
                                                 <span className="flex items-center gap-1"><Users size={10} /> {h._count.responses} Participants</span>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <button onClick={(e) => { e.stopPropagation(); if(confirm("Delete log?")) deleteMutation.mutate(h.id); }} className="text-gray-300 hover:text-red-500 transition-colors p-2"><Trash2 size={14} /></button>
+                                        <div className="flex items-center gap-1">
+                                            {/* ✅ RECYCLE INDIVIDUAL BUTTON */}
+                                            <button 
+                                                onClick={(e) => { 
+                                                    e.stopPropagation(); 
+                                                    if(confirm("Recycle this quest back to Vault?")) recycleSingleMutation.mutate(h.id); 
+                                                }} 
+                                                title="Recycle to Vault"
+                                                className="text-gray-300 hover:text-purple-500 transition-colors p-2"
+                                            >
+                                                <RefreshCw size={14} />
+                                            </button>
+
+                                            <button onClick={(e) => { e.stopPropagation(); if(confirm("Delete log?")) deleteMutation.mutate(h.id); }} className="text-gray-300 hover:text-red-500 transition-colors p-2">
+                                                <Trash2 size={14} />
+                                            </button>
                                             <ChevronRight size={14} className="text-gray-400 group-hover:translate-x-1 transition-transform" />
                                         </div>
                                     </div>
                                 )) : <div className="text-center py-20 text-gray-500 dark:text-slate-500 text-sm">No records found.</div>}
                             </div>
 
-                            {/* Pagination */}
                             {totalPages > 1 && (
                                 <div className="p-3 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 flex justify-between items-center shrink-0">
                                     <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-1.5 bg-white dark:bg-slate-800 rounded border border-gray-300 dark:border-slate-600 disabled:opacity-50"><ChevronLeft size={16}/></button>

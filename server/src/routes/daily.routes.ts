@@ -26,7 +26,9 @@ import {
   deleteDailyQuestion,
   clearVault,
   clearHistory,
-  getQuestDetails
+  getQuestDetails,
+  recycleAllHistory,
+  recycleToVault
 } from '../controllers/daily.controller';
 
 const router = Router();
@@ -70,5 +72,9 @@ router.patch('/:id/unschedule', verifyJWT, requireAdmin, unscheduleQuest);// Mov
 router.delete('/vault/clear', verifyJWT, requireAdmin, clearVault);     // Clear unused drafts
 router.delete('/history/clear', verifyJWT, requireAdmin, clearHistory); // Clear past logs
 router.delete('/:id', verifyJWT, requireAdmin, deleteDailyQuestion);    // Delete specific item
+
+// ✅ ADD THESE TWO NEW ROUTES HERE:
+router.post('/recycle-all', verifyJWT, requireAdmin, recycleAllHistory);
+router.post('/recycle/:id', verifyJWT, requireAdmin, recycleToVault);
 
 export default router;

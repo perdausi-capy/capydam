@@ -615,3 +615,44 @@ export const getQuestDetails = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Error fetching quest details" });
   }
 };
+
+
+// 17. RECYCLE SINGLE QUEST (Move 1 item back to Vault)
+export const recycleToVault = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const updated = await prisma.dailyQuestion.update({
+      where: { id },
+      data: {
+        isActive: false,   // 1. Take it out of the game
+        expiresAt: null,    // 2. Remove the "Battle Scar" (Makes it "Fresh" again)
+        scheduledFor: null  // 3. Ensure it's not sitting in the schedule
+      }
+    });
+
+    res.json({ message: "♻️ Quest recycled back to the Vault!", quest: updated });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to recycle quest" });
+  }
+};
+
+// 18. RECYCLE ALL HISTORY (Move all played items back to Vault)
+export const recycleAllHistory = async (req: Request, res: Response) => {
+  try {
+    const { count } = await prisma.dailyQuestion.updateMany({
+      where: { 
+        isActive: false, 
+        expiresAt: { not: null } // ✅ Targeted: Only items that were once active
+      },
+      data: {
+        expiresAt: null,   // ✅ Verified: Resets them to "Fresh" status
+        scheduledFor: null
+      }
+    });
+
+    res.json({ message: `♻️ Success! Recycled ${count} items back to the Vault.` });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to recycle history" });
+  }
+};
