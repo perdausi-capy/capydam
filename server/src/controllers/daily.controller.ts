@@ -278,6 +278,7 @@ export const getQuestStats = async (req: Request, res: Response) => {
    ========================================= */
 
 // 6. GET LEADERBOARD (Updated: Show ALL users + Tiers)
+// 6. GET LEADERBOARD (Priority: Points > Streak > Time)
 export const getLeaderboard = async (req: Request, res: Response) => {
   try {
     const currentUserId = (req as any).user?.id;
@@ -295,7 +296,16 @@ export const getLeaderboard = async (req: Request, res: Response) => {
     // 2. Fetch ALL Active Users (Base List)
     const allUsers = await prisma.user.findMany({
         where: { status: 'ACTIVE' },
-        select: { id: true, name: true, avatar: true, streak: true, score: true }
+        // ✅ UPDATE: Added 'lastDailyDate' & 'updatedAt' so sorting works
+        select: { 
+            id: true, 
+            name: true, 
+            avatar: true, 
+            streak: true, 
+            score: true,
+            lastDailyDate: true, 
+            updatedAt: true 
+        }
     });
 
     let rankedUsers: any[] = [];
@@ -322,37 +332,34 @@ export const getLeaderboard = async (req: Request, res: Response) => {
         // Merge Season Score into User List
         rankedUsers = allUsers.map(user => ({
             ...user,
-            score: scoreMap.get(user.id) || 0, // Override total score with season score (default 0)
+            score: scoreMap.get(user.id) || 0, // Override total score with season score
         }));
 
     } else {
         // --- ALL TIME LOGIC ---
-        // Just use the users as returned (score is total score)
         rankedUsers = [...allUsers];
     }
 
-    // 3. Sort Logic // Score > Streak > first to reach
+    // 3. 🧠 SORT LOGIC (Score > Streak > Time)
     rankedUsers.sort((a, b) => {
-      // 1. Higher Score wins
+      // Priority 1: POINTS (Higher wins)
       if (b.score !== a.score) return b.score - a.score;
       
-      // 2. Higher Streak wins
-      if (b.streak !== a.streak) return b.streak - a.streak;
+      // Priority 2: STREAK (Higher wins)
+      if ((b.streak || 0) !== (a.streak || 0)) return (b.streak || 0) - (a.streak || 0);
       
-      // 3. "First to Reach" (Lower Date wins)
-      // If we have 'lastDailyDate', use it. Otherwise fall back to 'updatedAt'
+      // Priority 3: TIME (First to Reach/Oldest timestamp wins)
       const dateA = new Date(a.lastDailyDate || a.updatedAt || 0).getTime();
       const dateB = new Date(b.lastDailyDate || b.updatedAt || 0).getTime();
       
-      // Ascending sort (Oldest timestamp aka "First" wins)
+      // Ascending sort (Smaller number = Earlier time)
       if (dateA !== dateB) return dateA - dateB;
 
-      // 4. Final Tie-Breaker: Alphabetical (Just to stop jitter)
+      // Final Tie-Breaker: Alphabetical (Prevents jitter)
       return (a.name || '').localeCompare(b.name || '');
-  });
+    });
 
-    // 4. Assign Ranks (Handle 0 Score = Unranked)
-    // We send the whole list (or top 100 to save bandwidth if you grow huge)
+    // 4. Assign Ranks
     const processedList = rankedUsers.slice(0, 100).map((u, i) => ({ 
         ...u, 
         rank: u.score > 0 ? i + 1 : 0 // 0 = Unranked
