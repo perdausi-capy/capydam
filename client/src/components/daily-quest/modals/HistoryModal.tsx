@@ -3,14 +3,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     History, Skull, X, Trash2, ChevronLeft, ChevronRight, 
     Search, ArrowUpDown, Calendar, Users, CheckCircle2, XCircle, ArrowLeft,
-    RefreshCw // Added for Recycle icon
+    RefreshCw 
 } from 'lucide-react';
 import client from '../../../api/client';
 import { toast } from 'react-toastify';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-// --- SUB-COMPONENT: DRILL DOWN VIEW (Unchanged) ---
+// --- SUB-COMPONENT: DRILL DOWN VIEW (NOW WITH PAGINATION) ---
 const QuestDetailView = ({ questId, onBack }: { questId: string, onBack: () => void }) => {
+    // Internal state for pagination within the details view
+    const [page, setPage] = useState(1);
+    const ITEMS_PER_PAGE = 5; 
+
     const { data: quest, isLoading } = useQuery({
         queryKey: ['quest-detail', questId],
         queryFn: async () => (await client.get(`/daily/${questId}/details`)).data
@@ -23,9 +27,14 @@ const QuestDetailView = ({ questId, onBack }: { questId: string, onBack: () => v
     const correctVotes = quest.responses.filter((r: any) => r.option.isCorrect).length;
     const winRate = totalVotes > 0 ? Math.round((correctVotes / totalVotes) * 100) : 0;
 
+    // Pagination Logic
+    const totalPages = Math.ceil(totalVotes / ITEMS_PER_PAGE);
+    const paginatedResponses = quest.responses.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
     return (
         <motion.div initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 20, opacity: 0 }} className="flex flex-col h-full">
-            <div className="p-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 flex items-center gap-3">
+            {/* Header */}
+            <div className="p-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 flex items-center gap-3 shrink-0">
                 <button onClick={onBack} className="p-1.5 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors border border-transparent hover:border-gray-200 dark:hover:border-slate-600">
                     <ArrowLeft size={18} className="text-gray-500 dark:text-slate-400" />
                 </button>
@@ -40,22 +49,23 @@ const QuestDetailView = ({ questId, onBack }: { questId: string, onBack: () => v
                 </div>
             </div>
 
+            {/* List Content (Paginated) */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">
-                {quest.responses.length === 0 ? (
+                {paginatedResponses.length === 0 ? (
                     <div className="text-center py-10 text-gray-400 text-sm">No brave souls attempted this quest.</div>
                 ) : (
-                    quest.responses.map((resp: any) => (
+                    paginatedResponses.map((resp: any) => (
                         <div key={resp.id} className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700 rounded-xl">
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
+                                <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden shrink-0">
                                     {resp.user?.avatar ? <img src={resp.user.avatar} className="w-full h-full object-cover" alt="avatar"/> : <div className="flex items-center justify-center h-full font-bold text-xs text-gray-500">{resp.user?.name?.[0]}</div>}
                                 </div>
-                                <div>
-                                    <p className="text-xs font-bold text-gray-800 dark:text-white">{resp.user?.name}</p>
-                                    <p className="text-[10px] text-gray-400">{resp.option.text}</p>
+                                <div className="min-w-0">
+                                    <p className="text-xs font-bold text-gray-800 dark:text-white truncate">{resp.user?.name}</p>
+                                    <p className="text-[10px] text-gray-400 truncate">{resp.option.text}</p>
                                 </div>
                             </div>
-                            <div>
+                            <div className="shrink-0">
                                 {resp.option.isCorrect ? (
                                     <span className="flex items-center gap-1 text-[10px] font-bold text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-1 rounded-full"><CheckCircle2 size={12} /> +10 XP</span>
                                 ) : (
@@ -66,6 +76,29 @@ const QuestDetailView = ({ questId, onBack }: { questId: string, onBack: () => v
                     ))
                 )}
             </div>
+
+            {/* Pagination Footer */}
+            {totalPages > 1 && (
+                <div className="p-3 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 flex justify-between items-center shrink-0">
+                    <button 
+                        onClick={() => setPage(p => Math.max(1, p - 1))} 
+                        disabled={page === 1} 
+                        className="p-1.5 bg-white dark:bg-slate-800 rounded border border-gray-300 dark:border-slate-600 disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-slate-700"
+                    >
+                        <ChevronLeft size={16} className="text-gray-600 dark:text-slate-300"/>
+                    </button>
+                    <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400">
+                        Page {page} of {totalPages}
+                    </span>
+                    <button 
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
+                        disabled={page === totalPages} 
+                        className="p-1.5 bg-white dark:bg-slate-800 rounded border border-gray-300 dark:border-slate-600 disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-slate-700"
+                    >
+                        <ChevronRight size={16} className="text-gray-600 dark:text-slate-300"/>
+                    </button>
+                </div>
+            )}
         </motion.div>
     );
 };
@@ -108,7 +141,7 @@ export const HistoryModal = ({ isOpen, onClose, history }: any) => {
         onSuccess: (res) => { queryClient.invalidateQueries({ queryKey: ['quest-stats'] }); toast.success(res.data.message); onClose(); }
     });
 
-    // ✅ NEW: Recycle All History Mutation
+    // Recycle All History Mutation
     const recycleAllMutation = useMutation({
         mutationFn: async () => client.post(`/daily/recycle-all`),
         onSuccess: (res) => { 
@@ -118,7 +151,7 @@ export const HistoryModal = ({ isOpen, onClose, history }: any) => {
         }
     });
 
-    // ✅ NEW: Recycle Single Quest Mutation
+    // Recycle Single Quest Mutation
     const recycleSingleMutation = useMutation({
         mutationFn: async (id: string) => client.post(`/daily/recycle/${id}`),
         onSuccess: (res) => { 
@@ -133,6 +166,7 @@ export const HistoryModal = ({ isOpen, onClose, history }: any) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white dark:bg-slate-800 w-full max-w-2xl rounded-xl border-4 border-gray-900 dark:border-slate-500 shadow-xl flex flex-col h-[600px] overflow-hidden">
                 
+                {/* Header */}
                 <div className="p-4 border-b-4 border-gray-300 dark:border-slate-600 flex justify-between items-center bg-gray-100 dark:bg-slate-700 shrink-0">
                     <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2 uppercase">
                         <History size={20} className="text-purple-600 dark:text-purple-400"/> Quest Archives
@@ -140,7 +174,6 @@ export const HistoryModal = ({ isOpen, onClose, history }: any) => {
                     <div className="flex gap-2">
                         {view === 'list' && history?.length > 0 && (
                             <>
-                                {/* ✅ RECYCLE ALL BUTTON */}
                                 <button 
                                     onClick={() => { if(confirm("Move all history back to Vault?")) recycleAllMutation.mutate(); }} 
                                     className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded border-2 border-purple-800 text-xs font-bold uppercase flex items-center gap-1"
@@ -164,6 +197,7 @@ export const HistoryModal = ({ isOpen, onClose, history }: any) => {
                             initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}
                             className="flex flex-col h-full overflow-hidden"
                         >
+                            {/* Toolbar */}
                             <div className="p-3 bg-white dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700 flex gap-2">
                                 <div className="flex-1 relative">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
@@ -183,6 +217,7 @@ export const HistoryModal = ({ isOpen, onClose, history }: any) => {
                                 </button>
                             </div>
 
+                            {/* Main List */}
                             <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
                                 {paginatedData?.length > 0 ? paginatedData.map((h: any) => (
                                     <div 
@@ -198,7 +233,7 @@ export const HistoryModal = ({ isOpen, onClose, history }: any) => {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-1">
-                                            {/* ✅ RECYCLE INDIVIDUAL BUTTON */}
+                                            {/* RECYCLE SINGLE */}
                                             <button 
                                                 onClick={(e) => { 
                                                     e.stopPropagation(); 
@@ -219,6 +254,7 @@ export const HistoryModal = ({ isOpen, onClose, history }: any) => {
                                 )) : <div className="text-center py-20 text-gray-500 dark:text-slate-500 text-sm">No records found.</div>}
                             </div>
 
+                            {/* Main Pagination */}
                             {totalPages > 1 && (
                                 <div className="p-3 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 flex justify-between items-center shrink-0">
                                     <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-1.5 bg-white dark:bg-slate-800 rounded border border-gray-300 dark:border-slate-600 disabled:opacity-50"><ChevronLeft size={16}/></button>
