@@ -9,7 +9,8 @@ import {
   // Admin Dashboard
   createDailyQuestion, 
   closeQuest, 
-  getQuestStats, 
+  getQuestStats,
+  claimGoldenCapy, 
   
   // Season & Leaderboard
   getLeaderboard, 
@@ -28,7 +29,9 @@ import {
   clearHistory,
   getQuestDetails,
   recycleAllHistory,
-  recycleToVault
+  recycleToVault,
+  getGoldenStatus,
+  
 } from '../controllers/daily.controller';
 
 const router = Router();
@@ -43,6 +46,9 @@ router.get('/', verifyJWT, getActiveQuestion);         // Get currently active q
 router.get('/active', verifyJWT, getActiveQuestion);   // Alias for above
 router.get('/leaderboard', verifyJWT, getLeaderboard); // Get rankings (Season/AllTime)
 router.post('/vote', verifyJWT, submitVote);           // Submit a vote
+// 🐹 2. REGISTER THE GOLDEN CAPY ROUTE HERE
+router.get('/golden-status', verifyJWT, getGoldenStatus);
+router.post('/claim-golden-capy', verifyJWT, claimGoldenCapy);
 
 /* =========================================
    ADMIN: DASHBOARD & MANAGEMENT

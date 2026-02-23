@@ -38,6 +38,7 @@ export const getActiveQuestion = async (req: Request, res: Response) => {
 };
 
 // 2. SUBMIT VOTE
+// 2. SUBMIT VOTE
 export const submitVote = async (req: Request, res: Response) => {
   try {
     const { questionId, optionId } = req.body;
@@ -49,42 +50,38 @@ export const submitVote = async (req: Request, res: Response) => {
     const isCorrect = option?.isCorrect || false;
     const points = isCorrect ? 10 : 0; 
 
+    // 1. Record the vote
     const vote = await prisma.dailyResponse.create({
       data: { userId, questionId, optionId }
     });
 
+    // 2. Fetch user to update stats
     const user = await prisma.user.findUnique({ where: { id: userId } });
     
     if (user) {
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      
-      let newStreak = 1; 
+      // ✅ NEW STREAK LOGIC: Consecutive Correct Answers
+      let newStreak = 0; 
 
-      if (user.lastDailyDate) {
-        const lastDate = new Date(user.lastDailyDate);
-        const lastMidnight = new Date(lastDate.getFullYear(), lastDate.getMonth(), lastDate.getDate());
-        
-        const diffTime = Math.abs(today.getTime() - lastMidnight.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-
-        if (diffDays === 1) {
+      if (isCorrect) {
+          // Answered correctly? Add 1 to their current streak
           newStreak = (user.streak || 0) + 1;
-        } else if (diffDays === 0) {
-          newStreak = user.streak || 1; 
-        }
+      } else {
+          // Answered incorrectly? Streak resets to 0
+          newStreak = 0;
       }
 
+      // 3. Update the User profile
       await prisma.user.update({
         where: { id: userId },
         data: { 
           score: { increment: points },
           streak: newStreak,
-          lastDailyDate: now 
+          lastDailyDate: new Date() 
         }
       });
     }
 
+    // 4. Fetch updated stats for the frontend
     const stats = await prisma.questionOption.findMany({
       where: { questionId },
       include: { _count: { select: { responses: true } } }
@@ -93,6 +90,7 @@ export const submitVote = async (req: Request, res: Response) => {
     res.json({ success: true, vote, stats, isCorrect, points });
 
   } catch (error: any) {
+    // Prisma unique constraint error (User already voted)
     if (error.code === 'P2002') {
       return res.status(400).json({ message: "You have already voted on this quest." });
     }
@@ -393,7 +391,7 @@ export const startSeason = async (req: Request, res: Response) => {
             prisma.systemConfig.deleteMany({ where: { key: 'SEASON_END' } }) 
         ]);
         res.json({ message: "🚀 Season Started! Score tracking is live." });
-    } catch (error) {
+    } catch (error) {  
         res.status(500).json({ message: "Failed to start" });
     }
 };
@@ -661,5 +659,85 @@ export const recycleAllHistory = async (req: Request, res: Response) => {
     res.json({ message: `♻️ Success! Recycled ${count} items back to the Vault.` });
   } catch (error) {
     res.status(500).json({ message: "Failed to recycle history" });
+  }
+};
+
+
+
+// --- GOLDEN CAPYBARA LOGIC ---
+
+// 1. CHECK STATUS (Frontend calls this to see if it should spawn)
+export const getGoldenStatus = async (req: Request, res: Response) => {
+  try {
+      const today = new Date().toISOString().split('T')[0]; // "2026-02-18"
+      
+      const dateConfig = await prisma.systemConfig.findUnique({ where: { key: 'GOLDEN_DATE' } });
+      const countConfig = await prisma.systemConfig.findUnique({ where: { key: 'GOLDEN_COUNT' } });
+
+      // If it's a new day, we act as if count is 0
+      let count = 0;
+      if (dateConfig?.value === today) {
+          count = parseInt(countConfig?.value || '0', 10);
+      }
+
+      const limit = 3;
+      const remaining = Math.max(0, limit - count);
+
+      res.json({ 
+          available: remaining > 0, 
+          remaining, 
+          totalClaimed: count 
+      });
+  } catch (error) {
+      res.status(500).json({ available: false });
+  }
+};
+
+// 2. CLAIM REWARD (Strict Check + 5 Points)
+export const claimGoldenCapy = async (req: Request, res: Response) => {
+  try {
+      const userId = (req as any).user.id;
+      const today = new Date().toISOString().split('T')[0];
+
+      // Transaction to ensure no race conditions
+      await prisma.$transaction(async (tx) => {
+          // A. Check/Reset Date
+          const dateConfig = await tx.systemConfig.findUnique({ where: { key: 'GOLDEN_DATE' } });
+          
+          if (dateConfig?.value !== today) {
+              // It's a new day! Reset everything.
+              await tx.systemConfig.upsert({ where: { key: 'GOLDEN_DATE' }, update: { value: today }, create: { key: 'GOLDEN_DATE', value: today } });
+              await tx.systemConfig.upsert({ where: { key: 'GOLDEN_COUNT' }, update: { value: '0' }, create: { key: 'GOLDEN_COUNT', value: '0' } });
+          }
+
+          // B. Check Count
+          const countConfig = await tx.systemConfig.findUnique({ where: { key: 'GOLDEN_COUNT' } });
+          const currentCount = parseInt(countConfig?.value || '0', 10);
+
+          if (currentCount >= 3) {
+              throw new Error("LIMIT_REACHED");
+          }
+
+          // C. Increment Count
+          await tx.systemConfig.update({
+              where: { key: 'GOLDEN_COUNT' },
+              data: { value: (currentCount + 1).toString() }
+          });
+
+          // D. Give Points
+          await tx.user.update({
+              where: { id: userId },
+              data: { score: { increment: 5 } }
+          });
+      });
+
+      res.json({ success: true, message: "Golden Capy Claimed!", points: 5 });
+
+  } catch (error: any) {
+      if (error.message === "LIMIT_REACHED") {
+          return res.status(410).json({ message: "Too slow! All Capys found today." });
+      }
+      console.error(error);
+      res.status(500).json({ message: "Error claiming bonus" });
   }
 };

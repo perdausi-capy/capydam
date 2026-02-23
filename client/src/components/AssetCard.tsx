@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Download, FolderPlus, ExternalLink } from 'lucide-react';
+import { motion } from 'framer-motion';
 import AssetThumbnail from './AssetThumbnail';
 
 // --- TYPES ---
@@ -22,6 +23,10 @@ interface AssetCardProps {
     onClick?: (id: string, idx: number) => void;
     onDownload?: (e: React.MouseEvent, asset: any) => void; 
     onAddToCollection?: (e: React.MouseEvent, id: string) => void;
+    
+    // 🐹 PROPS
+    isGolden?: boolean;
+    onClaimBonus?: () => void;
 }
 
 const parseAiData = (jsonString?: string) => {
@@ -43,20 +48,51 @@ const cleanFilename = (name: string) => {
 };
 
 // --- COMPONENT ---
-const AssetCard = React.memo(({ asset, index, onClick, onDownload, onAddToCollection }: AssetCardProps) => {
+const AssetCard = React.memo(({ 
+    asset, 
+    index, 
+    onClick, 
+    onDownload, 
+    onAddToCollection,
+    isGolden,     
+    onClaimBonus  
+}: AssetCardProps) => {
+    
     const { tags, link } = useMemo(() => parseAiData(asset.aiData), [asset.aiData]);
 
     return (
-        // transform-gpu forces hardware acceleration (Smoother scrolling)
         <div className="group relative mb-6 block transition-all duration-300 w-full min-w-0 transform-gpu break-inside-avoid">
+            
             <div className="relative">
+                {/* 🐹 GOLDEN CAPYBARA EVENT: No card border, just the Capy */}
+                {isGolden && (
+                    <motion.button
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        whileHover={{ scale: 1.3, rotate: [0, -10, 10, 0] }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            onClaimBonus?.();
+                        }}
+                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[50] cursor-pointer focus:outline-none"
+                        title="You found the Golden Capy!"
+                    >
+                        <div className="text-3xl filter drop-shadow-xl animate-bounce cursor-pointer relative z-10">
+                            🐹
+                        </div>
+                        {/* Glow Effect directly behind the Capy */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 bg-yellow-400/60 blur-xl rounded-full animate-pulse z-0" />
+                    </motion.button>
+                )}
+
                 {/* Visuals: Flat design, no hover lift, subtle border */}
-                <div className="relative w-full rounded-2xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] shadow-sm border border-gray-100 dark:border-white/5">
+                <div className="relative w-full rounded-2xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] shadow-sm border border-gray-100 dark:border-white/5 transition-all duration-300">
                     
                     <Link to={`/assets/${asset.id}`} className="block cursor-pointer relative" onClick={() => onClick?.(asset.id, index)}>
                         
-                        {/* 🌑 DARKEN OVERLAY: Fades in black/20 on hover */}
-                        <div className="absolute inset-0 z-10 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 pointer-events-none" />
+                        {/* Darken overlay to make the Golden Capy pop even more */}
+                        <div className={`absolute inset-0 z-10 transition-colors duration-300 pointer-events-none ${isGolden ? 'bg-black/30' : 'bg-black/0 group-hover:bg-black/20'}`} />
                         
                         <div className="transition-opacity">
                             <AssetThumbnail 
@@ -107,7 +143,7 @@ const AssetCard = React.memo(({ asset, index, onClick, onDownload, onAddToCollec
         </div>
     );
 }, 
-// STRICT COMPARATOR: Only re-render if ID changes. Ignores function prop changes.
-(prev, next) => prev.asset.id === next.asset.id);
+// STRICT COMPARATOR
+(prev, next) => prev.asset.id === next.asset.id && prev.isGolden === next.isGolden);
 
 export default AssetCard;
