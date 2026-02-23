@@ -6,18 +6,18 @@ import {
   X, 
   Download, 
   FolderPlus, 
+  Plus, 
   ExternalLink,
-  Loader2, 
-  Plus
+  Loader2
 } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Masonry from 'react-masonry-css';
 import AssetThumbnail from '../components/AssetThumbnail';
 import DashboardHeader, { type FilterType } from '../components/DashboardHeader';
 import { toast } from 'react-toastify';
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AnimatePresence, motion } from 'framer-motion';
-import confetti from 'canvas-confetti'; // ✅ Make sure this is installed
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
+import confetti from 'canvas-confetti'; // ✅ Added for the Golden Capy celebration
 
 // --- TYPES ---
 interface Asset {
@@ -43,19 +43,34 @@ const cleanFilename = (name: string) => {
   return clean;
 };
 
+const parseAiData = (jsonString?: string) => {
+    if (!jsonString) return { tags: [], link: null };
+    try {
+        const data = JSON.parse(jsonString);
+        return {
+            tags: Array.isArray(data.tags) ? data.tags : [],
+            link: data.externalLink || data.link || data.url || null
+        };
+    } catch { return { tags: [], link: null }; }
+};
+
 const SCROLL_KEY = 'capydam_dashboard_scroll_y';
 
-// --- SKELETON CARD ---
+// --- 🦴 SKELETON CARD ---
 const SkeletonCard = () => (
     <div className="mb-8 w-full">
         <div className="w-full aspect-[3/4] bg-gray-200 dark:bg-white/5 rounded-2xl animate-pulse" />
         <div className="mt-3 space-y-2 px-1">
             <div className="h-4 bg-gray-200 dark:bg-white/5 rounded w-3/4 animate-pulse" />
+            <div className="flex gap-2">
+                <div className="h-3 w-12 bg-gray-200 dark:bg-white/5 rounded-full animate-pulse" />
+                <div className="h-3 w-8 bg-gray-200 dark:bg-white/5 rounded-full animate-pulse" />
+            </div>
         </div>
     </div>
 );
 
-// --- SYNC LOADER ---
+// --- 👻 SYNC LOADER (The "Ghost" Card) ---
 const ProcessingAssetCard = () => (
     <div className="group relative mb-8 block animate-pulse w-full">
         <div className="relative w-full rounded-2xl overflow-hidden bg-indigo-50 dark:bg-indigo-900/10 border-2 border-indigo-200 dark:border-indigo-500/30 flex items-center justify-center aspect-[3/4]">
@@ -67,10 +82,110 @@ const ProcessingAssetCard = () => (
     </div>
 );
 
-// --- ASSET CARD WRAPPER ---
-// We import the AssetCard component you updated in the previous step
-import AssetCard from '../components/AssetCard';
+// --- ⚡ REAL CARD COMPONENT ---
+const AssetCard = React.memo(({ 
+    asset, 
+    index, 
+    onClick, 
+    onDownload, 
+    onAddToCollection,
+    isGolden,     // 🐹 Added Prop
+    onClaimBonus  // 🐹 Added Prop
+}: { 
+    asset: Asset, 
+    index: number, 
+    onClick: (id: string, idx: number) => void,
+    onDownload: (e: React.MouseEvent, asset: Asset) => void,
+    onAddToCollection: (e: React.MouseEvent, id: string) => void,
+    isGolden?: boolean,
+    onClaimBonus?: () => void
+}) => {
+    const { tags, link } = useMemo(() => parseAiData(asset.aiData), [asset.aiData]);
 
+    return (
+        <div className="group relative mb-8 block w-full min-w-0">
+            <div className="relative">
+                
+                {/* 🐹 GOLDEN CAPYBARA EVENT: Centered with no card borders */}
+                {isGolden && (
+                    <motion.button
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        whileHover={{ scale: 1.3, rotate: [0, -10, 10, 0] }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            onClaimBonus?.();
+                        }}
+                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[50] cursor-pointer focus:outline-none"
+                        title="You found the Golden Capy!"
+                    >
+                        <div className="text-3xl filter drop-shadow-xl animate-bounce cursor-pointer relative z-10">
+                            🐹
+                        </div>
+                        {/* Glow Effect directly behind the Capy */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 bg-yellow-400/60 blur-xl rounded-full animate-pulse z-0" />
+                    </motion.button>
+                )}
+
+                {/* Visuals */}
+                <div className="relative w-full rounded-2xl overflow-hidden transition-all duration-300 bg-gray-100 dark:bg-[#1A1D21] shadow-sm hover:shadow-md">
+                    
+                    <Link to={`/assets/${asset.id}`} className="block cursor-pointer relative" onClick={() => onClick(asset.id, index)}>
+                        
+                        {/* Darken overlay to make the Golden Capy pop if it's there */}
+                        <div className={`absolute inset-0 z-10 transition-colors duration-300 pointer-events-none ${isGolden ? 'bg-black/30' : 'bg-black/0 group-hover:bg-black/20'}`} />
+
+                        <div className="transition-opacity">
+                            <AssetThumbnail 
+                                mimeType={asset.mimeType} 
+                                thumbnailPath={asset.thumbnailPath || asset.path} 
+                                previewFrames={asset.previewFrames}
+                                className="w-full h-auto"
+                                // @ts-ignore 
+                                loading="lazy" 
+                            />
+                        </div>
+                    </Link>
+                </div>
+
+                {/* Floating Action Buttons */}
+                <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20">
+                    {link && (
+                        <a href={link} target="_blank" rel="noopener noreferrer" className="rounded-full bg-white/90 dark:bg-black/60 p-2 text-indigo-500 dark:text-indigo-400 shadow-sm backdrop-blur-md transition-colors hover:bg-indigo-600 hover:text-white" onClick={(e) => e.stopPropagation()}>
+                            <ExternalLink size={16} />
+                        </a>
+                    )}
+                    <button onClick={(e) => onAddToCollection(e, asset.id)} className="rounded-full bg-white/90 dark:bg-black/60 p-2 text-indigo-600 dark:text-indigo-400 shadow-sm backdrop-blur-md transition-colors hover:bg-indigo-600 hover:text-white">
+                        <FolderPlus size={16} />
+                    </button>
+                    <button onClick={(e) => onDownload(e, asset)} className="rounded-full bg-white/90 dark:bg-black/60 p-2 text-gray-700 dark:text-gray-200 shadow-sm backdrop-blur-md transition-colors hover:bg-blue-600 hover:text-white">
+                        <Download size={16} />
+                    </button>
+                </div>
+            </div>
+            
+            {/* Meta Info */}
+            <div className="mt-3 px-1 w-full min-w-0">
+                <Link to={`/assets/${asset.id}`} onClick={() => onClick(asset.id, index)} className="group/link block w-full">
+                    <p className="truncate font-bold text-sm text-gray-800 dark:text-gray-100 group-hover/link:underline decoration-gray-400 underline-offset-2 transition-all w-full block" title={asset.originalName}>
+                        {cleanFilename(asset.originalName)}
+                    </p>
+                </Link>
+                
+                <div className="mt-1.5 flex flex-wrap gap-1.5 h-auto overflow-hidden opacity-70 hover:opacity-100 transition-opacity">
+                    {tags.slice(0, 5).map((tag: string) => (
+                        <span key={tag} className="text-[10px] text-gray-500 dark:text-gray-400 font-medium bg-gray-100 dark:bg-white/5 px-1.5 py-0.5 rounded-md whitespace-nowrap">
+                            #{tag}
+                        </span>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}, (prev, next) => prev.asset.id === next.asset.id && prev.isGolden === next.isGolden);
+
+// --- DASHBOARD COMPONENT ---
 const Dashboard = () => {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -133,6 +248,7 @@ const Dashboard = () => {
   // --- Combine Real Assets + Skeletons ---
   const assets = useMemo(() => {
       const realAssets = data?.pages.flatMap(page => page.results) || [];
+      
       if (isFetchingNextPage) {
           const skeletons = Array.from({ length: 10 }).map((_, i) => ({
               id: `skeleton-${i}`,
@@ -159,6 +275,7 @@ const Dashboard = () => {
                 
                 if (shouldSpawn) {
                     const randomIdx = Math.floor(Math.random() * assets.length);
+                    // Ensure we don't spawn it on a skeleton loader
                     if (!assets[randomIdx].isSkeleton) {
                         setLuckyIndex(randomIdx);
                     }
@@ -177,6 +294,7 @@ const Dashboard = () => {
     checkServerAvailability();
   }, [assets.length, assetsLoading, filterType, debouncedSearch]);
 
+  // 🐹 CLAIM REWARD LOGIC
   const handleClaimBonus = async () => {
       setLuckyIndex(null); // Hide immediately
 
@@ -184,7 +302,7 @@ const Dashboard = () => {
           // Attempt to claim
           await client.post('/daily/claim-golden-capy');
 
-          // 🎉 EXPLOSION
+          // 🎉 Success: Explosion
           confetti({
               particleCount: 120,
               spread: 70,
@@ -192,7 +310,6 @@ const Dashboard = () => {
               colors: ['#FFD700', '#FFA500']
           });
 
-          // Show Toast
           toast.success(
               <div className="flex flex-col">
                   <span className="font-black text-sm">🐹 GOLDEN CAPY CAUGHT!</span>
@@ -204,7 +321,7 @@ const Dashboard = () => {
           queryClient.invalidateQueries({ queryKey: ['user-streak'] });
 
       } catch (error: any) {
-          // ❌ Fail: Someone else grabbed the last one before you clicked!
+          // ❌ Fail: Someone else grabbed it first
           if (error.response?.status === 410) {
               toast.error("Too slow! The last Golden Capy was just found by someone else.");
           } else {
@@ -340,7 +457,7 @@ const Dashboard = () => {
             <div className="w-full overflow-hidden">
                 <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-6" columnClassName="pl-6 bg-clip-padding">
                     
-                    {/* ✅ SYNC LOADER */}
+                    {/* ✅ SYNC LOADER: Shows only when refreshing existing data (like after an upload) */}
                     {isRefetching && !isFetchingNextPage && <ProcessingAssetCard />}
 
                     {assets.map((asset, index) => {
