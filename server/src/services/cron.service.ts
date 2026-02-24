@@ -6,6 +6,96 @@ import axios from 'axios';
 const prisma = new PrismaClient();
 const EXPIRATION_DAYS = 30;
 
+// --- PRO-TIER CLICKUP HELPER FUNCTION ---
+const buildClickUpPayload = (title: string, emojiCode: string, emojiChar: string, questionText: string) => {
+  return {
+      notify_all: true, 
+      comment: [
+          // ==========================================
+          // 1. BANNER HEADER
+          // ==========================================
+          {
+              type: "emoticon",
+              emoticon: { code: emojiCode, name: "icon", type: "default" },
+              text: emojiChar
+          },
+          {
+              text: `  ${title}`, // Extra space for breathing room
+              attributes: { bold: true }
+          },
+          {
+              text: "\n",
+              attributes: {
+                  "advanced-banner": "8b461d23-f294-4683-8826-2cb9bf991071", 
+                  "advanced-banner-color": "blue-strong", 
+                  header: 3
+              }
+          },
+          { text: "\n", attributes: {} },
+
+          // ==========================================
+          // 2. QUESTION HEADER
+          // ==========================================
+          { text: "Today's Challenge", attributes: { bold: true, underline: true } },
+          { text: "\n", attributes: {} },
+
+          // ==========================================
+          // 3. THE ACTUAL QUESTION 
+          // ==========================================
+          // Bold, Italicized, and Indented to look like a professional blockquote
+          { text: questionText, attributes: { italic: true, bold: true } },
+          { text: "\n", attributes: { indent: 1 } },
+          { text: "\n", attributes: {} },
+
+          // ==========================================
+          // 4. REWARDS / INFO (Bulleted List)
+          // ==========================================
+          {
+              type: "emoticon",
+              emoticon: { code: "1f48e", name: "gem", type: "default" }, // 💎
+              text: "💎"
+          },
+          { text: " Reward: ", attributes: { bold: true } },
+          { text: "+10 XP", attributes: { code: true } }, // Uses code block to make the XP pop!
+          { text: " for the correct answer.", attributes: {} },
+          { text: "\n", attributes: { list: { list: "bullet" } } }, // Formats as Bullet 1
+
+          {
+              type: "emoticon",
+              emoticon: { code: "1f525", name: "fire", type: "default" }, // 🔥
+              text: "🔥"
+          },
+          { text: " Streak: ", attributes: { bold: true } },
+          { text: "Keep your consecutive answer streak alive!", attributes: {} },
+          { text: "\n", attributes: { list: { list: "bullet" } } }, // Formats as Bullet 2
+          
+          { text: "\n", attributes: {} },
+
+          // ==========================================
+          // 5. DIVIDER
+          // ==========================================
+          { type: "divider", text: "---" },
+          { text: "\n", attributes: {} },
+
+          // ==========================================
+          // 6. CALL TO ACTION (CENTERED)
+          // ==========================================
+          {
+              type: "emoticon",
+              emoticon: { code: "1f680", name: "rocket", type: "default" }, // 🚀
+              text: "🚀"
+          },
+          { text: "  SUBMIT YOUR ANSWER HERE  ", attributes: { bold: true, link: "https://dam.capy-dev.com" } },
+          {
+              type: "emoticon",
+              emoticon: { code: "1f680", name: "rocket", type: "default" }, // 🚀
+              text: "🚀"
+          },
+          { text: "\n", attributes: { align: "center" } } // Centers the entire line perfectly
+      ]
+  };
+};
+
 export const initCronJobs = () => {
   // 1. TRASH CLEANUP: Runs every day at Midnight (00:00 UTC)
   cron.schedule('0 0 * * *', async () => {
@@ -134,30 +224,34 @@ const launchDailyQuest = async () => {
   }
 };
 
+// ---------------------------------------------------------
+// YOUR UPDATED NOTIFY FUNCTION
+// ---------------------------------------------------------
+
 const notifyIntegrations = async (questionText: string) => {
-    const token = process.env.CLICKUP_API_TOKEN;
-    const chatId = process.env.CLICKUP_LIST_ID;
-    if (!token || !chatId) return;
+  const token = process.env.CLICKUP_API_TOKEN;
+  const chatId = process.env.CLICKUP_LIST_ID;
+  if (!token || !chatId) return;
 
-    const message = 
-      `__________________________________________\n` +
-      `🤖 DAILY QUEST NA THIS\n` +
-      `__________________________________________\n\n` +
-      `QUESTION: "${questionText}"\n\n` +
-      `👉 ANSWER HERE: https://dam.capy-dev.com\n` +
-      `__________________________________________`;
+  // ✅ Generate the Professional Rich-Text Payload
+  const clickUpPayload = buildClickUpPayload(
+      "DAILY QUEST NA THIS", 
+      "1f916", // 🤖 unicode
+      "🤖", 
+      questionText
+  );
 
-    try {
-      await axios.post(
-        `https://api.clickup.com/api/v2/view/${chatId}/comment`,
-        { comment_text: message, notify_all: true },
-        { headers: { 'Authorization': token, 'Content-Type': 'application/json' } }
-      );
-    } catch (error: any) {
-      console.error("❌ Notification failed:", error.message);
-    }
+  try {
+    await axios.post(
+      `https://api.clickup.com/api/v2/view/${chatId}/comment`,
+      clickUpPayload, // ✅ Pass the JSON object directly (it already includes notify_all)
+      { headers: { 'Authorization': token, 'Content-Type': 'application/json' } }
+    );
+  } catch (error: any) {
+    console.error("❌ Notification failed:", error.message);
+  }
 };
-
+ 
 /* =========================================
    TASK 3: SEASON AUTO-PILOT
    ========================================= */
