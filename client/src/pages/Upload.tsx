@@ -449,25 +449,6 @@ const Upload = () => {
                       </p>
                       
                       {/* SIDE PANEL PREVIEW LIST WITH ACTUAL THUMBNAILS */}
-                      <div className="space-y-2 mb-5">
-                          {recentUploads.slice(0, 3).map(recent => (
-                              <div key={recent.id} className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-100 dark:border-white/5">
-                                  <div className="h-10 w-10 bg-gray-200 dark:bg-black/40 rounded-lg overflow-hidden shrink-0">
-                                      <AssetThumbnail 
-                                          mimeType={recent.mimeType} 
-                                          thumbnailPath={recent.thumbnailPath || recent.path} 
-                                          previewFrames={recent.previewFrames}
-                                          className="w-full h-full object-cover" 
-                                      />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                      <p className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate">{recent.originalName}</p>
-                                      <p className="text-[10px] text-gray-400 mt-0.5">{formatSafeDate(recent.createdAt)}</p>
-                                  </div>
-                              </div>
-                          ))}
-                      </div>
-
                       <button 
                           onClick={() => setIsRecentModalOpen(true)}
                           className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 hover:bg-gray-100 dark:hover:bg-white/5 hover:border-blue-300 dark:hover:border-blue-500/50 transition-all text-sm font-bold text-gray-700 dark:text-gray-300 group"
