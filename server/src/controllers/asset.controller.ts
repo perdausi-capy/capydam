@@ -257,7 +257,8 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
         path: true,
         thumbnailPath: true,
         previewFrames: true, // ✅ Return frames to frontend
-        aiData: true, 
+        aiData: true,
+        createdAt: true,
         uploadedBy: { select: { name: true } }
     };
 

@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useMemo } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { 
   UploadCloud, 
@@ -7,7 +7,6 @@ import {
   Image as ImageIcon, 
   Film, 
   Music,
-  // Trash2,
   Sparkles,
   Link as LinkIcon,
   Edit2,
@@ -15,12 +14,15 @@ import {
   ArrowRight,
   Check,
   X,
-  Loader2 
+  Loader2,
+  Search
 } from 'lucide-react';
 import client from '../api/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
+import AssetThumbnail from '../components/AssetThumbnail';
 
 // --- STYLES FOR ANIMATION ---
 const customStyles = `
@@ -51,7 +53,17 @@ interface RecentAsset {
   originalName: string;
   mimeType: string;
   createdAt: string;
+  thumbnailPath: string | null;
+  path: string;
+  previewFrames?: string[];
 }
+
+// --- HELPER ---
+const formatSafeDate = (dateStr?: string) => {
+    if (!dateStr) return 'Unknown Date';
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? 'Unknown Date' : d.toLocaleDateString();
+};
 
 const Upload = () => {
   const [queue, setQueue] = useState<UploadItem[]>([]);
@@ -61,8 +73,14 @@ const Upload = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  // AI Settings
   const [creativity, setCreativity] = useState(0.2);
   const [specificity, setSpecificity] = useState<'general' | 'high'>('general');
+
+  // Modal & Sorting/Searching State
+  const [isRecentModalOpen, setIsRecentModalOpen] = useState(false);
+  const [modalSearchQuery, setModalSearchQuery] = useState('');
+  const [sortConfig, setSortConfig] = useState<'newest' | 'oldest' | 'a-z' | 'z-a'>('newest');
 
   // --- CALCULATE OVERALL PROGRESS ---
   const overallProgress = queue.length > 0 
@@ -72,13 +90,34 @@ const Upload = () => {
   // --- FETCH HISTORY ---
   const fetchRecent = async () => {
     try {
-      const res = await client.get('/assets?limit=5');
+      const res = await client.get('/assets?limit=30');
       const results = Array.isArray(res.data) ? res.data : (res.data.results || []);
-      setRecentUploads(results.slice(0, 5));
+      setRecentUploads(results);
     } catch (error) { console.warn("Could not fetch history"); }
   };
 
   useEffect(() => { fetchRecent(); }, []);
+
+  // --- FILTER & SORT LOGIC ---
+  const processedRecentUploads = useMemo(() => {
+    // 1. Filter by search query
+    let arr = recentUploads.filter(asset => 
+        (asset.originalName || '').toLowerCase().includes(modalSearchQuery.toLowerCase())
+    );
+
+    // 2. Sort the filtered array
+    switch (sortConfig) {
+        case 'oldest': 
+            return arr.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        case 'a-z': 
+            return arr.sort((a, b) => (a.originalName || '').localeCompare(b.originalName || ''));
+        case 'z-a': 
+            return arr.sort((a, b) => (b.originalName || '').localeCompare(a.originalName || ''));
+        case 'newest':
+        default:
+            return arr.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+  }, [recentUploads, sortConfig, modalSearchQuery]);
 
   // --- DROPZONE ---
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -98,7 +137,6 @@ const Upload = () => {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     multiple: true,
-    // ✅ REMOVED 'application/pdf'
     accept: { 
         'image/*': [], 
         'video/*': [], 
@@ -229,12 +267,11 @@ const Upload = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-[#0B0D0F] dark:via-[#131619] dark:to-[#0F0B15] pb-20 transition-colors duration-500">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-[#0B0D0F] dark:via-[#131619] dark:to-[#0F0B15] pb-20 transition-colors duration-500 relative">
       
-      {/* Inject Custom Animation Styles */}
       <style>{customStyles}</style>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-4 py-8 relative z-10">
         
         {/* HEADER */}
         <div className="mb-8 animate-in slide-in-from-top-4 duration-700 fade-in">
@@ -276,7 +313,6 @@ const Upload = () => {
                           <UploadCloud size={24} />
                       </div>
                       <h3 className="text-lg font-bold text-gray-700 dark:text-gray-200">Click to upload</h3>
-                      {/* ✅ UPDATED TEXT */}
                       <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Images, Video & Audio</p>
                   </div>
               </div>
@@ -292,8 +328,12 @@ const Upload = () => {
                       {queue.map((item, index) => (
                           <div key={item.id} className="relative bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
                               <div className="flex gap-4">
-                                  <div className="h-20 w-20 shrink-0 bg-gray-100 dark:bg-black/20 rounded-xl overflow-hidden border border-gray-100 dark:border-white/5 flex items-center justify-center">
-                                      {item.file.preview ? <img src={item.file.preview} className="h-full w-full object-cover" alt="" /> : getFileIcon(item.file.type)}
+                                  <div className="h-20 w-20 shrink-0 bg-gray-100 dark:bg-black/20 rounded-xl overflow-hidden border border-gray-100 dark:border-white/5 flex items-center justify-center relative">
+                                      {item.file.preview ? (
+                                          <img src={item.file.preview} className="h-full w-full object-cover" alt="" /> 
+                                      ) : (
+                                          getFileIcon(item.file.type)
+                                      )}
                                   </div>
 
                                   <div className="flex-1 space-y-3 min-w-0">
@@ -395,31 +435,180 @@ const Upload = () => {
                   </div>
               </div>
 
-              {/* RECENT HISTORY */}
+              {/* RECENT UPLOADS BUTTON (Side Panel) */}
               {recentUploads.length > 0 && (
                   <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1D21] p-6 shadow-sm animate-in fade-in slide-in-from-right-4 duration-700">
-                      <div className="flex items-center gap-2 mb-4 text-gray-800 dark:text-white">
-                          <Clock size={18} className="text-gray-500" />
-                          <h3 className="font-bold text-sm">Recent Uploads</h3>
+                      <div className="flex items-center gap-3 mb-2 text-gray-800 dark:text-white">
+                          <div className="p-2 bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg">
+                              <Clock size={20} />
+                          </div>
+                          <h3 className="font-bold text-sm">Upload History</h3>
                       </div>
-                      <div className="space-y-3">
-                          {recentUploads.map(recent => (
-                              <div key={recent.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg transition-colors cursor-pointer group" onClick={() => navigate(`/assets/${recent.id}`)}>
-                                  <div className="h-8 w-8 bg-gray-100 dark:bg-white/10 rounded-lg flex items-center justify-center shrink-0 border border-gray-200 dark:border-white/5">{getFileIcon(recent.mimeType)}</div>
-                                  <div className="min-w-0 flex-1">
-                                      <p className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate group-hover:text-indigo-600 transition-colors">{recent.originalName}</p>
-                                      <p className="text-[10px] text-gray-400">{new Date(recent.createdAt).toLocaleDateString()}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-5 leading-relaxed">
+                          Need to retrieve something you just uploaded? View and manage your recent files here.
+                      </p>
+                      
+                      {/* SIDE PANEL PREVIEW LIST WITH ACTUAL THUMBNAILS */}
+                      <div className="space-y-2 mb-5">
+                          {recentUploads.slice(0, 3).map(recent => (
+                              <div key={recent.id} className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-100 dark:border-white/5">
+                                  <div className="h-10 w-10 bg-gray-200 dark:bg-black/40 rounded-lg overflow-hidden shrink-0">
+                                      <AssetThumbnail 
+                                          mimeType={recent.mimeType} 
+                                          thumbnailPath={recent.thumbnailPath || recent.path} 
+                                          previewFrames={recent.previewFrames}
+                                          className="w-full h-full object-cover" 
+                                      />
                                   </div>
-                                  <ArrowRight size={12} className="text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                  <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate">{recent.originalName}</p>
+                                      <p className="text-[10px] text-gray-400 mt-0.5">{formatSafeDate(recent.createdAt)}</p>
+                                  </div>
                               </div>
                           ))}
                       </div>
+
+                      <button 
+                          onClick={() => setIsRecentModalOpen(true)}
+                          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 hover:bg-gray-100 dark:hover:bg-white/5 hover:border-blue-300 dark:hover:border-blue-500/50 transition-all text-sm font-bold text-gray-700 dark:text-gray-300 group"
+                      >
+                          View All Recent <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform text-blue-500" />
+                      </button>
                   </div>
               )}
 
           </div>
         </div>
       </div>
+
+      {/* ✅ RECENT UPLOADS MODAL (Wider, Searchable, 3-Column Grid) */}
+      <AnimatePresence>
+          {isRecentModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                  {/* Backdrop */}
+                  <motion.div 
+                      initial={{ opacity: 0 }} 
+                      animate={{ opacity: 1 }} 
+                      exit={{ opacity: 0 }} 
+                      className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
+                      onClick={() => setIsRecentModalOpen(false)} 
+                  />
+                  
+                  {/* Modal Panel - Increased to max-w-6xl */}
+                  <motion.div 
+                      initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+                      animate={{ opacity: 1, scale: 1, y: 0 }} 
+                      exit={{ opacity: 0, scale: 0.95, y: 20 }} 
+                      className="relative w-full max-w-6xl bg-white dark:bg-[#1A1D21] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] border border-gray-200 dark:border-white/10"
+                  >
+                      {/* Header */}
+                      <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-black/20 shrink-0">
+                          <div className="flex items-center gap-3">
+                              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg">
+                                  <Clock size={20} /> 
+                              </div>
+                              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Recent Uploads</h3>
+                          </div>
+                          <button onClick={() => setIsRecentModalOpen(false)} className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-gray-200 dark:hover:bg-white/10">
+                              <X size={20} />
+                          </button>
+                      </div>
+
+                      {/* Toolbar / Search & Sorting */}
+                      <div className="px-6 py-4 border-b border-gray-100 dark:border-white/5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white dark:bg-[#1A1D21] shrink-0">
+                          
+                          {/* Search Bar */}
+                          <div className="relative w-full md:w-72">
+                              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                              <input 
+                                  type="text" 
+                                  placeholder="Search recent uploads..." 
+                                  value={modalSearchQuery}
+                                  onChange={(e) => setModalSearchQuery(e.target.value)}
+                                  className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-all"
+                              />
+                          </div>
+
+                          {/* Sorting Buttons */}
+                          <div className="flex items-center gap-1 bg-gray-50 dark:bg-black/20 p-1 rounded-xl border border-gray-200 dark:border-white/10 overflow-x-auto w-full md:w-auto">
+                              <button 
+                                  onClick={() => setSortConfig('newest')} 
+                                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${sortConfig === 'newest' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                              >
+                                  Newest
+                              </button>
+                              <button 
+                                  onClick={() => setSortConfig('oldest')} 
+                                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${sortConfig === 'oldest' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                              >
+                                  Oldest
+                              </button>
+                              <button 
+                                  onClick={() => setSortConfig('a-z')} 
+                                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${sortConfig === 'a-z' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                              >
+                                  A-Z
+                              </button>
+                              <button 
+                                  onClick={() => setSortConfig('z-a')} 
+                                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${sortConfig === 'z-a' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                              >
+                                  Z-A
+                              </button>
+                          </div>
+                      </div>
+
+                      {/* GRID LIST */}
+                      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-gray-50/50 dark:bg-[#0B0D0F]/30">
+                          {processedRecentUploads.length === 0 ? (
+                              <div className="text-center py-20 flex flex-col items-center justify-center opacity-60">
+                                  <Search size={40} className="mb-4 text-gray-400" />
+                                  <p className="text-gray-500 text-lg font-medium">No results found.</p>
+                              </div>
+                          ) : (
+                              // ✅ Updated to 3-Column Grid on large screens
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                  {processedRecentUploads.map(recent => (
+                                      <div 
+                                          key={recent.id} 
+                                          className="flex items-center justify-between p-3 bg-white dark:bg-[#1A1D21] hover:bg-blue-50 dark:hover:bg-white/5 rounded-2xl transition-colors group border border-gray-100 dark:border-white/5 hover:border-blue-200 dark:hover:border-white/10 cursor-pointer shadow-sm hover:shadow"
+                                          onClick={() => { 
+                                              setIsRecentModalOpen(false); 
+                                              navigate(`/assets/${recent.id}`); 
+                                          }}
+                                      >
+                                          <div className="flex items-center gap-4 min-w-0 flex-1">
+                                              <div className="h-16 w-16 bg-gray-100 dark:bg-black/40 rounded-xl overflow-hidden flex items-center justify-center shrink-0 border border-gray-200 dark:border-white/5 relative">
+                                                  <AssetThumbnail 
+                                                      mimeType={recent.mimeType} 
+                                                      thumbnailPath={recent.thumbnailPath || recent.path} 
+                                                      previewFrames={recent.previewFrames}
+                                                      className="w-full h-full object-cover" 
+                                                  />
+                                              </div>
+                                              <div className="min-w-0 pr-4">
+                                                  <p className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" title={recent.originalName}>
+                                                      {recent.originalName}
+                                                  </p>
+                                                  <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[10px] text-gray-500 uppercase tracking-wider font-medium">
+                                                      <span className="bg-gray-100 dark:bg-white/5 px-2 py-0.5 rounded-md">{recent.mimeType.split('/')[1]}</span>
+                                                      <span className="w-1 h-1 bg-gray-300 dark:bg-gray-600 rounded-full"></span>
+                                                      <span>{formatSafeDate(recent.createdAt)}</span>
+                                                  </div>
+                                              </div>
+                                          </div>
+                                          <div className="shrink-0 p-2 rounded-full bg-white dark:bg-black/20 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors">
+                                              <ArrowRight size={16} className="text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-transform group-hover:translate-x-0.5" />
+                                          </div>
+                                      </div>
+                                  ))}
+                              </div>
+                          )}
+                      </div>
+                  </motion.div>
+              </div>
+          )}
+      </AnimatePresence>
     </div>
   );
 };

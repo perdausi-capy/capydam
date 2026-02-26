@@ -8,6 +8,96 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const prisma = new PrismaClient();
 
+// --- PRO-TIER CLICKUP HELPER FUNCTION ---
+const buildClickUpPayload = (title: string, emojiCode: string, emojiChar: string, questionText: string) => {
+  return {
+      notify_all: true, 
+      comment: [
+          // ==========================================
+          // 1. BANNER HEADER
+          // ==========================================
+          {
+              type: "emoticon",
+              emoticon: { code: emojiCode, name: "icon", type: "default" },
+              text: emojiChar
+          },
+          {
+              text: `  ${title}`, // Extra space for breathing room
+              attributes: { bold: true }
+          },
+          {
+              text: "\n",
+              attributes: {
+                  "advanced-banner": "8b461d23-f294-4683-8826-2cb9bf991071", 
+                  "advanced-banner-color": "blue-strong", 
+                  header: 3
+              }
+          },
+          { text: "\n", attributes: {} },
+
+          // ==========================================
+          // 2. QUESTION HEADER
+          // ==========================================
+          { text: "Today's Challenge", attributes: { bold: true, underline: true } },
+          { text: "\n", attributes: {} },
+
+          // ==========================================
+          // 3. THE ACTUAL QUESTION (Now a True Blockquote)
+          // ==========================================
+          // Bold, Italicized, and wrapped in a native Blockquote
+          { text: questionText, attributes: { italic: true, bold: true } },
+          { text: "\n", attributes: { blockquote: true } }, // <--- CHANGED HERE
+          { text: "\n", attributes: {} },
+
+          // ==========================================
+          // 4. REWARDS / INFO (Now Blockquotes instead of Bullets)
+          // ==========================================
+          {
+              type: "emoticon",
+              emoticon: { code: "1f48e", name: "gem", type: "default" }, // 💎
+              text: "💎"
+          },
+          { text: " Reward: ", attributes: { bold: true } },
+          { text: "+10 XP", attributes: { code: true } }, // Uses code block to make the XP pop!
+          { text: " for the correct answer.", attributes: {} },
+          { text: "\n", attributes: { blockquote: true } }, // <--- CHANGED HERE
+
+          {
+              type: "emoticon",
+              emoticon: { code: "1f525", name: "fire", type: "default" }, // 🔥
+              text: "🔥"
+          },
+          { text: " Streak: ", attributes: { bold: true } },
+          { text: "Keep your consecutive answer streak alive!", attributes: {} },
+          { text: "\n", attributes: { blockquote: true } }, // <--- CHANGED HERE
+          
+          { text: "\n", attributes: {} },
+
+          // ==========================================
+          // 5. DIVIDER
+          // ==========================================
+          { type: "divider", text: "---" },
+          { text: "\n", attributes: {} },
+
+          // ==========================================
+          // 6. CALL TO ACTION (CENTERED)
+          // ==========================================
+          {
+              type: "emoticon",
+              emoticon: { code: "1f680", name: "rocket", type: "default" },
+              text: "🦫"
+          },
+          { text: "  SUBMIT YOUR ANSWER HERE  ", attributes: { bold: true, link: "https://dam.capy-dev.com" } },
+          {
+              type: "emoticon",
+              emoticon: { code: "1f680", name: "rocket", type: "default" }, 
+              text: "🦫"
+          },
+          { text: "\n", attributes: { align: "center" } } // Centers the entire line perfectly
+      ]
+  };
+};
+
 const triggerQuest = async () => {
   try {
     console.log("🚀 MANUALLY TRIGGERING DAILY QUEST ROTATION...");
@@ -86,24 +176,23 @@ const notifyIntegrations = async (questionText: string) => {
 
     console.log("   📨 Sending notification to ClickUp...");
 
-    const message = 
-      `__________________________________________\n` +
-      `🤖 MANUAL SYSTEM OVERRIDE\n` +
-      `__________________________________________\n\n` +
-      `QUESTION: "${questionText}"\n\n` +
-      `👉 ANSWER HERE: https://dam.capy-dev.com\n` +
-      `__________________________________________`;
-
-    try {
-      await axios.post(
-        `https://api.clickup.com/api/v2/view/${chatId}/comment`,
-        { comment_text: message, notify_all: true },
-        { headers: { 'Authorization': token, 'Content-Type': 'application/json' } }
+    // ✅ Generate the Professional Rich-Text Payload
+        const clickUpPayload = buildClickUpPayload(
+          "DAILY QUEST MANUAL OVERRIDE", 
+          "1f916", // 🤖 unicode
+          "🤖", 
+          questionText
       );
-      console.log("   ✅ Notification sent.");
-    } catch (error: any) {
-      console.error("   ❌ Notification failed:", error.message);
-    }
+
+      try {
+        await axios.post(
+          `https://api.clickup.com/api/v2/view/${chatId}/comment`,
+          clickUpPayload, // ✅ Pass the JSON object directly (it already includes notify_all)
+          { headers: { 'Authorization': token, 'Content-Type': 'application/json' } }
+        );
+      } catch (error: any) {
+        console.error("❌ Notification failed:", error.message);
+      }
 };
 
 // Run it
