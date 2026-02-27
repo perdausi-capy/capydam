@@ -6,6 +6,7 @@ import DailyQuestionModal from './DailyQuestionModal';
 import LeaderboardModal from './LeaderboardModal';
 import { Flame, Trophy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { SeasonRecapModal } from './daily-quest/modals/SeasonRecapModal';
 
 // ✅ IMPORT YOUR GIF
 import robotGif from '../assets/robot.gif';
@@ -46,6 +47,13 @@ const FloatingDailyQuestion = () => {
       queryKey: ['user-streak', user?.id],
       queryFn: async () => (await client.get('/auth/me')).data,
       enabled: !!user
+  });
+
+  // 3. Get Leaderboard State (For Season Recap Check)
+  const { data: leaderboardData } = useQuery({
+    queryKey: ['leaderboard', 'monthly'],
+    queryFn: async () => (await client.get('/daily/leaderboard?range=monthly')).data,
+    enabled: !!user
   });
 
   const streak = userData?.streak || 0;
@@ -234,6 +242,13 @@ const FloatingDailyQuestion = () => {
         isOpen={isLeaderboardOpen} 
         onClose={() => setIsLeaderboardOpen(false)} 
       />
+
+      {/* 🚀 ADD THE SEASON RECAP MODAL HERE */}
+      <SeasonRecapModal 
+        leaderboardData={leaderboardData} 
+        currentUser={user} 
+      />
+      
     </>
   );
 };

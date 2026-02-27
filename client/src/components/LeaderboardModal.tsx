@@ -394,8 +394,19 @@ const LeaderboardModal = ({ isOpen, onClose }: any) => {
                         <div className="absolute top-0 right-0 p-2 opacity-10"><Gift size={64}/></div>
                         <h4 className="text-xs font-black text-gray-500 dark:text-slate-400 uppercase tracking-widest mb-3">Season Rewards</h4>
                         <div className="space-y-2 text-xs">
-                            <div className="flex justify-between items-center font-bold"><span className="text-gray-600 dark:text-slate-300 flex items-center gap-1"><Crown size={12} className="text-yellow-500"/> 1st Place</span><span className="text-gray-900 dark:text-white">5000 XP + Gold Frame</span></div>
-                            <div className="flex justify-between items-center font-bold"><span className="text-gray-600 dark:text-slate-300 flex items-center gap-1"><Medal size={12} className="text-gray-400"/> 2nd Place</span><span className="text-gray-900 dark:text-white">2500 XP + Silver Badge</span></div>
+                            <div className="flex justify-between items-center font-bold">
+                                <span className="text-gray-600 dark:text-slate-300 flex items-center gap-1"><Crown size={12} className="text-yellow-500"/> 1st Place</span>
+                                <span className="text-gray-900 dark:text-white">5000 XP + Gold Frame</span>
+                            </div>
+                            <div className="flex justify-between items-center font-bold">
+                                <span className="text-gray-600 dark:text-slate-300 flex items-center gap-1"><Medal size={12} className="text-gray-400"/> 2nd Place</span>
+                                <span className="text-gray-900 dark:text-white">2500 XP + Silver Badge</span>
+                            </div>
+                            {/* ✅ NEW: 3rd Place Reward */}
+                            <div className="flex justify-between items-center font-bold">
+                                <span className="text-gray-600 dark:text-slate-300 flex items-center gap-1"><Gem size={12} className="text-orange-700 dark:text-orange-500"/> 3rd Place</span>
+                                <span className="text-gray-900 dark:text-white">1000 XP + Bronze Gem</span>
+                            </div>
                         </div>
                     </div>
                  </div>

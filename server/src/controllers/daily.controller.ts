@@ -99,6 +99,82 @@ const buildClickUpPayload = (title: string, emojiCode: string, emojiChar: string
   };
 };
 
+// --- SEASON RECAP CLICKUP PAYLOAD ---
+const buildSeasonRecapPayload = (seasonName: string, top3: any[]) => {
+  // ✅ FIX: Added ': any[]' so TypeScript stops complaining about .push()
+  const comment: any[] = [
+      // ==========================================
+      // 1. BANNER HEADER
+      // ==========================================
+      {
+          type: "emoticon",
+          emoticon: { code: "1f3c6", name: "trophy", type: "default" },
+          text: "🏆"
+      },
+      {
+          text: `  ${seasonName} SEASON FINALE  `, 
+          attributes: { bold: true }
+      },
+      {
+          text: "\n",
+          attributes: {
+              "advanced-banner": "8b461d23-f294-4683-8826-2cb9bf991071", 
+              "advanced-banner-color": "yellow", 
+              header: 3
+          }
+      },
+      { text: "\n", attributes: {} },
+      { text: "The dust has settled. The scores are tallied. Here are your Champions:", attributes: { italic: true } },
+      { text: "\n", attributes: {} },
+      { text: "\n", attributes: {} }
+  ];
+
+  const medals = [
+      { emoji: "🥇", code: "1f947", name: "1st_place_medal", label: "1st Place", xp: "5000 XP" },
+      { emoji: "🥈", code: "1f948", name: "2nd_place_medal", label: "2nd Place", xp: "2500 XP" },
+      { emoji: "🥉", code: "1f949", name: "3rd_place_medal", label: "3rd Place", xp: "1000 XP" }
+  ];
+
+  // ==========================================
+  // 2. DYNAMIC WINNERS LIST
+  // ==========================================
+  top3.forEach((user, index) => {
+      if (user) {
+          comment.push({ 
+              type: "emoticon", 
+              emoticon: { code: medals[index].code, name: medals[index].name, type: "default" }, 
+              text: medals[index].emoji 
+          });
+          comment.push({ text: ` ${medals[index].label}: `, attributes: { bold: true } });
+          comment.push({ text: `${user.name} `, attributes: {} });
+          comment.push({ text: `(+${medals[index].xp})`, attributes: { code: true } });
+          comment.push({ text: "\n", attributes: { blockquote: true } });
+      }
+  });
+
+  // ==========================================
+  // 3. FOOTER & CALL TO ACTION
+  // ==========================================
+  comment.push(
+      { text: "\n", attributes: {} },
+      { type: "divider", text: "---" },
+      { text: "\n", attributes: {} },
+      { type: "emoticon", emoticon: { code: "1f634", name: "sleeping", type: "default" }, text: "😴" },
+      { text: "  A new season will begin shortly. Rest up, units!  ", attributes: { bold: true, italic: true } },
+      { type: "emoticon", emoticon: { code: "1f634", name: "sleeping", type: "default" }, text: "😴" },
+      { text: "\n", attributes: { align: "center" } }
+  );
+
+  return {
+      notify_all: true, 
+      comment: comment
+  };
+};
+
+
+
+
+
 
 // 1. GET ACTIVE QUESTION
 export const getActiveQuestion = async (req: Request, res: Response) => {
@@ -402,52 +478,57 @@ export const getLeaderboard = async (req: Request, res: Response) => {
     
     // --- SEASON LOGIC ---
     if (range === 'monthly') {
-        const endDateFilter = status === 'ENDED' ? seasonEnd : new Date();
+      const endDateFilter = status === 'ENDED' ? seasonEnd : new Date();
 
-        // Fetch Season Scores
-        const seasonResponses = await prisma.dailyResponse.findMany({
-            where: {
-                createdAt: { gte: seasonStart, lte: endDateFilter },
-                option: { isCorrect: true }
-            }
-        });
+      const seasonResponses = await prisma.dailyResponse.findMany({
+          where: {
+              createdAt: { gte: seasonStart, lte: endDateFilter },
+              option: { isCorrect: true }
+          }
+      });
 
-        // Map Scores
-        const scoreMap = new Map<string, number>();
-        seasonResponses.forEach(r => {
-            const current = scoreMap.get(r.userId) || 0;
-            scoreMap.set(r.userId, current + 10);
-        });
+      const scoreMap = new Map<string, number>();
+      const timeMap = new Map<string, number>(); // ✅ TRACKS EXACT MILLISECOND
 
-        // Merge Season Score into User List
-        rankedUsers = allUsers.map(user => ({
-            ...user,
-            score: scoreMap.get(user.id) || 0, // Override total score with season score
-        }));
+      seasonResponses.forEach(r => {
+          const current = scoreMap.get(r.userId) || 0;
+          scoreMap.set(r.userId, current + 10);
 
-    } else {
-        // --- ALL TIME LOGIC ---
-        rankedUsers = [...allUsers];
-    }
+          // Record the precise millisecond they earned these points
+          const rTime = new Date(r.createdAt).getTime();
+          const currentLastTime = timeMap.get(r.userId) || 0;
+          if (rTime > currentLastTime) {
+              timeMap.set(r.userId, rTime);
+          }
+      });
 
-    // 3. 🧠 SORT LOGIC (Score > Streak > Time)
-    rankedUsers.sort((a, b) => {
-      // Priority 1: POINTS (Higher wins)
-      if (b.score !== a.score) return b.score - a.score;
-      
-      // Priority 2: STREAK (Higher wins)
-      if ((b.streak || 0) !== (a.streak || 0)) return (b.streak || 0) - (a.streak || 0);
-      
-      // Priority 3: TIME (First to Reach/Oldest timestamp wins)
-      const dateA = new Date(a.lastDailyDate || a.updatedAt || 0).getTime();
-      const dateB = new Date(b.lastDailyDate || b.updatedAt || 0).getTime();
-      
-      // Ascending sort (Smaller number = Earlier time)
-      if (dateA !== dateB) return dateA - dateB;
+      // Merge Season Score into User List
+      rankedUsers = allUsers.map(user => ({
+          ...user,
+          score: scoreMap.get(user.id) || 0,
+          // Fallback to their profile date only if they have 0 points
+          timeReached: timeMap.get(user.id) || new Date(user.lastDailyDate || user.updatedAt || 0).getTime()
+      }));
 
-      // Final Tie-Breaker: Alphabetical (Prevents jitter)
-      return (a.name || '').localeCompare(b.name || '');
-    });
+  } else {
+      // --- ALL TIME LOGIC ---
+      rankedUsers = allUsers.map(user => ({
+          ...user,
+          timeReached: new Date(user.lastDailyDate || user.updatedAt || 0).getTime()
+      }));
+  }
+
+  // 3. 🧠 STRICT SORT LOGIC (Score > Streak > Exact Time)
+  rankedUsers.sort((a, b) => {
+    // Priority 1: POINTS
+    if (b.score !== a.score) return b.score - a.score;
+    // Priority 2: STREAK
+    if ((b.streak || 0) !== (a.streak || 0)) return (b.streak || 0) - (a.streak || 0);
+    // Priority 3: EXACT TIME REACHED (Millisecond precision)
+    if (a.timeReached !== b.timeReached) return a.timeReached - b.timeReached;
+    // Final Tie-Breaker: Alphabetical
+    return (a.name || '').localeCompare(b.name || '');
+  });
 
     // 4. Assign Ranks
     const processedList = rankedUsers.slice(0, 100).map((u, i) => ({ 
@@ -474,66 +555,106 @@ export const getLeaderboard = async (req: Request, res: Response) => {
   }
 };
 
+
 // 7. START SEASON
 export const startSeason = async (req: Request, res: Response) => {
-    try {
-        await prisma.$transaction([
-            prisma.systemConfig.upsert({ where: { key: 'SEASON_STATUS' }, update: { value: 'ACTIVE' }, create: { key: 'SEASON_STATUS', value: 'ACTIVE' } }),
-            prisma.systemConfig.upsert({ where: { key: 'SEASON_START' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_START', value: new Date().toISOString() } }),
-            prisma.systemConfig.deleteMany({ where: { key: 'SEASON_END' } }) 
-        ]);
-        res.json({ message: "🚀 Season Started! Score tracking is live." });
-    } catch (error) {  
-        res.status(500).json({ message: "Failed to start" });
-    }
+  try {
+      await prisma.$transaction([
+          prisma.systemConfig.upsert({ where: { key: 'SEASON_STATUS' }, update: { value: 'ACTIVE' }, create: { key: 'SEASON_STATUS', value: 'ACTIVE' } }),
+          prisma.systemConfig.upsert({ where: { key: 'SEASON_START' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_START', value: new Date().toISOString() } }),
+          prisma.systemConfig.deleteMany({ where: { key: 'SEASON_END' } }),
+          
+          // ✅ MOVED HERE: Guarantee a 100% clean slate the exact moment the season begins!
+          prisma.user.updateMany({ data: { streak: 0 } }) 
+      ]);
+      res.json({ message: "🚀 Season Started! Score tracking is live and streaks are reset." });
+  } catch (error) {  
+      res.status(500).json({ message: "Failed to start" });
+  }
 };
-
 // 8. END SEASON
 export const endSeason = async (req: Request, res: Response) => {
-    try {
-        const startConfig = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_START' } });
-        const startDate = startConfig ? new Date(startConfig.value) : new Date(0);
+  try {
+      const startConfig = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_START' } });
+      const startDate = startConfig ? new Date(startConfig.value) : new Date(0);
+      const seasonName = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
-        const responses = await prisma.dailyResponse.findMany({
-            where: { createdAt: { gte: startDate }, option: { isCorrect: true } },
-            include: { user: true }
+      const responses = await prisma.dailyResponse.findMany({
+          where: { createdAt: { gte: startDate }, option: { isCorrect: true } },
+          include: { user: true }
+      });
+
+      let top3: any[] = [];
+
+      if (responses.length > 0) {
+        const scoreMap = new Map<string, any>();
+        const timeMap = new Map<string, number>(); // ✅ TRACKS EXACT MILLISECOND
+
+        responses.forEach(r => {
+            const existing = scoreMap.get(r.userId) || { ...r.user, score: 0 };
+            existing.score += 10;
+            existing.streak = r.user.streak || 0;
+            scoreMap.set(r.userId, existing);
+
+            const rTime = new Date(r.createdAt).getTime();
+            const currentLastTime = timeMap.get(r.userId) || 0;
+            if (rTime > currentLastTime) timeMap.set(r.userId, rTime);
+        });
+        
+        // ✅ GET ALL SORTED USERS (With Millisecond Tie-Breaker)
+        const sortedUsers = Array.from(scoreMap.values()).map(u => ({
+            ...u,
+            timeReached: timeMap.get(u.id) || 0
+        })).sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            if ((b.streak || 0) !== (a.streak || 0)) return (b.streak || 0) - (a.streak || 0);
+            if (a.timeReached !== b.timeReached) return a.timeReached - b.timeReached;
+            return (a.name || '').localeCompare(b.name || '');
         });
 
-        if (responses.length > 0) {
-            const scoreMap = new Map<string, any>();
-            responses.forEach(r => {
-                const existing = scoreMap.get(r.userId) || { ...r.user, score: 0 };
-                existing.score += 10;
-                existing.streak = r.user.streak || 0;
-                scoreMap.set(r.userId, existing);
-            });
-            
-            // ✅ FIX: Tie Breaker Logic (Score > Streak)
-            const winner = Array.from(scoreMap.values()).sort((a, b) => {
-                if (b.score !== a.score) return b.score - a.score;
-                return b.streak - a.streak;
-            })[0];
+        // ✅ GRAB TOP 3
+        const first = sortedUsers[0];
+        const second = sortedUsers[1];
+        const third = sortedUsers[2];
 
-            if (winner) {
-                await prisma.seasonArchive.create({
-                    data: {
-                        seasonName: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
-                        winnerId: winner.id, winnerName: winner.name, winnerAvatar: winner.avatar, winnerScore: winner.score, prizeAwarded: 5000
-                    }
-                });
-                await prisma.user.update({ where: { id: winner.id }, data: { score: { increment: 5000 } } });
-            }
-        }
+          if (top3[0]) {
+              await prisma.seasonArchive.create({
+                  data: {
+                      seasonName, winnerId: top3[0].id, winnerName: top3[0].name, winnerAvatar: top3[0].avatar, winnerScore: top3[0].score, prizeAwarded: 5000
+                  }
+              });
+              await prisma.user.update({ where: { id: top3[0].id }, data: { score: { increment: 5000 } } });
+          }
+          if (top3[1]) await prisma.user.update({ where: { id: top3[1].id }, data: { score: { increment: 2500 } } });
+          if (top3[2]) await prisma.user.update({ where: { id: top3[2].id }, data: { score: { increment: 1000 } } });
+      }
 
-        await prisma.$transaction([
-            prisma.systemConfig.upsert({ where: { key: 'SEASON_STATUS' }, update: { value: 'ENDED' }, create: { key: 'SEASON_STATUS', value: 'ENDED' } }),
-            prisma.systemConfig.upsert({ where: { key: 'SEASON_END' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_END', value: new Date().toISOString() } })
-        ]);
+      // 🛑 Freezing Season Status and Resetting Streaks
+    await prisma.$transaction([
+      prisma.systemConfig.upsert({ where: { key: 'SEASON_STATUS' }, update: { value: 'ENDED' }, create: { key: 'SEASON_STATUS', value: 'ENDED' } }),
+      prisma.systemConfig.upsert({ where: { key: 'SEASON_END' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_END', value: new Date().toISOString() } }),
+      
+      // ✅ NEW: Reset every user's streak to 0 for the new season
+      prisma.user.updateMany({ data: { streak: 0 } }) 
+  ]);
 
-        res.json({ message: "🛑 Season Ended. Results are frozen." });
-    } catch (error) {
-        res.status(500).json({ message: "Failed to end" });
-    }
+      // 📣 FIRE CLICKUP ANNOUNCEMENT
+      const token = process.env.CLICKUP_API_TOKEN;
+      const chatId = process.env.CLICKUP_LIST_ID;
+      if (token && chatId && top3.length > 0) {
+          try {
+              await axios.post(
+                `https://api.clickup.com/api/v2/view/${chatId}/comment`,
+                buildSeasonRecapPayload(seasonName, top3), 
+                { headers: { 'Authorization': token, 'Content-Type': 'application/json' } }
+              );
+          } catch (err: any) { console.error("ClickUp Finale Post Failed:", err.message); }
+      }
+
+      res.json({ message: "🛑 Season Ended. Rewards distributed & Announced." });
+  } catch (error) {
+      res.status(500).json({ message: "Failed to end" });
+  }
 };
 
 // 9. FACTORY RESET

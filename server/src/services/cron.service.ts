@@ -96,6 +96,80 @@ const buildClickUpPayload = (title: string, emojiCode: string, emojiChar: string
   };
 };
 
+
+// --- SEASON RECAP CLICKUP PAYLOAD ---
+const buildSeasonRecapPayload = (seasonName: string, top3: any[]) => {
+  const comment: any[] = [
+      // ==========================================
+      // 1. BANNER HEADER
+      // ==========================================
+      {
+          type: "emoticon",
+          emoticon: { code: "1f3c6", name: "trophy", type: "default" },
+          text: "🏆"
+      },
+      {
+          text: `  ${seasonName} SEASON FINALE  `, 
+          attributes: { bold: true }
+      },
+      {
+          text: "\n",
+          attributes: {
+              "advanced-banner": "8b461d23-f294-4683-8826-2cb9bf991071", 
+              "advanced-banner-color": "yellow", 
+              header: 3
+          }
+      },
+      { text: "\n", attributes: {} },
+      { text: "The dust has settled. The scores are tallied. Here are your Champions:", attributes: { italic: true } },
+      { text: "\n", attributes: {} },
+      { text: "\n", attributes: {} }
+  ];
+
+  const medals = [
+      { emoji: "🥇", code: "1f947", name: "1st_place_medal", label: "1st Place", xp: "5000 XP" },
+      { emoji: "🥈", code: "1f948", name: "2nd_place_medal", label: "2nd Place", xp: "2500 XP" },
+      { emoji: "🥉", code: "1f949", name: "3rd_place_medal", label: "3rd Place", xp: "1000 XP" }
+  ];
+
+  // ==========================================
+  // 2. DYNAMIC WINNERS LIST
+  // ==========================================
+  top3.forEach((user, index) => {
+      if (user) {
+          comment.push({ 
+              type: "emoticon", 
+              emoticon: { code: medals[index].code, name: medals[index].name, type: "default" }, 
+              text: medals[index].emoji 
+          });
+          comment.push({ text: ` ${medals[index].label}: `, attributes: { bold: true } });
+          comment.push({ text: `${user.name} `, attributes: {} });
+          comment.push({ text: `(+${medals[index].xp})`, attributes: { code: true } });
+          comment.push({ text: "\n", attributes: { blockquote: true } });
+      }
+  });
+
+  // ==========================================
+  // 3. FOOTER & CALL TO ACTION
+  // ==========================================
+  comment.push(
+      { text: "\n", attributes: {} },
+      { type: "divider", text: "---" },
+      { text: "\n", attributes: {} },
+      { type: "emoticon", emoticon: { code: "1f634", name: "sleeping", type: "default" }, text: "😴" },
+      { text: "  A new season will begin shortly. Rest up, units!  ", attributes: { bold: true, italic: true } },
+      { type: "emoticon", emoticon: { code: "1f634", name: "sleeping", type: "default" }, text: "😴" },
+      { text: "\n", attributes: { align: "center" } }
+  );
+
+  return {
+      notify_all: true, 
+      comment: comment
+  };
+};
+
+
+
 export const initCronJobs = () => {
   // 1. TRASH CLEANUP: Runs every day at Midnight (00:00 UTC)
   cron.schedule('0 0 * * *', async () => {
@@ -255,55 +329,92 @@ const notifyIntegrations = async (questionText: string) => {
 /* =========================================
    TASK 3: SEASON AUTO-PILOT
    ========================================= */
-const checkAndEndSeason = async () => {
-  try {
-    const now = new Date();
-    // 22:00 UTC = 06:00 AM PH (+1 Day).
-    const phTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
-    
-    if (phTime.getDate() !== 1) return; 
-
-    console.log("🗓️ [CRON] It is the 1st of the month (PH). Ending season...");
-
-    const startConfig = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_START' } });
-    const startDate = startConfig ? new Date(startConfig.value) : new Date(0);
-
-    const responses = await prisma.dailyResponse.findMany({
-        where: { createdAt: { gte: startDate }, option: { isCorrect: true } },
-        include: { user: true }
-    });
-
-    if (responses.length > 0) {
+   const checkAndEndSeason = async () => {
+    try {
+      const now = new Date();
+      // 22:00 UTC = 06:00 AM PH (+1 Day).
+      const phTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+      
+      if (phTime.getDate() !== 1) return; 
+  
+      console.log("🗓️ [CRON] It is the 1st of the month (PH). Ending season...");
+  
+      const startConfig = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_START' } });
+      const startDate = startConfig ? new Date(startConfig.value) : new Date(0);
+      const seasonName = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+  
+      const responses = await prisma.dailyResponse.findMany({
+          where: { createdAt: { gte: startDate }, option: { isCorrect: true } },
+          include: { user: true }
+      });
+  
+      let top3: any[] = [];
+  
+      if (responses.length > 0) {
         const scoreMap = new Map<string, any>();
+        const timeMap = new Map<string, number>(); // ✅ TRACKS EXACT MILLISECOND
+        
         responses.forEach(r => {
             const existing = scoreMap.get(r.userId) || { ...r.user, score: 0, streak: r.user.streak || 0 };
             existing.score += 10;
             scoreMap.set(r.userId, existing);
+
+            const rTime = new Date(r.createdAt).getTime();
+            const currentLastTime = timeMap.get(r.userId) || 0;
+            if (rTime > currentLastTime) timeMap.set(r.userId, rTime);
         });
 
-        const winner = Array.from(scoreMap.values()).sort((a, b) => {
-             if (b.score !== a.score) return b.score - a.score;
-             return b.streak - a.streak;
-        })[0];
+        // ✅ GET ALL SORTED USERS
+        const sortedUsers = Array.from(scoreMap.values()).map(u => ({
+            ...u,
+            timeReached: timeMap.get(u.id) || 0
+        })).sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            if ((b.streak || 0) !== (a.streak || 0)) return (b.streak || 0) - (a.streak || 0);
+            if (a.timeReached !== b.timeReached) return a.timeReached - b.timeReached;
+            return (a.name || '').localeCompare(b.name || '');
+        });
 
-        if (winner) {
-            await prisma.seasonArchive.create({
-                data: {
-                    seasonName: new Date().toLocaleString('default', { month: 'long', year: 'numeric' }),
-                    winnerId: winner.id, winnerName: winner.name, winnerAvatar: winner.avatar, winnerScore: winner.score, prizeAwarded: 5000
-                }
-            });
-            await prisma.user.update({ where: { id: winner.id }, data: { score: { increment: 5000 } } });
-        }
-    }
-
+        const first = sortedUsers[0];
+        const second = sortedUsers[1];
+        const third = sortedUsers[2];
+  
+          if (top3[0]) {
+              await prisma.seasonArchive.create({
+                  data: {
+                      seasonName, winnerId: top3[0].id, winnerName: top3[0].name, winnerAvatar: top3[0].avatar, winnerScore: top3[0].score, prizeAwarded: 5000
+                  }
+              });
+              await prisma.user.update({ where: { id: top3[0].id }, data: { score: { increment: 5000 } } });
+          }
+          if (top3[1]) await prisma.user.update({ where: { id: top3[1].id }, data: { score: { increment: 2500 } } });
+          if (top3[2]) await prisma.user.update({ where: { id: top3[2].id }, data: { score: { increment: 1000 } } });
+      }
+  
+      // 🛑 Freezing Season Status and Resetting Streaks
     await prisma.$transaction([
-        prisma.systemConfig.upsert({ where: { key: 'SEASON_STATUS' }, update: { value: 'ENDED' }, create: { key: 'SEASON_STATUS', value: 'ENDED' } }),
-        prisma.systemConfig.upsert({ where: { key: 'SEASON_END' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_END', value: new Date().toISOString() } })
-    ]);
-    
-    console.log("✅ [CRON] Season Ended Successfully.");
-  } catch (error) {
-    console.error("❌ [CRON] Season End Error:", error);
-  }
-};
+      prisma.systemConfig.upsert({ where: { key: 'SEASON_STATUS' }, update: { value: 'ENDED' }, create: { key: 'SEASON_STATUS', value: 'ENDED' } }),
+      prisma.systemConfig.upsert({ where: { key: 'SEASON_END' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_END', value: new Date().toISOString() } }),
+      
+      // ✅ NEW: Reset every user's streak to 0 for the new season
+      prisma.user.updateMany({ data: { streak: 0 } }) 
+  ]);
+  
+      // 📣 FIRE CLICKUP ANNOUNCEMENT
+      const token = process.env.CLICKUP_API_TOKEN;
+      const chatId = process.env.CLICKUP_LIST_ID;
+      if (token && chatId && top3.length > 0) {
+          try {
+              await axios.post(
+                `https://api.clickup.com/api/v2/view/${chatId}/comment`,
+                buildSeasonRecapPayload(seasonName, top3), 
+                { headers: { 'Authorization': token, 'Content-Type': 'application/json' } }
+              );
+          } catch (err: any) { console.error("ClickUp Finale Post Failed:", err.message); }
+      }
+      
+      console.log("✅ [CRON] Season Ended Successfully. Top 3 rewarded and announced.");
+    } catch (error) {
+      console.error("❌ [CRON] Season End Error:", error);
+    }
+  };
