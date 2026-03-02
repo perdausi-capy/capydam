@@ -617,6 +617,9 @@ export const endSeason = async (req: Request, res: Response) => {
         const second = sortedUsers[1];
         const third = sortedUsers[2];
 
+        // 🚨 CRITICAL FIX: Populate the top3 array so rewards and announcements trigger!
+        top3 = [first, second, third].filter(Boolean);
+
           if (top3[0]) {
               await prisma.seasonArchive.create({
                   data: {
@@ -629,14 +632,11 @@ export const endSeason = async (req: Request, res: Response) => {
           if (top3[2]) await prisma.user.update({ where: { id: top3[2].id }, data: { score: { increment: 1000 } } });
       }
 
-      // 🛑 Freezing Season Status and Resetting Streaks
-    await prisma.$transaction([
-      prisma.systemConfig.upsert({ where: { key: 'SEASON_STATUS' }, update: { value: 'ENDED' }, create: { key: 'SEASON_STATUS', value: 'ENDED' } }),
-      prisma.systemConfig.upsert({ where: { key: 'SEASON_END' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_END', value: new Date().toISOString() } }),
-      
-      // ✅ NEW: Reset every user's streak to 0 for the new season
-      prisma.user.updateMany({ data: { streak: 0 } }) 
-  ]);
+      // 🛑 Freezing Season Status (Streaks remain frozen until the new season starts)
+      await prisma.$transaction([
+          prisma.systemConfig.upsert({ where: { key: 'SEASON_STATUS' }, update: { value: 'ENDED' }, create: { key: 'SEASON_STATUS', value: 'ENDED' } }),
+          prisma.systemConfig.upsert({ where: { key: 'SEASON_END' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_END', value: new Date().toISOString() } })
+      ]);
 
       // 📣 FIRE CLICKUP ANNOUNCEMENT
       const token = process.env.CLICKUP_API_TOKEN;

@@ -236,67 +236,75 @@ const cleanupExpiredAssets = async () => {
 };
 
 /* =========================================
+/* =========================================
    TASK 2: DAILY QUEST ROTATION (STRICT FRESHNESS)
    ========================================= */
-const launchDailyQuest = async () => {
-  try {
-    console.log("🔄 [CRON] Starting Daily Rotation Sequence...");
-
-    // 1. KILL SWITCH: Deactivate ALL currently active quests immediately
-    const deactivated = await prisma.dailyQuestion.updateMany({
-      where: { isActive: true },
-      data: { isActive: false }
-    });
-    if (deactivated.count > 0) console.log(`   💀 Deactivated ${deactivated.count} old quest(s).`);
-
-    // 2. FETCH RANDOM FROM VAULT
-    // ✅ NEW RULE: expiresAt must be NULL. 
-    // This guarantees we only pick questions that have NEVER been used.
-    const whereCondition = { 
-      isActive: false, 
-      expiresAt: null 
-    };
-
-    const count = await prisma.dailyQuestion.count({ where: whereCondition });
-
-    if (count === 0) {
-      console.log("   ❌ VAULT IS EMPTY! No fresh questions found. (Used questions are ignored)");
-      return;
-    }
-
-    // Pick a random offset
-    const skip = Math.floor(Math.random() * count);
-    
-    const questToLaunch = await prisma.dailyQuestion.findFirst({
-      where: whereCondition,
-      skip: skip,
-      include: { options: true }
-    });
-
-    // 3. LAUNCH SEQUENCE
-    if (questToLaunch) {
-      // Set expiry for 24 hours from now
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 24);
-
-      await prisma.dailyQuestion.update({
-        where: { id: questToLaunch.id },
-        data: {
-          isActive: true,
-          scheduledFor: null,
-          createdAt: new Date(), 
-          expiresAt: expiresAt // This marks it as "Used" forever
-        }
+   const launchDailyQuest = async () => {
+    try {
+      console.log("🔄 [CRON] Starting Daily Rotation Sequence...");
+  
+      // 🚨 GATEKEEPER: Check if the season is actually running!
+      const seasonStatus = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_STATUS' } });
+      if (seasonStatus?.value === 'ENDED') {
+          console.log("⏸️ [CRON] Season is currently ENDED. Skipping daily quest rotation.");
+          return; // Abort the entire function!
+      }
+  
+      // 1. KILL SWITCH: Deactivate ALL currently active quests immediately
+      const deactivated = await prisma.dailyQuestion.updateMany({
+        where: { isActive: true },
+        data: { isActive: false }
       });
-
-      console.log(`   🚀 LAUNCHED: "${questToLaunch.question}"`);
-      await notifyIntegrations(questToLaunch.question);
-    } 
-
-  } catch (error) {
-    console.error("🔥 [CRON] Rotation Error:", error);
-  }
-};
+      if (deactivated.count > 0) console.log(`   💀 Deactivated ${deactivated.count} old quest(s).`);
+  
+      // 2. FETCH RANDOM FROM VAULT
+      // ✅ NEW RULE: expiresAt must be NULL. 
+      // This guarantees we only pick questions that have NEVER been used.
+      const whereCondition = { 
+        isActive: false, 
+        expiresAt: null 
+      };
+  
+      const count = await prisma.dailyQuestion.count({ where: whereCondition });
+  
+      if (count === 0) {
+        console.log("   ❌ VAULT IS EMPTY! No fresh questions found. (Used questions are ignored)");
+        return;
+      }
+  
+      // Pick a random offset
+      const skip = Math.floor(Math.random() * count);
+      
+      const questToLaunch = await prisma.dailyQuestion.findFirst({
+        where: whereCondition,
+        skip: skip,
+        include: { options: true }
+      });
+  
+      // 3. LAUNCH SEQUENCE
+      if (questToLaunch) {
+        // Set expiry for 24 hours from now
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 24);
+  
+        await prisma.dailyQuestion.update({
+          where: { id: questToLaunch.id },
+          data: {
+            isActive: true,
+            scheduledFor: null,
+            createdAt: new Date(), 
+            expiresAt: expiresAt // This marks it as "Used" forever
+          }
+        });
+  
+        console.log(`   🚀 LAUNCHED: "${questToLaunch.question}"`);
+        await notifyIntegrations(questToLaunch.question);
+      } 
+  
+    } catch (error) {
+      console.error("🔥 [CRON] Rotation Error:", error);
+    }
+  };
 
 // ---------------------------------------------------------
 // YOUR UPDATED NOTIFY FUNCTION
@@ -331,90 +339,90 @@ const notifyIntegrations = async (questionText: string) => {
    ========================================= */
    const checkAndEndSeason = async () => {
     try {
-      const now = new Date();
-      // 22:00 UTC = 06:00 AM PH (+1 Day).
-      const phTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
-      
-      if (phTime.getDate() !== 1) return; 
-  
-      console.log("🗓️ [CRON] It is the 1st of the month (PH). Ending season...");
-  
-      const startConfig = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_START' } });
-      const startDate = startConfig ? new Date(startConfig.value) : new Date(0);
-      const seasonName = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-  
-      const responses = await prisma.dailyResponse.findMany({
-          where: { createdAt: { gte: startDate }, option: { isCorrect: true } },
-          include: { user: true }
-      });
-  
-      let top3: any[] = [];
-  
-      if (responses.length > 0) {
-        const scoreMap = new Map<string, any>();
-        const timeMap = new Map<string, number>(); // ✅ TRACKS EXACT MILLISECOND
+        const now = new Date();
+        // 22:00 UTC = 06:00 AM PH (+1 Day).
+        const phTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
         
-        responses.forEach(r => {
-            const existing = scoreMap.get(r.userId) || { ...r.user, score: 0, streak: r.user.streak || 0 };
-            existing.score += 10;
-            scoreMap.set(r.userId, existing);
-
-            const rTime = new Date(r.createdAt).getTime();
-            const currentLastTime = timeMap.get(r.userId) || 0;
-            if (rTime > currentLastTime) timeMap.set(r.userId, rTime);
+        if (phTime.getDate() !== 1) return; 
+    
+        console.log("🗓️ [CRON] It is the 1st of the month (PH). Ending season...");
+    
+        const startConfig = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_START' } });
+        const startDate = startConfig ? new Date(startConfig.value) : new Date(0);
+        const seasonName = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+    
+        const responses = await prisma.dailyResponse.findMany({
+            where: { createdAt: { gte: startDate }, option: { isCorrect: true } },
+            include: { user: true }
         });
+    
+        let top3: any[] = [];
+    
+        if (responses.length > 0) {
+            const scoreMap = new Map<string, any>();
+            const timeMap = new Map<string, number>(); // ✅ TRACKS EXACT MILLISECOND
+            
+            responses.forEach(r => {
+                const existing = scoreMap.get(r.userId) || { ...r.user, score: 0, streak: r.user.streak || 0 };
+                existing.score += 10;
+                scoreMap.set(r.userId, existing);
 
-        // ✅ GET ALL SORTED USERS
-        const sortedUsers = Array.from(scoreMap.values()).map(u => ({
-            ...u,
-            timeReached: timeMap.get(u.id) || 0
-        })).sort((a, b) => {
-            if (b.score !== a.score) return b.score - a.score;
-            if ((b.streak || 0) !== (a.streak || 0)) return (b.streak || 0) - (a.streak || 0);
-            if (a.timeReached !== b.timeReached) return a.timeReached - b.timeReached;
-            return (a.name || '').localeCompare(b.name || '');
-        });
+                const rTime = new Date(r.createdAt).getTime();
+                const currentLastTime = timeMap.get(r.userId) || 0;
+                if (rTime > currentLastTime) timeMap.set(r.userId, rTime);
+            });
 
-        const first = sortedUsers[0];
-        const second = sortedUsers[1];
-        const third = sortedUsers[2];
-  
-          if (top3[0]) {
-              await prisma.seasonArchive.create({
-                  data: {
-                      seasonName, winnerId: top3[0].id, winnerName: top3[0].name, winnerAvatar: top3[0].avatar, winnerScore: top3[0].score, prizeAwarded: 5000
-                  }
-              });
-              await prisma.user.update({ where: { id: top3[0].id }, data: { score: { increment: 5000 } } });
-          }
-          if (top3[1]) await prisma.user.update({ where: { id: top3[1].id }, data: { score: { increment: 2500 } } });
-          if (top3[2]) await prisma.user.update({ where: { id: top3[2].id }, data: { score: { increment: 1000 } } });
-      }
-  
-      // 🛑 Freezing Season Status and Resetting Streaks
-    await prisma.$transaction([
-      prisma.systemConfig.upsert({ where: { key: 'SEASON_STATUS' }, update: { value: 'ENDED' }, create: { key: 'SEASON_STATUS', value: 'ENDED' } }),
-      prisma.systemConfig.upsert({ where: { key: 'SEASON_END' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_END', value: new Date().toISOString() } }),
-      
-      // ✅ NEW: Reset every user's streak to 0 for the new season
-      prisma.user.updateMany({ data: { streak: 0 } }) 
-  ]);
-  
-      // 📣 FIRE CLICKUP ANNOUNCEMENT
-      const token = process.env.CLICKUP_API_TOKEN;
-      const chatId = process.env.CLICKUP_LIST_ID;
-      if (token && chatId && top3.length > 0) {
-          try {
-              await axios.post(
-                `https://api.clickup.com/api/v2/view/${chatId}/comment`,
-                buildSeasonRecapPayload(seasonName, top3), 
-                { headers: { 'Authorization': token, 'Content-Type': 'application/json' } }
-              );
-          } catch (err: any) { console.error("ClickUp Finale Post Failed:", err.message); }
-      }
-      
-      console.log("✅ [CRON] Season Ended Successfully. Top 3 rewarded and announced.");
+            // ✅ GET ALL SORTED USERS
+            const sortedUsers = Array.from(scoreMap.values()).map(u => ({
+                ...u,
+                timeReached: timeMap.get(u.id) || 0
+            })).sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                if ((b.streak || 0) !== (a.streak || 0)) return (b.streak || 0) - (a.streak || 0);
+                if (a.timeReached !== b.timeReached) return a.timeReached - b.timeReached;
+                return (a.name || '').localeCompare(b.name || '');
+            });
+
+            const first = sortedUsers[0];
+            const second = sortedUsers[1];
+            const third = sortedUsers[2];
+            
+            // 🚨 CRITICAL FIX: Populate the top3 array so rewards and announcements trigger!
+            top3 = [first, second, third].filter(Boolean);
+    
+            if (top3[0]) {
+                await prisma.seasonArchive.create({
+                    data: {
+                        seasonName, winnerId: top3[0].id, winnerName: top3[0].name, winnerAvatar: top3[0].avatar, winnerScore: top3[0].score, prizeAwarded: 5000
+                    }
+                });
+                await prisma.user.update({ where: { id: top3[0].id }, data: { score: { increment: 5000 } } });
+            }
+            if (top3[1]) await prisma.user.update({ where: { id: top3[1].id }, data: { score: { increment: 2500 } } });
+            if (top3[2]) await prisma.user.update({ where: { id: top3[2].id }, data: { score: { increment: 1000 } } });
+        }
+    
+        // 🛑 Freezing Season Status (Streaks remain frozen until the new season starts)
+        await prisma.$transaction([
+            prisma.systemConfig.upsert({ where: { key: 'SEASON_STATUS' }, update: { value: 'ENDED' }, create: { key: 'SEASON_STATUS', value: 'ENDED' } }),
+            prisma.systemConfig.upsert({ where: { key: 'SEASON_END' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_END', value: new Date().toISOString() } })
+        ]);
+    
+        // 📣 FIRE CLICKUP ANNOUNCEMENT
+        const token = process.env.CLICKUP_API_TOKEN;
+        const chatId = process.env.CLICKUP_LIST_ID;
+        if (token && chatId && top3.length > 0) {
+            try {
+                await axios.post(
+                    `https://api.clickup.com/api/v2/view/${chatId}/comment`,
+                    buildSeasonRecapPayload(seasonName, top3), 
+                    { headers: { 'Authorization': token, 'Content-Type': 'application/json' } }
+                );
+            } catch (err: any) { console.error("ClickUp Finale Post Failed:", err.message); }
+        }
+        
+        console.log("✅ [CRON] Season Ended Successfully. Top 3 rewarded and announced.");
     } catch (error) {
-      console.error("❌ [CRON] Season End Error:", error);
+        console.error("❌ [CRON] Season End Error:", error);
     }
-  };
+};
