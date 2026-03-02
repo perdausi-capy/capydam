@@ -162,81 +162,86 @@ const FloatingDailyQuestion = () => {
     }
   };
 
-  if (!question) return null;
+  // ✅ REMOVED: if (!question) return null;
 
   return (
     <>
-      <div
-        ref={buttonRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        className="fixed top-0 left-0 z-[9998] group cursor-grab touch-none select-none outline-none"
-        style={{ width: BOX_SIZE, height: BOX_SIZE, willChange: 'transform' }}
-      >
-        {/* Tooltip Bubble */}
-        <AnimatePresence>
-            <motion.div 
-                initial={{ opacity: 0, y: 10, scale: 0.8 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                className="absolute -top-10 -left-12 w-48 flex justify-center pointer-events-none"
-            >
-                <div className="bg-slate-900 text-green-400 border-2 border-green-500 text-[10px] font-mono font-bold px-3 py-1.5 rounded shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] uppercase tracking-wide">
-                    {displayedText}
-                    {/* Pixel Triangle */}
-                    <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 border-r-2 border-b-2 border-green-500 rotate-45"></div>
-                </div>
-            </motion.div>
-        </AnimatePresence>
-
-        {/* 🤖 THE ROBOT */}
-        <motion.div 
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9, y: 5 }}
-            className="w-full h-full relative"
+      {/* 🤖 ONLY SHOW ROBOT IF THERE IS A QUESTION */}
+      {question && (
+        <div
+          ref={buttonRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          className="fixed top-0 left-0 z-[9998] group cursor-grab touch-none select-none outline-none"
+          style={{ width: BOX_SIZE, height: BOX_SIZE, willChange: 'transform' }}
         >
-            <img 
-                src={robotGif} 
-                alt="Quest Robot"
-                draggable={false} 
-                className={`
-                    w-full h-full object-contain drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)]
-                    scale-x-[-1] 
-                    ${hasVoted ? 'grayscale opacity-70' : ''}
-                `}
-            />
+          {/* Tooltip Bubble */}
+          <AnimatePresence>
+              <motion.div 
+                  initial={{ opacity: 0, y: 10, scale: 0.8 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  className="absolute -top-10 -left-12 w-48 flex justify-center pointer-events-none"
+              >
+                  <div className="bg-slate-900 text-green-400 border-2 border-green-500 text-[10px] font-mono font-bold px-3 py-1.5 rounded shadow-[4px_4px_0px_0px_rgba(0,0,0,0.5)] uppercase tracking-wide">
+                      {displayedText}
+                      {/* Pixel Triangle */}
+                      <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 border-r-2 border-b-2 border-green-500 rotate-45"></div>
+                  </div>
+              </motion.div>
+          </AnimatePresence>
 
-            {/* Streak Badge (Attached to Corner) */}
-            {streak > 0 && (
-                <div className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded border-2 border-black shadow-sm flex items-center gap-0.5 z-10">
-                    <Flame size={10} fill="currentColor" /> {streak}
-                </div>
-            )}
-        </motion.div>
+          {/* 🤖 THE ROBOT */}
+          <motion.div 
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9, y: 5 }}
+              className="w-full h-full relative"
+          >
+              <img 
+                  src={robotGif} 
+                  alt="Quest Robot"
+                  draggable={false} 
+                  className={`
+                      w-full h-full object-contain drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)]
+                      scale-x-[-1] 
+                      ${hasVoted ? 'grayscale opacity-70' : ''}
+                  `}
+              />
 
-        {/* 🏆 LEADERBOARD BUTTON (Hanging Below) */}
-        <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            className="leaderboard-btn absolute -bottom-2 -left-2 w-8 h-8 bg-yellow-400 hover:bg-yellow-300 text-black rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)] flex items-center justify-center z-20"
-            title="View Rankings"
-        >
-            <Trophy size={14} className="text-black" />
-        </motion.button>
+              {/* Streak Badge (Attached to Corner) */}
+              {streak > 0 && (
+                  <div className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded border-2 border-black shadow-sm flex items-center gap-0.5 z-10">
+                      <Flame size={10} fill="currentColor" /> {streak}
+                  </div>
+              )}
+          </motion.div>
 
-      </div>
+          {/* 🏆 LEADERBOARD BUTTON (Hanging Below) */}
+          <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              className="leaderboard-btn absolute -bottom-2 -left-2 w-8 h-8 bg-yellow-400 hover:bg-yellow-300 text-black rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)] flex items-center justify-center z-20"
+              title="View Rankings"
+          >
+              <Trophy size={14} className="text-black" />
+          </motion.button>
+
+        </div>
+      )}
 
       {/* Modals */}
-      <DailyQuestionModal 
-        isOpen={isOpen} 
-        onClose={() => setIsOpen(false)} 
-        question={question}
-        onVoteSuccess={() => {
-            setIsOpen(false);
-            queryClient.invalidateQueries({ queryKey: ['user-streak'] });
-            queryClient.invalidateQueries({ queryKey: ['active-question'] });
-        }}
-      />
+      {question && (
+        <DailyQuestionModal 
+          isOpen={isOpen} 
+          onClose={() => setIsOpen(false)} 
+          question={question}
+          onVoteSuccess={() => {
+              setIsOpen(false);
+              queryClient.invalidateQueries({ queryKey: ['user-streak'] });
+              queryClient.invalidateQueries({ queryKey: ['active-question'] });
+          }}
+        />
+      )}
       
       <LeaderboardModal 
         isOpen={isLeaderboardOpen} 
