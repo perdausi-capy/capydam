@@ -74,7 +74,7 @@ const formatSafeDate = (dateStr?: string) => {
 };
 
 const Upload = () => {
-  const { user } = useAuth();
+  useAuth();
   const [queue, setQueue] = useState<UploadItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false); 
