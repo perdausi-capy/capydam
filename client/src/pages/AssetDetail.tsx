@@ -15,7 +15,6 @@ import ConfirmModal from '../components/ConfirmModal';
 import Masonry from 'react-masonry-css';
 import AssetThumbnail from '../components/AssetThumbnail';
 import { useQueryClient } from '@tanstack/react-query';
-// import AssetChatPanel from '../components/AssetChatPanel';
 
 // --- TYPES ---
 interface Asset {
@@ -103,7 +102,7 @@ const AssetDetail = () => {
   const [addingToId, setAddingToId] = useState<string | null>(null);
 
   const [isEditingLink, setIsEditingLink] = useState(false);
-  const [driveLink, setDriveLink] = useState('');
+  const [driveLinks, setDriveLinks] = useState<string[]>([]); // ✅ Changed to array
   const [isSavingLink, setIsSavingLink] = useState(false);
 
   const [isRenaming, setIsRenaming] = useState(false);
@@ -144,7 +143,6 @@ const AssetDetail = () => {
         setIsSearching(true);
         setShowDropdown(true);
         try {
-          // Fetch limit 5 results for the dropdown
           const res = await client.get(`/assets?search=${encodeURIComponent(searchQuery)}&limit=5`);
           setSearchResults(res.data.results || []);
         } catch (error) {
@@ -156,7 +154,7 @@ const AssetDetail = () => {
         setSearchResults([]);
         setShowDropdown(false);
       }
-    }, 300); // 300ms delay to prevent spamming server
+    }, 300); 
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
@@ -175,7 +173,13 @@ const AssetDetail = () => {
             try {
                 const ai = JSON.parse(assetRes.data.aiData || '{}');
                 setParsedAi(ai);
-                setDriveLink(ai.externalLink || ai.link || ai.url || '');
+
+                // ✅ Handle multiple links AND fallback to old single link structure
+                const extractedLinks = ai.links || [];
+                if (extractedLinks.length === 0 && (ai.externalLink || ai.link || ai.url)) {
+                    extractedLinks.push(ai.externalLink || ai.link || ai.url);
+                }
+                setDriveLinks(extractedLinks);
             } catch { setParsedAi({}); }
 
             setLoading(false); 
@@ -200,14 +204,12 @@ const AssetDetail = () => {
     if (id) loadData();
   }, [id, navigate]);
 
-  // HANDLE RESULT CLICK
   const handleResultClick = (assetId: string) => {
       navigate(`/assets/${assetId}`);
       setShowDropdown(false);
       setSearchQuery('');
   };
 
-  // ✅ FIXED: Navigate to /library instead of /
   const handleGlobalSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchQuery.trim()) {
         navigate(`/library?search=${encodeURIComponent(searchQuery)}`);
@@ -263,16 +265,23 @@ const AssetDetail = () => {
       }
   };
 
-  const saveDriveLink = async () => {
+  // ✅ NEW: Save Multiple Links
+  const saveDriveLinks = async () => {
       if (!asset) return;
       setIsSavingLink(true);
       try {
-          const newAiData = { ...parsedAi, externalLink: driveLink };
+          const validLinks = driveLinks.filter(l => l.trim() !== '');
+          const newAiData = { 
+              ...parsedAi, 
+              externalLink: validLinks.length > 0 ? validLinks[0] : '', // keep fallback
+              links: validLinks 
+          };
           await client.patch(`/assets/${asset.id}`, { aiData: JSON.stringify(newAiData) });
           setParsedAi(newAiData);
+          setDriveLinks(validLinks);
           setIsEditingLink(false);
-          toast.success("Link saved!");
-      } catch (error) { toast.error("Failed to save link"); } 
+          toast.success("Links saved!");
+      } catch (error) { toast.error("Failed to save links"); } 
       finally { setIsSavingLink(false); }
   };
 
@@ -315,8 +324,6 @@ const AssetDetail = () => {
     
     try {
         await client.post(`/collections/${collectionId}/assets`, { assetId: asset.id });
-        
-        // ✅ FIX: Invalidate BOTH
         await queryClient.invalidateQueries({ queryKey: ['collections'] }); 
         await queryClient.invalidateQueries({ queryKey: ['collection', collectionId] }); 
 
@@ -327,7 +334,7 @@ const AssetDetail = () => {
     } finally { 
         setAddingToId(null); 
     }
-};
+  };
 
   const addToTopic = async (categoryId: string, name: string) => {
       if (!asset || addingToId) return;
@@ -344,9 +351,8 @@ const AssetDetail = () => {
 
   const breakpointColumnsObj = { default: 4, 1100: 3, 700: 2, 500: 1 };
 
-  const effectiveLink = parsedAi.externalLink || parsedAi.link || parsedAi.url || null;
   const effectiveTags = parsedAi.tags || parsedAi.keywords || [];
-  const visibleTags = showAllTags ? effectiveTags : effectiveTags.slice(0, 10); // Show only first 10
+  const visibleTags = showAllTags ? effectiveTags : effectiveTags.slice(0, 10);
   const effectiveDescription = parsedAi.description || parsedAi.summary || parsedAi.caption || "";
 
   return (
@@ -356,12 +362,10 @@ const AssetDetail = () => {
       <div className="bg-white/80 dark:bg-[#1A1D21]/80 backdrop-blur-md border-b border-gray-200 dark:border-white/5 px-6 py-3 sticky top-0 z-30 shadow-sm">
           <div className="max-w-[2000px] mx-auto flex items-center justify-between gap-4">
               
-              {/* LEFT: BACK BUTTON */}
               <button onClick={() => navigate(-1)} className="shrink-0 flex items-center text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors font-medium text-sm">
                   <ArrowLeft size={18} className="mr-2" /> Back
               </button>
               
-              {/* ✅ CENTER: LIVE SEARCH SPOTLIGHT */}
               <div className="flex-1 max-w-xl mx-auto hidden md:block group relative" ref={searchRef}>
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <Search size={16} className="text-gray-400 group-focus-within:text-blue-500 transition-colors" />
@@ -376,13 +380,12 @@ const AssetDetail = () => {
                     onKeyDown={handleGlobalSearch}
                   />
 
-                  {/* 🟢 SPOTLIGHT DROPDOWN RESULTS */}
                   {showDropdown && (
                       <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
                           {isSearching ? (
-                              <div className="p-4 flex items-center justify-center text-gray-400 gap-2 text-sm">
+                               <div className="p-4 flex items-center justify-center text-gray-400 gap-2 text-sm">
                                    <Loader2 size={16} className="animate-spin" /> Searching...
-                              </div>
+                               </div>
                           ) : searchResults.length > 0 ? (
                               <div className="py-2">
                                   <div className="px-3 pb-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Quick Results</div>
@@ -392,29 +395,27 @@ const AssetDetail = () => {
                                           onClick={() => handleResultClick(result.id)}
                                           className="w-full px-4 py-2 flex items-center gap-3 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-left"
                                       >
-                                          {/* Tiny Thumbnail */}
                                           <div className="h-8 w-8 rounded bg-gray-200 dark:bg-white/10 overflow-hidden shrink-0">
                                               {result.mimeType.startsWith('image') ? (
-                                                   <img src={result.thumbnailPath || result.path} className="w-full h-full object-cover" />
+                                                    <img src={result.thumbnailPath || result.path} className="w-full h-full object-cover" />
                                                ) : (
-                                                   <div className="w-full h-full flex items-center justify-center text-gray-500">
+                                                    <div className="w-full h-full flex items-center justify-center text-gray-500">
                                                         {result.mimeType.startsWith('video') ? <Video size={14} /> : <FileText size={14} />}
                                                     </div>
-                                               )}
+                                                )}
                                           </div>
                                           <div className="min-w-0">
                                               <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{result.originalName}</p>
                                               <p className="text-[10px] text-gray-500 uppercase">{result.mimeType.split('/')[1]}</p>
                                           </div>
                                       </button>
-                                  ))}
+                                   ))}
                                   <div className="border-t border-gray-100 dark:border-white/5 mt-1 pt-1">
                                       <button 
-                                          // ✅ FIXED: Navigate to Library instead of Home
                                           onClick={() => navigate(`/library?search=${encodeURIComponent(searchQuery)}`)}
                                           className="w-full px-4 py-2 text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-center"
                                       >
-                                           View all results for "{searchQuery}"
+                                          View all results for "{searchQuery}"
                                       </button>
                                   </div>
                               </div>
@@ -427,26 +428,20 @@ const AssetDetail = () => {
                   )}
               </div>
 
-              {/* RIGHT: ACTIONS */}
               <div className="flex items-center gap-3 shrink-0">
-                  {/* DELETE BUTTON */}
                   {canDelete && (
                       <button 
-                          onClick={() => setShowDeleteConfirm(true)} 
+                        onClick={() => setShowDeleteConfirm(true)} 
                         className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors border border-transparent"
                         title="Move to Recycle Bin"
                       >
                           <Trash2 size={18} />
                       </button>
                   )}
-
                   <div className="h-8 w-px bg-gray-200 dark:bg-white/10 mx-1 hidden sm:block"></div>
-
                   <button onClick={handleShare} className="hidden sm:flex items-center gap-2 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-gray-50 dark:hover:bg-white/5 transition-all">
                       <Share2 size={16} /> Share
                   </button>
-
-                  {/* PRIMARY: DOWNLOAD (Blue) */}
                   <button onClick={handleDownload} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md hover:scale-105 transition-transform active:scale-95">
                        <Download size={18} /> Download
                   </button>
@@ -454,7 +449,7 @@ const AssetDetail = () => {
           </div>
       </div>
 
-      {/* MOBILE SEARCH (Visible only on small screens below header) */}
+      {/* MOBILE SEARCH */}
       <div className="md:hidden px-6 pt-4 pb-2">
            <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -476,23 +471,21 @@ const AssetDetail = () => {
       ) : (
           <div className="max-w-[2000px] mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-8 items-start">
               
-              {/* LEFT: PREVIEW & RELATED (Scrollable) */}
+              {/* LEFT: PREVIEW & RELATED */}
               <div className="lg:col-span-2 xl:col-span-3 space-y-12 min-w-0">
-                  {/* MEDIA PREVIEW */}
-                  <div className="rounded-3xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] border border-gray-200 dark:border-white/5 shadow-sm relative group">
+                  <div className="rounded-3xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] border border-gray-200 dark:border-white/5 shadow-sm relative group flex items-center justify-center">
                       {asset.mimeType.startsWith('image/') ? (
                           <img src={asset.path} alt={asset.originalName} className="w-full h-auto object-contain max-h-[75vh]" />
                       ) : asset.mimeType.startsWith('video/') ? (
                           <video src={asset.path} poster={asset.thumbnailPath || undefined} controls className="w-full h-auto max-h-[75vh]" />
                       ) : (
                           <div className="h-96 flex flex-col items-center justify-center text-gray-400">
-                               <FileText size={64} />
+                              <FileText size={64} />
                               <p className="mt-4 font-medium">Preview not available</p>
                           </div>
                       )}
                   </div>
 
-                  {/* RELATED ASSETS SECTION */}
                   {isRelatedLoading ? (
                       <div className="animate-pulse h-64 bg-gray-100 dark:bg-white/5 rounded-2xl"></div>
                   ) : relatedAssets.length > 0 && (
@@ -506,8 +499,8 @@ const AssetDetail = () => {
                                       <div className="rounded-xl overflow-hidden bg-gray-100 dark:bg-[#1A1D21] shadow-sm hover:shadow-md transition-all">
                                           <AssetThumbnail 
                                               mimeType={item.mimeType} 
-                                            thumbnailPath={item.thumbnailPath || item.path} 
-                                            className="w-full h-auto object-cover group-hover:opacity-90 transition-opacity" 
+                                              thumbnailPath={item.thumbnailPath || item.path} 
+                                              className="w-full h-auto object-cover group-hover:opacity-90 transition-opacity" 
                                           />
                                       </div>
                                   </div>
@@ -518,10 +511,7 @@ const AssetDetail = () => {
               </div>
 
               {/* RIGHT: INFO PANEL (Sticky) */}
-              <div 
-                  id="asset-sidebar"
-                  className="space-y-6 lg:sticky lg:top-24 h-fit min-w-0 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/5 rounded-3xl p-6 shadow-sm"
-              >
+              <div id="asset-sidebar" className="space-y-6 lg:sticky lg:top-24 h-fit min-w-0 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/5 rounded-3xl p-6 shadow-sm">
                   
                   {/* 1. TITLE & METADATA */}
                   <div className="group min-w-0">
@@ -539,11 +529,7 @@ const AssetDetail = () => {
                           </div>
                       ) : (
                         <div className="flex items-start justify-between gap-2 mb-2">
-                            <h1 
-                                // ✅ FIX: Added 'flex-1', 'min-w-0', and changed to 'break-all'
-                                className="text-xl font-bold text-gray-900 dark:text-white leading-tight break-all flex-1 min-w-0" 
-                                title={asset.originalName || asset.filename}
-                                >
+                            <h1 className="text-xl font-bold text-gray-900 dark:text-white leading-tight break-all flex-1 min-w-0" title={asset.originalName || asset.filename}>
                                 {asset.originalName || asset.filename}
                             </h1>
                         
@@ -565,12 +551,15 @@ const AssetDetail = () => {
                           <span className="uppercase bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded text-[10px] tracking-wide">{asset.mimeType.split('/')[1]}</span>
                       </div>
 
+                      {/* ✅ CUSTOM UPLOADER DISPLAY */}
                       <div className="flex items-center gap-2 mt-4 text-sm font-medium text-gray-700 dark:text-gray-300">
                           <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center text-[10px] text-white font-bold shadow-sm shrink-0">
-                              {asset.uploadedBy?.name?.charAt(0).toUpperCase() || 'U'}
+                              {(parsedAi.customUploader || asset.uploadedBy?.name || 'U').charAt(0).toUpperCase()}
                           </div>
                           <span className="truncate">
-                              Uploaded by <span className="text-gray-900 dark:text-white font-bold">{asset.uploadedBy?.name || 'Unknown'}</span>
+                              Uploaded by <span className="text-gray-900 dark:text-white font-bold">
+                                  {parsedAi.customUploader || asset.uploadedBy?.name || 'Unknown'}
+                              </span>
                           </span>
                       </div>
                   </div>
@@ -596,44 +585,74 @@ const AssetDetail = () => {
                       )}
                   </div>
 
-                  {/* 3. GOOGLE DRIVE LINK */}
+                  {/* 3. MULTIPLE SOURCE LINKS */}
                   <div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl p-4 border border-blue-100 dark:border-blue-800/30">
-                      <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center justify-between mb-3">
                           <h3 className="text-xs font-bold text-gray-800 dark:text-blue-100 flex items-center gap-2 uppercase tracking-wide">
-                              Source Link
+                              Source Links
                           </h3>
                           {canManageAsset && (
-                              <button onClick={() => setIsEditingLink(!isEditingLink)} className="text-xs font-bold text-blue-600 hover:underline">
+                              <button onClick={() => {
+                                  if (!isEditingLink && driveLinks.length === 0) setDriveLinks(['']);
+                                  setIsEditingLink(!isEditingLink);
+                              }} className="text-xs font-bold text-blue-600 hover:underline">
                                   {isEditingLink ? 'Cancel' : 'Edit'}
                               </button>
                           )}
                       </div>
 
                       {isEditingLink ? (
-                          <div className="flex gap-2">
-                              <input 
-                                  type="url" 
-                                  value={driveLink} 
-                                  onChange={e => setDriveLink(e.target.value)} 
-                                  placeholder="Paste link..." 
-                                  className="flex-1 text-sm bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 min-w-0"
-                              />
-                              <button onClick={saveDriveLink} disabled={isSavingLink} className="bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 disabled:opacity-50 shrink-0">
-                                  <Check size={16} />
-                              </button>
+                          <div className="space-y-2">
+                              {driveLinks.map((link, idx) => (
+                                  <div key={idx} className="flex gap-2">
+                                      <input 
+                                          type="url" 
+                                          value={link} 
+                                          onChange={e => {
+                                              const newLinks = [...driveLinks];
+                                              newLinks[idx] = e.target.value;
+                                              setDriveLinks(newLinks);
+                                          }} 
+                                          placeholder="https://..." 
+                                          className="flex-1 text-sm bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 min-w-0"
+                                      />
+                                      <button onClick={() => {
+                                          const newLinks = driveLinks.filter((_, i) => i !== idx);
+                                          setDriveLinks(newLinks.length ? newLinks : ['']);
+                                      }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors shrink-0">
+                                          <X size={16} />
+                                      </button>
+                                  </div>
+                              ))}
+                              
+                              <div className="flex items-center justify-between pt-2">
+                                  <button onClick={() => setDriveLinks([...driveLinks, ''])} className="text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1">
+                                      <Plus size={12} /> Add Link
+                                  </button>
+                                  <button onClick={saveDriveLinks} disabled={isSavingLink} className="bg-blue-600 text-white rounded-lg px-4 py-2 text-xs font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1 shrink-0">
+                                      {isSavingLink ? <Loader2 size={14} className="animate-spin"/> : <Check size={14} />} Save
+                                  </button>
+                              </div>
                           </div>
-                      ) : effectiveLink ? (
-                          <a 
-                              href={effectiveLink} 
-                              target="_blank" 
-                              rel="noreferrer" 
-                              className="flex items-center justify-center gap-2 w-full bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500 text-gray-700 dark:text-gray-200 font-semibold py-2.5 rounded-xl shadow-sm transition-all hover:shadow-md group text-sm"
-                          >
-                              <LinkIcon size={14} className="text-blue-500 group-hover:rotate-45 transition-transform" />
-                              Open External Link
-                          </a>
                       ) : (
-                          <p className="text-xs text-gray-400 italic">No external link added.</p>
+                          <div className="space-y-2">
+                              {driveLinks.length > 0 ? (
+                                  driveLinks.map((link, idx) => (
+                                      <a 
+                                          key={idx}
+                                          href={link} 
+                                          target="_blank" 
+                                          rel="noreferrer" 
+                                          className="flex items-center gap-2 w-full bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500 text-gray-700 dark:text-gray-200 font-semibold py-2.5 px-3 rounded-xl shadow-sm transition-all hover:shadow-md group text-sm truncate"
+                                      >
+                                          <LinkIcon size={14} className="text-blue-500 group-hover:rotate-45 transition-transform shrink-0" />
+                                          <span className="truncate">{link.replace(/^https?:\/\//, '')}</span>
+                                      </a>
+                                  ))
+                              ) : (
+                                  <p className="text-xs text-gray-400 italic">No external links added.</p>
+                              )}
+                          </div>
                       )}
                   </div>
 
@@ -677,7 +696,7 @@ const AssetDetail = () => {
                                           )}
                                       </div>
                                   ))}
-                                   
+                                  
                                   {effectiveTags.length > 10 && (
                                       <button 
                                           onClick={() => setShowAllTags(!showAllTags)}
@@ -699,7 +718,7 @@ const AssetDetail = () => {
                                       value={newTag} 
                                       onChange={e => setNewTag(e.target.value)} 
                                       onBlur={() => setIsAddingTag(false)} 
-                                      className="text-xs bg-white dark:bg-black/20 border border-blue-500 rounded-full px-2 py-1 outline-none w-24" 
+                                      className="text-xs bg-white dark:bg-black/20 border border-blue-500 rounded-full px-2 py-1 outline-none w-24 text-gray-900 dark:text-white" 
                                       placeholder="New tag..." 
                                   />
                               </form>
@@ -776,7 +795,6 @@ const AssetDetail = () => {
                                   </button>
                               ))
                           ) : <div className="p-6 text-center text-gray-400 text-sm">No topics found</div>
-                  
                       )}
                   </div>
               </div>

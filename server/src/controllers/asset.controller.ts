@@ -221,11 +221,9 @@ export const trackAssetClick = async (req: Request, res: Response): Promise<void
 export const getAssets = async (req: Request, res: Response): Promise<void> => {
   try {
     const { search, type, color, page = 1, limit = 50 } = req.query;
-    
     const pageNum = Math.max(1, Number(page));
     const limitNum = Math.max(1, Math.min(100, Number(limit))); 
     const skip = (pageNum - 1) * limitNum;
-
     const cleanSearch = String(search || '').trim().toLowerCase();
     
     // A. Reusable Filter Logic
@@ -234,7 +232,6 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
             // ✅ CRITICAL: Only show assets that are NOT in the trash
             deletedAt: null
         };
-
         if (type && type !== 'all') {
             if (type === 'image') filters.mimeType = { startsWith: 'image/' };
             else if (type === 'video') filters.mimeType = { startsWith: 'video/' };
@@ -274,12 +271,10 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
                 select: lightweightSelect, 
             })
         ]);
-
         const fixedAssets = assets.map(asset => ({
             ...asset,
             thumbnailPath: asset.thumbnailPath || asset.path 
         }));
-
         res.json({
             results: fixedAssets,
             total,
@@ -291,7 +286,9 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
 
     // --- MODE B: SEARCH (Optimized) ---
     const scoredMap = new Map<string, { asset: any, score: number }>();
-    let searchTerms: string[] = [cleanSearch];
+    
+    // ✅ FIX 1: Split search into multiple words so "red car" searches for "red" AND "car"
+    let searchTerms: string[] = cleanSearch.split(/\s+/).filter(Boolean);
 
     // Ensure activeFilters (including deletedAt: null) are applied to search
     const keywordWhere: any = { 
@@ -300,10 +297,13 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
 
     if (searchTerms.length > 0) {
       keywordWhere.AND.push({
-        OR: searchTerms.flatMap(term => [
-          { originalName: { contains: term, mode: 'insensitive' } },
-          { aiData: { contains: term, mode: 'insensitive' } },
-        ])
+        // Require ALL words to match somewhere in the asset (Title or AI)
+        AND: searchTerms.map(term => ({
+            OR: [
+              { originalName: { contains: term, mode: 'insensitive' } },
+              { aiData: { contains: term, mode: 'insensitive' } },
+            ]
+        }))
       });
     }
 
@@ -311,6 +311,7 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
     const keywordAssets = await prisma.asset.findMany({
       where: keywordWhere,
       select: lightweightSelect, 
+      orderBy: { createdAt: 'desc' }, // ✅ FIX 2: Ensure we pull the 200 NEWEST matches first!
       take: 200, 
     });
 
@@ -320,15 +321,25 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
         const lowerName = (asset.originalName || '').toLowerCase();
         const lowerAI = (String(asset.aiData) || '').toLowerCase();
         
+        // Score based on the full exact phrase first
         if (lowerName === cleanSearch) score += 100;
         else if (lowerName.includes(cleanSearch)) score += 50;
-        if (lowerAI.includes(cleanSearch)) score += 30;
+        
+        // Then score based on individual words
+        searchTerms.forEach(term => {
+            if (lowerName.includes(term)) score += 20;
+            if (lowerAI.includes(term)) score += 10;
+        });
 
         scoredMap.set(asset.id, { asset, score });
     });
 
     let finalResults = Array.from(scoredMap.values())
-        .sort((a, b) => b.score - a.score)
+        .sort((a, b) => {
+            // ✅ FIX 3: Primary sort by score. If tied, secondary sort by Newest!
+            if (b.score !== a.score) return b.score - a.score;
+            return new Date(b.asset.createdAt).getTime() - new Date(a.asset.createdAt).getTime();
+        })
         .map(item => item.asset);
 
     const totalSearch = finalResults.length;
@@ -344,12 +355,10 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
             take: limitNum,
             select: lightweightSelect
         });
-        
         const fixedFallback = fallbackAssets.map(asset => ({
             ...asset,
             thumbnailPath: asset.thumbnailPath || asset.path 
         }));
-        
         res.json({ results: fixedFallback, isFallback: true, total: 0, page: 1, totalPages: 1 });
         return;
     }
@@ -358,7 +367,6 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
         ...asset,
         thumbnailPath: asset.thumbnailPath || asset.path 
     }));
-
     res.json({ 
         results: fixedResults, 
         isFallback,
@@ -366,7 +374,6 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
         page: pageNum,
         totalPages: Math.ceil(totalSearch / limitNum)
     });
-
   } catch (error) {
     console.error("Get Assets Error:", error);
     res.status(500).json({ message: 'Error fetching assets' });
