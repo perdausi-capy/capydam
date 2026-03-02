@@ -349,7 +349,9 @@ const notifyIntegrations = async (questionText: string) => {
     
         const startConfig = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_START' } });
         const startDate = startConfig ? new Date(startConfig.value) : new Date(0);
-        const seasonName = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+        
+        // 🚨 CRITICAL FIX: Named based on when the season STARTED, not the current date.
+        const seasonName = startDate.toLocaleString('default', { month: 'long', year: 'numeric' });
     
         const responses = await prisma.dailyResponse.findMany({
             where: { createdAt: { gte: startDate }, option: { isCorrect: true } },
