@@ -5,36 +5,40 @@ import confetti from 'canvas-confetti';
 import fanfareSound from '../../../assets/fanfareSound.mp3';
 
 interface SeasonRecapModalProps {
-    leaderboardData: any;
+    recapData: any;
     currentUser: any;
 }
 
-export const SeasonRecapModal = ({ leaderboardData, currentUser }: SeasonRecapModalProps) => {
+export const SeasonRecapModal = ({ recapData, currentUser }: SeasonRecapModalProps) => {
     const [isOpen, setIsOpen] = useState(false);
     const [isRevealed, setIsRevealed] = useState(false);
     const [view, setView] = useState<'podium' | 'summary'>('podium');
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
-    const isEnded = leaderboardData?.status === 'ENDED';
-    const leaders = leaderboardData?.leaders || [];
-    const myStats = leaderboardData?.user;
+    // ✅ Map data directly from the frozen snapshot
+    const leaders = recapData?.leaders || [];
+    const seasonName = recapData?.seasonName || "Previous";
     
-    const seasonName = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-    const storageKey = `capydam_recap_seen_${seasonName.replace(/\s+/g, '')}`;
+    // Find the current user's frozen stats from the snapshot
+    const myStats = leaders.find((u: any) => u.id === currentUser?.id);
+    
+    // Unique key so it only shows once per user per season
+    const storageKey = recapData ? `capydam_recap_seen_${seasonName.replace(/\s+/g, '')}` : null;
 
     useEffect(() => {
         audioRef.current = new Audio(fanfareSound);
         audioRef.current.volume = 0.6;
     }, []);
 
+    // ✅ Trigger Modal ONLY if recapData exists and they haven't seen it yet
     useEffect(() => {
-        if (isEnded && !localStorage.getItem(storageKey)) {
+        if (recapData && storageKey && !localStorage.getItem(storageKey)) {
             const timer = setTimeout(() => {
                 setIsOpen(true);
             }, 1000);
             return () => clearTimeout(timer);
         }
-    }, [isEnded, storageKey]);
+    }, [recapData, storageKey]);
 
     const handleReveal = () => {
         setIsRevealed(true);
@@ -72,7 +76,10 @@ export const SeasonRecapModal = ({ leaderboardData, currentUser }: SeasonRecapMo
     };
 
     const handleClose = () => {
-        localStorage.setItem(storageKey, 'true'); 
+        // ✅ Add a check to ensure storageKey exists before using it
+        if (storageKey) {
+            localStorage.setItem(storageKey, 'true'); 
+        }
         setIsOpen(false);
     };
 

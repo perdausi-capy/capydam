@@ -49,10 +49,11 @@ const FloatingDailyQuestion = () => {
       enabled: !!user
   });
 
-  // 3. Get Leaderboard State (For Season Recap Check)
-  const { data: leaderboardData } = useQuery({
-    queryKey: ['leaderboard', 'monthly'],
-    queryFn: async () => (await client.get('/daily/leaderboard?range=monthly')).data,
+  // 3. Get Frozen Season Recap Snapshot
+  // ✅ FIX: Now fetches the saved JSON snapshot instead of the live leaderboard
+  const { data: recapSnapshot } = useQuery({
+    queryKey: ['season-recap-snapshot'],
+    queryFn: async () => (await client.get('/daily/recap')).data,
     enabled: !!user
   });
 
@@ -162,8 +163,6 @@ const FloatingDailyQuestion = () => {
     }
   };
 
-  // ✅ REMOVED: if (!question) return null;
-
   return (
     <>
       {/* 🤖 ONLY SHOW ROBOT IF THERE IS A QUESTION */}
@@ -250,7 +249,7 @@ const FloatingDailyQuestion = () => {
 
       {/* 🚀 ADD THE SEASON RECAP MODAL HERE */}
       <SeasonRecapModal 
-        leaderboardData={leaderboardData} 
+        recapData={recapSnapshot} // ✅ Passed the new snapshot data
         currentUser={user} 
       />
       

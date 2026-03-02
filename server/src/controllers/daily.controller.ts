@@ -572,6 +572,7 @@ export const startSeason = async (req: Request, res: Response) => {
       res.status(500).json({ message: "Failed to start" });
   }
 };
+
 // 8. END SEASON
 export const endSeason = async (req: Request, res: Response) => {
   try {
@@ -587,6 +588,7 @@ export const endSeason = async (req: Request, res: Response) => {
       });
 
       let top3: any[] = [];
+      let sortedUsers: any[] = []; // ✅ Lifted to outer scope for the snapshot
 
       if (responses.length > 0) {
         const scoreMap = new Map<string, any>();
@@ -604,7 +606,7 @@ export const endSeason = async (req: Request, res: Response) => {
         });
         
         // ✅ GET ALL SORTED USERS (With Millisecond Tie-Breaker)
-        const sortedUsers = Array.from(scoreMap.values()).map(u => ({
+        sortedUsers = Array.from(scoreMap.values()).map(u => ({
             ...u,
             timeReached: timeMap.get(u.id) || 0
         })).sort((a, b) => {
@@ -633,11 +635,24 @@ export const endSeason = async (req: Request, res: Response) => {
           if (top3[1]) await prisma.user.update({ where: { id: top3[1].id }, data: { score: { increment: 2500 } } });
           if (top3[2]) await prisma.user.update({ where: { id: top3[2].id }, data: { score: { increment: 1000 } } });
       }
+      
+      // 📸 CREATE THE FROZEN SNAPSHOT (Top 50 users)
+      const recapSnapshot = {
+          seasonName: seasonName,
+          leaders: sortedUsers.slice(0, 50) 
+      };
 
-      // 🛑 Freezing Season Status (Streaks remain frozen until the new season starts)
+      // 🛑 Freezing Season Status and Saving Snapshot
       await prisma.$transaction([
           prisma.systemConfig.upsert({ where: { key: 'SEASON_STATUS' }, update: { value: 'ENDED' }, create: { key: 'SEASON_STATUS', value: 'ENDED' } }),
-          prisma.systemConfig.upsert({ where: { key: 'SEASON_END' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_END', value: new Date().toISOString() } })
+          prisma.systemConfig.upsert({ where: { key: 'SEASON_END' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_END', value: new Date().toISOString() } }),
+          
+          // ✅ Save the snapshot to the config table!
+          prisma.systemConfig.upsert({ 
+              where: { key: 'LAST_SEASON_RECAP' }, 
+              update: { value: JSON.stringify(recapSnapshot) }, 
+              create: { key: 'LAST_SEASON_RECAP', value: JSON.stringify(recapSnapshot) } 
+          })
       ]);
 
       // 📣 FIRE CLICKUP ANNOUNCEMENT
@@ -954,5 +969,17 @@ export const claimGoldenCapy = async (req: Request, res: Response) => {
       }
       console.error(error);
       res.status(500).json({ message: "Error claiming bonus" });
+  }
+};
+
+// 19. GET LAST SEASON RECAP SNAPSHOT
+export const getLastSeasonRecap = async (req: Request, res: Response) => {
+  try {
+    const recapConfig = await prisma.systemConfig.findUnique({ where: { key: 'LAST_SEASON_RECAP' } });
+    if (!recapConfig) return res.json(null);
+    
+    res.json(JSON.parse(recapConfig.value));
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch recap snapshot" });
   }
 };

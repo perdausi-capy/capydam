@@ -31,6 +31,7 @@ import {
   recycleAllHistory,
   recycleToVault,
   getGoldenStatus,
+  getLastSeasonRecap,
   
 } from '../controllers/daily.controller';
 
@@ -45,6 +46,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 router.get('/', verifyJWT, getActiveQuestion);         // Get currently active quest
 router.get('/active', verifyJWT, getActiveQuestion);   // Alias for above
 router.get('/leaderboard', verifyJWT, getLeaderboard); // Get rankings (Season/AllTime)
+router.get('/recap', verifyJWT, getLastSeasonRecap);
 router.post('/vote', verifyJWT, submitVote);           // Submit a vote
 // 🐹 2. REGISTER THE GOLDEN CAPY ROUTE HERE
 router.get('/golden-status', verifyJWT, getGoldenStatus);
