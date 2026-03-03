@@ -61,8 +61,11 @@ const AssetCard = React.memo(({
     const { tags, link } = useMemo(() => parseAiData(asset.aiData), [asset.aiData]);
 
     return (
-        <div className="group relative mb-6 block transition-all duration-300 w-full min-w-0 transform-gpu break-inside-avoid">
-            
+        // ✅ FIX: Added content-visibility to offload off-screen rendering
+        <div 
+            className="group relative mb-6 block transition-all duration-300 w-full min-w-0 transform-gpu break-inside-avoid"
+            style={{ contentVisibility: 'auto', containIntrinsicSize: '350px' }}
+        >
             <div className="relative">
                 {/* 🐹 GOLDEN CAPYBARA EVENT: No card border, just the Capy */}
                 {isGolden && (
