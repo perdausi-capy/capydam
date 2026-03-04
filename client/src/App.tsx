@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 // ✅ 1. Import Terminal Context & Component
-import { TerminalProvider } from './context/TerminalContext'; 
+import { TerminalProvider } from './context/TerminalContext';
 import GlobalTerminal from './components/GlobalTerminal';
 
 import Layout from './components/Layout';
@@ -21,12 +21,12 @@ import CollectionDetail from './pages/CollectionDetail';
 import Users from './pages/Users';
 import Profile from './pages/Profile';
 import Support from './pages/Support';
-import AdminFeedback from './pages/AdminFeedback'; 
+import AdminFeedback from './pages/AdminFeedback';
 import AdminAnalytics from './pages/AdminAnalytics';
 import RecycleBin from './pages/RecycleBin';
 
 // ✅ NEW CHAT PAGE IMPORT
-import { SocketProvider } from './context/SocketContext'; 
+import { SocketProvider } from './context/SocketContext';
 import Chat from './pages/Chat'; // 1. Full Page Chat (Replaces floating widget)
 import JrdAssets from './pages/jrdAssets';
 import ScormExtractor from './pages/ScormExtractor';
@@ -38,6 +38,9 @@ import DdlGenerator from './pages/DdlGenerator';
 
 import FloatingDailyQuestion from './components/FloatingDailyQuestion';
 import AdminDailyQuest from './pages/AdminDailyQuest';
+
+// ✅ NEW ITT DASHBOARD
+import ITTDashboard from './pages/ITTDashboard';
 
 // --- WRAPPERS ---
 
@@ -51,10 +54,10 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 // 2. Admin Only Route (Security Layer)
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, user } = useAuth();
-  
+
   if (!isAuthenticated) return <Navigate to="/login" />;
   if (user?.role !== 'admin') return <Navigate to="/" />; // Redirect unauthorized users
-  
+
   return <Layout>{children}</Layout>;
 };
 
@@ -67,14 +70,14 @@ function App() {
           <Router>
             {/* ✅ TERMINAL PROVIDER (Can be anywhere inside Router) */}
             <TerminalProvider>
-              
+
               <Routes>
                 {/* --- Public Routes --- */}
                 <Route path="/login" element={<Login />} />
                 <Route path="/request-account" element={<RequestAccount />} />
-                
+
                 {/* --- Protected Routes (All Users) --- */}
-                
+
                 {/* 1. Exploration (Home) */}
                 <Route path="/" element={<ProtectedRoute><Categories /></ProtectedRoute>} />
                 <Route path="/categories/:id" element={<ProtectedRoute><CategoryDetail /></ProtectedRoute>} />
@@ -83,12 +86,12 @@ function App() {
                 <Route path="/library" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
                 <Route path="/assets/:id" element={<ProtectedRoute><AssetDetail /></ProtectedRoute>} />
-                
+
                 {/* 3. Support & Collections */}
                 <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
                 <Route path="/collections" element={<ProtectedRoute><Collections /></ProtectedRoute>} />
                 <Route path="/collections/:id" element={<ProtectedRoute><CollectionDetail /></ProtectedRoute>} />
-                
+
                 {/* 4. Profile */}
                 <Route path="/profile/:id?" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
@@ -101,15 +104,18 @@ function App() {
 
                 {/* 6. ✅ NEW CHAT ScormExtractor */}
                 <Route path="/scorm-extractor" element={<ProtectedRoute><ScormExtractor /></ProtectedRoute>} />
-                 <Route path="/jrd-assets" element={<ProtectedRoute><JrdAssets /></ProtectedRoute>} />
+                <Route path="/jrd-assets" element={<ProtectedRoute><JrdAssets /></ProtectedRoute>} />
                 {/* --- Admin Routes (Restricted) --- */}
                 <Route path="/users" element={<AdminRoute><Users /></AdminRoute>} />
                 <Route path="/admin/feedback" element={<AdminRoute><AdminFeedback /></AdminRoute>} />
                 <Route path="/admin/analytics" element={<AdminRoute><AdminAnalytics /></AdminRoute>} />
                 <Route path="/admin/recycle-bin" element={<AdminRoute><RecycleBin /></AdminRoute>} />
                 <Route path="/admin/daily-quest" element={<AdminRoute><AdminDailyQuest /></AdminRoute>} />
-                
-                
+
+                {/* ✅ NEW: ITT System Dashboard */}
+                <Route path="/admin/itt" element={<AdminRoute><ITTDashboard /></AdminRoute>} />
+
+
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
@@ -117,7 +123,7 @@ function App() {
               {/* ✅ GLOBAL COMPONENTS (Persist across pages) */}
               <GlobalTerminal />
               <FloatingDailyQuestion />
-              
+
               {/* 🗑️ REMOVED: <GlobalChat /> (Floating widget no longer needed) */}
 
             </TerminalProvider>
