@@ -543,7 +543,7 @@ const Upload = () => {
                                                 </label>
                                                 <div className={`flex items-center bg-gray-50 dark:bg-[#0B0D0F]/50 border rounded-xl px-3 py-2.5 focus-within:ring-2 transition-all hover:border-gray-300 dark:hover:border-white/20 ${isMissingUploader ? 'border-red-300 dark:border-red-900 focus-within:ring-red-500/50' : 'border-gray-200 dark:border-white/10 focus-within:ring-indigo-500/50'}`}>
                                                     <User size={14} className={isMissingUploader ? 'text-red-400 mr-2 shrink-0' : 'text-gray-400 mr-2 shrink-0'} />
-                                                    <input type="text" value={item.customUploader} onChange={(e) => updateItem(index, 'customUploader', e.target.value)} disabled={item.status !== 'pending'} className="w-full bg-transparent text-sm font-medium text-gray-900 dark:text-white outline-none placeholder-gray-400" placeholder="Who created this?" />
+                                                    <input type="text" value={item.customUploader} onChange={(e) => updateItem(index, 'customUploader', e.target.value)} disabled={item.status !== 'pending'} className="w-full bg-transparent text-sm font-medium text-gray-900 dark:text-white outline-none placeholder-gray-400" placeholder="DAM uploader doing the task" />
                                                 </div>
                                             </div>
                                         </div>
