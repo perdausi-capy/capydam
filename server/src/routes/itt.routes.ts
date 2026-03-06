@@ -27,5 +27,7 @@ router.delete('/reports/:id', ittController.deleteReport);
 
 // ITT Support Tickets
 router.get('/tickets', ittController.getIttTickets);
+router.get('/tickets/user/:userId', ittController.getIttTicketsByUser);
+router.post('/tickets/:id/reply', ittController.replyToIttTicket);
 
 export default router;

@@ -32,17 +32,33 @@ html::view-transition-group(root) {
 
 @layer utilities {
   @keyframes wing-flutter-left {
-    0%, 100% { transform: scaleX(1) rotate(10deg); }
-    50% { transform: scaleX(0.6) rotate(0deg); }
+
+    0%,
+    100% {
+      transform: scaleX(1) rotate(10deg);
+    }
+
+    50% {
+      transform: scaleX(0.6) rotate(0deg);
+    }
   }
+
   @keyframes wing-flutter-right {
-    0%, 100% { transform: scaleX(1) rotate(-10deg); }
-    50% { transform: scaleX(0.6) rotate(0deg); }
+
+    0%,
+    100% {
+      transform: scaleX(1) rotate(-10deg);
+    }
+
+    50% {
+      transform: scaleX(0.6) rotate(0deg);
+    }
   }
-  
+
   .animate-wing-flutter-left {
     animation: wing-flutter-left 0.15s infinite ease-in-out alternate;
   }
+
   .animate-wing-flutter-right {
     animation: wing-flutter-right 0.15s infinite ease-in-out alternate;
   }
@@ -52,13 +68,13 @@ html::view-transition-group(root) {
   .glass {
     @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-glass;
   }
-  
+
   .glass-dark {
     @apply bg-neutral-dark/80 backdrop-blur-md border border-white/10;
   }
-  
+
   .text-shadow {
-    text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 }
 
@@ -80,10 +96,12 @@ html.transitioning * {
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
   .mask-gradient-right {
     mask-image: linear-gradient(to right, black 85%, transparent 100%);
   }
@@ -94,15 +112,18 @@ html.transitioning * {
   .perspective-1000 {
     perspective: 1000px;
   }
+
   .transform-style-3d {
     transform-style: preserve-3d;
   }
 }
+
 /* client/src/index.css */
 @layer utilities {
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -113,7 +134,7 @@ html.transitioning * {
 body {
   @apply bg-neutral-light text-neutral-mid;
   /* Subtle mesh gradient */
-  background-image: 
+  background-image:
     radial-gradient(at 0% 0%, rgba(90, 142, 209, 0.05) 0px, transparent 50%),
     radial-gradient(at 100% 0%, rgba(6, 214, 160, 0.05) 0px, transparent 50%);
   background-attachment: fixed;
@@ -121,24 +142,24 @@ body {
 
 /* Custom Scrollbar for Sidebar */
 .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-  }
-  
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
-  }
-  
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-  }
-  
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
-  }
+  width: 6px;
+}
 
-  /* client/src/index.css */
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* client/src/index.css */
 
 /* ... existing styles ... */
 
@@ -165,7 +186,8 @@ body {
 }
 
 .chat-editor blockquote {
-  border-left: 4px solid #3b82f6; /* Blue border */
+  border-left: 4px solid #3b82f6;
+  /* Blue border */
   padding-left: 1rem;
   font-style: italic;
   color: #94a3b8;
@@ -199,5 +221,67 @@ body {
   content: attr(placeholder);
   color: #6b7280;
   pointer-events: none;
-  display: block; /* For Firefox */
+  display: block;
+  /* For Firefox */
+}
+
+/* ============================================
+   GLASSY SELECT / DROPDOWN UTILITY
+   Matches the ITT Dashboard parent design:
+   backdrop-blur, translucent tint, blue accent
+   ============================================ */
+.select-glass {
+  width: 100%;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0.625rem 2.5rem 0.625rem 1rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-color: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(209, 213, 219, 0.8);
+  color: #111827;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.select-glass:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18), 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.dark .select-glass {
+  background-color: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #f9fafb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+}
+
+.dark .select-glass:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2), 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.select-glass option {
+  background-color: #ffffff;
+  color: #111827;
+}
+
+.dark .select-glass option {
+  background-color: #1a1d21;
+  color: #f9fafb;
+}
+
+/* Left-icon padded variant */
+.select-glass-icon {
+  padding-left: 2.75rem;
 }

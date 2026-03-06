@@ -201,8 +201,6 @@ export const createReport = async (req: Request, res: Response) => {
       data: {
         date: date ? new Date(date) : new Date(),
         hours: parseFloat(hours) || 8.0,
-        reactiveTickets: parseInt(reactiveTickets) || 0,
-        proactiveMaintenance: parseInt(proactiveMaintenance) || 0,
         researchNotes,
         nextSteps,
         authorId
@@ -228,8 +226,6 @@ export const updateReport = async (req: Request, res: Response) => {
       data: {
         date: date ? new Date(date) : undefined,
         hours: hours ? parseFloat(hours) : undefined,
-        reactiveTickets: reactiveTickets !== undefined ? parseInt(reactiveTickets) : undefined,
-        proactiveMaintenance: proactiveMaintenance !== undefined ? parseInt(proactiveMaintenance) : undefined,
         researchNotes,
         nextSteps,
       },
@@ -272,5 +268,45 @@ export const getIttTickets = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error fetching ITT tickets:", error);
     res.status(500).json({ error: "Failed to fetch ITT tickets" });
+  }
+};
+
+// Get ITT support tickets by assigned user (for workstation detail view)
+export const getIttTicketsByUser = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const tickets = await prisma.feedback.findMany({
+      where: { type: 'itt_support', userId },
+      include: {
+        user: { select: { name: true, email: true, avatar: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(tickets);
+  } catch (error) {
+    console.error("Error fetching ITT tickets by user:", error);
+    res.status(500).json({ error: "Failed to fetch tickets" });
+  }
+};
+
+// Reply to an ITT support ticket
+export const replyToIttTicket = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { message } = req.body;
+    if (!message) return res.status(400).json({ error: "Reply message is required" });
+
+    const updated = await prisma.feedback.update({
+      where: { id },
+      data: {
+        adminReply: message,
+        repliedAt: new Date(),
+        status: 'resolved'
+      }
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error replying to ITT ticket:", error);
+    res.status(500).json({ error: "Failed to reply to ticket" });
   }
 };

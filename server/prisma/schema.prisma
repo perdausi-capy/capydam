@@ -341,8 +341,8 @@ model DailyReport {
   date                DateTime @default(now())
   hours               Float    @default(8.0)
   
-  reactiveTickets     Int      @default(0)
-  proactiveMaintenance Int     @default(0)
+  reactiveTickets      String[] @default([])
+  proactiveMaintenance String[] @default([])
   
   researchNotes       String?
   nextSteps           String?

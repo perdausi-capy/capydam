@@ -151,7 +151,7 @@ const ITTLedger = () => {
 
             {/* Form Modal */}
             {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/70 animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl w-full max-w-xl overflow-hidden border border-gray-200 dark:border-white/10">
                         <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center">
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
@@ -164,7 +164,7 @@ const ITTLedger = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Workstation</label>
-                                    <select required value={formData.workstationId} onChange={e => setFormData({ ...formData, workstationId: e.target.value })} className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <select required value={formData.workstationId} onChange={e => setFormData({ ...formData, workstationId: e.target.value })} className="select-glass">
                                         <option value="">-- Select Unit --</option>
                                         {workstations.map(ws => (
                                             <option key={ws.id} value={ws.id}>{ws.unitId}</option>
@@ -173,7 +173,7 @@ const ITTLedger = () => {
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
-                                    <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} className="select-glass">
                                         <option value="open">Open</option>
                                         <option value="in-progress">In Progress</option>
                                         <option value="resolved">Resolved</option>
