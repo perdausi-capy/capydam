@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ExternalLink, X } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import clickUpLogo from '../assets/clickuplogo2.png';
 
 const FloatingClickUp = () => {
