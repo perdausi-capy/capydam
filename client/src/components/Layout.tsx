@@ -7,6 +7,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import client from '../api/client';
+// import clickUpLogo from '../assets/clickuplogo.png';
 import { motion, type Variants } from 'framer-motion'; // ✅ Import Framer Motion
 import { 
   LayoutDashboard, 
@@ -28,6 +29,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import FloatingThemeToggle from './FloatingThemeToggle';
+import FloatingClickUp from './FloatingClickUp';
 
 // Define Stats Interface
 interface AdminStats {
@@ -169,6 +171,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       />
       
       <FloatingThemeToggle />
+      <FloatingClickUp />
       
       {/* MOBILE HEADER */} 
       <div className="fixed top-0 left-0 right-0 z-20 flex h-16 items-center justify-between border-b border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] px-4 shadow-sm lg:hidden transition-colors duration-300">

@@ -21,8 +21,9 @@ import {
   HardDrive,
   Layers,
   Info,
-  CheckSquare, // ✅ Added for ClickUp button
-  ExternalLink // ✅ Added for ClickUp button
+  ArrowUp,
+  ArrowDown,
+  Calendar
 } from 'lucide-react';
 import client from '../api/client';
 import { useNavigate } from 'react-router-dom';
@@ -40,6 +41,18 @@ const customStyles = `
   }
   .animate-shimmer {
     animation: shimmer 3s linear infinite;
+  }
+  /* Fix date picker calendar icon color in dark mode */
+  input[type="date"]::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      opacity: 0.6;
+      transition: 0.2s;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator:hover {
+      opacity: 1;
+  }
+  .dark input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
   }
 `;
 
@@ -65,6 +78,10 @@ interface RecentAsset {
   thumbnailPath: string | null;
   path: string;
   previewFrames?: string[];
+  uploadedBy?: { name: string };
+  aiData?: string;
+  displayUploader?: string; 
+  tagsStr?: string;
 }
 
 const formatSafeDate = (dateStr?: string) => {
@@ -85,11 +102,16 @@ const Upload = () => {
   const [creativity, setCreativity] = useState(0.2);
   const [specificity, setSpecificity] = useState<'general' | 'high'>('general');
 
-  // Modals
+  // Modals & Filters
   const [isRecentModalOpen, setIsRecentModalOpen] = useState(false);
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false); 
+  
+  // ✅ CLEANED UP FILTER STATES
   const [modalSearchQuery, setModalSearchQuery] = useState('');
-  const [sortConfig, setSortConfig] = useState<'newest' | 'oldest' | 'a-z' | 'z-a'>('newest');
+  const [dateStart, setDateStart] = useState<string>(''); 
+  const [dateEnd, setDateEnd] = useState<string>('');
+  const [sortBy, setSortBy] = useState<'date' | 'name' | 'uploader'>('date');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
   const overallProgress = queue.length > 0 
     ? Math.min(100, Math.max(0, Math.round(queue.reduce((acc, item) => acc + item.progress, 0) / queue.length)))
@@ -97,7 +119,7 @@ const Upload = () => {
 
   const fetchRecent = async () => {
     try {
-      const res = await client.get('/assets?limit=30');
+      const res = await client.get('/assets?limit=50'); 
       const results = Array.isArray(res.data) ? res.data : (res.data.results || []);
       setRecentUploads(results);
     } catch (error) { console.warn("Could not fetch history"); }
@@ -105,20 +127,67 @@ const Upload = () => {
 
   useEffect(() => { fetchRecent(); }, []);
 
+  // ✅ LOGIC: Range Filter + Uploader Sort
   const processedRecentUploads = useMemo(() => {
-    let arr = recentUploads.filter(asset => 
-        (asset.originalName || '').toLowerCase().includes(modalSearchQuery.toLowerCase())
-    );
+    
+    // 1. Pre-process to extract customUploader and tags
+    const enrichedAssets = recentUploads.map(asset => {
+        let customUploader = '';
+        let tagsStr = '';
+        try {
+            if (asset.aiData) {
+                const parsed = JSON.parse(asset.aiData);
+                customUploader = parsed.customUploader || '';
+                if (Array.isArray(parsed.tags)) tagsStr = parsed.tags.join(' ').toLowerCase();
+            }
+        } catch(e) {}
 
-    switch (sortConfig) {
-        case 'oldest': return arr.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        case 'a-z': return arr.sort((a, b) => (a.originalName || '').localeCompare(b.originalName || ''));
-        case 'z-a': return arr.sort((a, b) => (b.originalName || '').localeCompare(a.originalName || ''));
-        case 'newest':
-        default: return arr.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }
-  }, [recentUploads, sortConfig, modalSearchQuery]);
+        const displayUploader = customUploader || asset.uploadedBy?.name || 'Unknown';
+        return { ...asset, displayUploader, tagsStr };
+    });
 
+    // 2. Filter Results (Search + Date Range)
+    let arr = enrichedAssets.filter(asset => {
+        const query = modalSearchQuery.toLowerCase();
+        const fileName = (asset.originalName || '').toLowerCase();
+        const uploaderSearch = asset.displayUploader.toLowerCase();
+
+        const matchesSearch = !query || 
+            fileName.includes(query) || 
+            uploaderSearch.includes(query) || 
+            asset.tagsStr!.includes(query);
+        
+        let matchesDate = true;
+        const assetTime = new Date(asset.createdAt).getTime();
+
+        if (dateStart) {
+            const start = new Date(dateStart);
+            start.setHours(0, 0, 0, 0); // Start of day
+            if (assetTime < start.getTime()) matchesDate = false;
+        }
+        
+        if (dateEnd) {
+            const end = new Date(dateEnd);
+            end.setHours(23, 59, 59, 999); // End of day
+            if (assetTime > end.getTime()) matchesDate = false;
+        }
+
+        return matchesSearch && matchesDate;
+    });
+
+    // 3. Sort Results
+    return arr.sort((a, b) => {
+        let comparison = 0;
+        if (sortBy === 'date') comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        if (sortBy === 'name') comparison = (a.originalName || '').localeCompare(b.originalName || '');
+        if (sortBy === 'uploader') comparison = a.displayUploader.localeCompare(b.displayUploader);
+        
+        // Reverse if Descending
+        return sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [recentUploads, sortBy, sortOrder, modalSearchQuery, dateStart, dateEnd]);
+
+  // --- DROPZONE ---
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newItems: UploadItem[] = acceptedFiles.map(file => ({
       file: Object.assign(file, {
@@ -134,9 +203,7 @@ const Upload = () => {
   
     setQueue(prev => {
         const updated = [...prev, ...newItems];
-        if (prev.length === 0 && updated.length > 0) {
-            setIsQueueModalOpen(true);
-        }
+        if (prev.length === 0 && updated.length > 0) setIsQueueModalOpen(true);
         return updated;
     });
   }, []);
@@ -406,29 +473,6 @@ const Upload = () => {
                     <span className="relative z-10 flex items-center gap-2 drop-shadow-sm">{getButtonContent()}</span>
                 </button>
                 
-                {/* ✅ NEW: CLICKUP QUICK LINK */}
-                <a  
-                    href="https://app.clickup.com/t/86euevnrn" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="w-full flex items-center justify-between p-4 rounded-3xl bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 shadow-sm hover:shadow-md hover:border-purple-300 dark:hover:border-purple-500/50 transition-all group"
-                >
-                    <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-xl group-hover:scale-110 transition-transform">
-                            <CheckSquare size={20} />
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-bold text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">Find Task Card</h3>
-                            <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mt-0.5">Open ClickUp Workspace</p>
-                        </div>
-                    </div>
-                    <div className="p-2 rounded-full bg-gray-50 dark:bg-black/20 group-hover:bg-purple-100 dark:group-hover:bg-purple-900/30 transition-colors">
-                        <ExternalLink size={14} className="text-gray-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" />
-                    </div>
-                </a>
-
-                
-                
                 {/* AI SETTINGS */}
                 <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1D21] p-6 shadow-sm">
                     <div className="flex items-center gap-2 mb-4 text-gray-800 dark:text-white">
@@ -499,10 +543,9 @@ const Upload = () => {
                           <button onClick={() => setIsQueueModalOpen(false)} className="text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10"><X size={20} /></button>
                       </div>
 
-                      {/* Modal Content: The mapped queue items (Sleek List) */}
+                      {/* Modal Content */}
                       <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar space-y-3 bg-gray-50/30 dark:bg-black/20">
                           {queue.map((item, index) => {
-                              // Identify if this specific item has errors (only relevant if they tried to submit)
                               const isMissingUploader = item.customUploader.trim() === '';
                               const isMissingLink = !item.externalLinks.some(link => link.trim() !== '');
 
@@ -623,28 +666,125 @@ const Upload = () => {
               <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsRecentModalOpen(false)} />
                   <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-6xl bg-white dark:bg-[#1A1D21] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] border border-gray-200 dark:border-white/10">
-                      <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-black/20 shrink-0"><div className="flex items-center gap-3"><div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg"><Clock size={20} /> </div><h3 className="text-lg font-bold text-gray-900 dark:text-white">Recent Uploads</h3></div><button onClick={() => setIsRecentModalOpen(false)} className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-gray-200 dark:hover:bg-white/10"><X size={20} /></button></div>
-                      <div className="px-6 py-4 border-b border-gray-100 dark:border-white/5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white dark:bg-[#1A1D21] shrink-0">
-                          <div className="relative w-full md:w-72"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" placeholder="Search recent uploads..." value={modalSearchQuery} onChange={(e) => setModalSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-all"/></div>
-                          <div className="flex items-center gap-1 bg-gray-50 dark:bg-black/20 p-1 rounded-xl border border-gray-200 dark:border-white/10 overflow-x-auto w-full md:w-auto"><button onClick={() => setSortConfig('newest')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${sortConfig === 'newest' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>Newest</button><button onClick={() => setSortConfig('oldest')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${sortConfig === 'oldest' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>Oldest</button><button onClick={() => setSortConfig('a-z')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${sortConfig === 'a-z' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>A-Z</button><button onClick={() => setSortConfig('z-a')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${sortConfig === 'z-a' ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>Z-A</button></div>
+                      
+                      <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-black/20 shrink-0">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg"><Clock size={20} /> </div>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Recent Uploads</h3>
+                        </div>
+                        <button onClick={() => setIsRecentModalOpen(false)} className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-gray-200 dark:hover:bg-white/10"><X size={20} /></button>
                       </div>
+                      
+                      {/* ✅ ULTRA-CLEAN CONTROLS SECTION */}
+                      <div className="px-6 py-4 border-b border-gray-100 dark:border-white/5 flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-[#1A1D21] shrink-0">
+                          
+                          {/* Left: Search */}
+                          <div className="relative flex-1 min-w-[200px] max-w-sm">
+                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input 
+                                type="text" 
+                                placeholder="Search files, tags, or uploaders..." 
+                                value={modalSearchQuery} 
+                                onChange={(e) => setModalSearchQuery(e.target.value)} 
+                                className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white transition-all"
+                            />
+                          </div>
+
+                          {/* Right: Date Picker & New Sorting Pills */}
+                          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                              
+                              {/* Date Pickers */}
+                              <div className="flex items-center bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl px-3 py-1.5 focus-within:ring-2 focus-within:ring-blue-500 transition-all gap-2 group relative">
+                                  <Calendar size={15} className="text-gray-400 shrink-0" />
+                                  <input 
+                                      type="date" 
+                                      title="Start Date"
+                                      value={dateStart}
+                                      onChange={(e) => setDateStart(e.target.value)}
+                                      className="bg-transparent text-xs font-bold text-gray-700 dark:text-gray-200 outline-none cursor-pointer w-28"
+                                  />
+                                  <span className="text-gray-400">-</span>
+                                  <input 
+                                      type="date" 
+                                      title="End Date"
+                                      value={dateEnd}
+                                      onChange={(e) => setDateEnd(e.target.value)}
+                                      className="bg-transparent text-xs font-bold text-gray-700 dark:text-gray-200 outline-none cursor-pointer w-28"
+                                  />
+                                  {(dateStart || dateEnd) && (
+                                      <button 
+                                          onClick={() => { setDateStart(''); setDateEnd(''); }} 
+                                          className="absolute right-2 p-1 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-md transition-all"
+                                          title="Clear Dates"
+                                      >
+                                          <X size={12} strokeWidth={3} />
+                                      </button>
+                                  )}
+                              </div>
+
+                              {/* NEW: Sleek Pill Sorting Group */}
+                              <div className="flex items-center bg-gray-50 dark:bg-black/20 p-1 rounded-xl border border-gray-200 dark:border-white/10">
+                                  {['date', 'name', 'uploader'].map(metric => (
+                                      <button
+                                          key={metric}
+                                          onClick={() => setSortBy(metric as any)}
+                                          className={`px-3 py-1.5 text-xs font-bold rounded-lg capitalize transition-all ${sortBy === metric ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                                      >
+                                          {metric}
+                                      </button>
+                                  ))}
+                                  
+                                  {/* Divider */}
+                                  <div className="w-px h-4 bg-gray-300 dark:bg-white/10 mx-1" />
+                                  
+                                  {/* Direction Toggle */}
+                                  <button
+                                      onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                                      className="flex items-center gap-1 px-2 py-1.5 text-xs font-bold text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 rounded-lg transition-all"
+                                      title={sortOrder === 'asc' ? "Sorting Ascending" : "Sorting Descending"}
+                                  >
+                                      {sortOrder === 'asc' ? <ArrowUp size={14} strokeWidth={3} /> : <ArrowDown size={14} strokeWidth={3} />}
+                                  </button>
+                              </div>
+                          </div>
+                      </div>
+
                       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-gray-50/50 dark:bg-[#0B0D0F]/30">
                           {processedRecentUploads.length === 0 ? (
-                              <div className="text-center py-20 flex flex-col items-center justify-center opacity-60"><Search size={40} className="mb-4 text-gray-400" /><p className="text-gray-500 text-lg font-medium">No results found.</p></div>
+                              <div className="text-center py-20 flex flex-col items-center justify-center opacity-60">
+                                  <Search size={40} className="mb-4 text-gray-400" />
+                                  <p className="text-gray-500 text-lg font-medium">No results found.</p>
+                                  {(dateStart || dateEnd || modalSearchQuery) && <p className="text-sm mt-2 text-gray-400">Try clearing your search or date filters.</p>}
+                              </div>
                           ) : (
                               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                   {processedRecentUploads.map(recent => (
-                                      <div key={recent.id} className="flex items-center justify-between p-3 bg-white dark:bg-[#1A1D21] hover:bg-blue-50 dark:hover:bg-white/5 rounded-2xl transition-colors group border border-gray-100 dark:border-white/5 hover:border-blue-200 dark:hover:border-white/10 cursor-pointer shadow-sm hover:shadow" onClick={() => { setIsRecentModalOpen(false); navigate(`/assets/${recent.id}`); }}>
-                                          <div className="flex items-center gap-4 min-w-0 flex-1">
+                                      <div key={recent.id} className="flex flex-col p-4 bg-white dark:bg-[#1A1D21] hover:bg-blue-50 dark:hover:bg-white/5 rounded-2xl transition-colors group border border-gray-100 dark:border-white/5 hover:border-blue-200 dark:hover:border-white/10 cursor-pointer shadow-sm hover:shadow" onClick={() => { setIsRecentModalOpen(false); navigate(`/assets/${recent.id}`); }}>
+                                          
+                                          <div className="flex items-center gap-4 min-w-0">
                                               <div className="h-16 w-16 bg-gray-100 dark:bg-black/40 rounded-xl overflow-hidden flex items-center justify-center shrink-0 border border-gray-200 dark:border-white/5 relative">
                                                   <AssetThumbnail mimeType={recent.mimeType} thumbnailPath={recent.thumbnailPath || recent.path} previewFrames={recent.previewFrames} className="w-full h-full object-cover" />
                                               </div>
-                                              <div className="min-w-0 pr-4">
+                                              <div className="min-w-0 flex-1">
                                                   <p className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" title={recent.originalName}>{recent.originalName}</p>
-                                                  <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[10px] text-gray-500 uppercase tracking-wider font-medium"><span className="bg-gray-100 dark:bg-white/5 px-2 py-0.5 rounded-md">{recent.mimeType.split('/')[1]}</span><span className="w-1 h-1 bg-gray-300 dark:bg-gray-600 rounded-full"></span><span>{formatSafeDate(recent.createdAt)}</span></div>
+                                                  
+                                                  {/* ✅ SHOW ACTUAL UPLOADER NAME (from aiData customUploader) */}
+                                                  {recent.displayUploader && (
+                                                      <p className="text-[11px] font-semibold text-gray-500 flex items-center gap-1 mt-0.5 truncate">
+                                                          <User size={10} /> {recent.displayUploader}
+                                                      </p>
+                                                  )}
+
+                                                  <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[10px] text-gray-500 uppercase tracking-wider font-medium">
+                                                      <span className="bg-gray-100 dark:bg-white/5 px-2 py-0.5 rounded-md">{recent.mimeType.split('/')[1]}</span>
+                                                      <span className="w-1 h-1 bg-gray-300 dark:bg-gray-600 rounded-full"></span>
+                                                      <span>{formatSafeDate(recent.createdAt)}</span>
+                                                  </div>
+                                              </div>
+                                              <div className="shrink-0 p-2 rounded-full bg-white dark:bg-black/20 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors">
+                                                  <ArrowRight size={16} className="text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-transform group-hover:translate-x-0.5" />
                                               </div>
                                           </div>
-                                          <div className="shrink-0 p-2 rounded-full bg-white dark:bg-black/20 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors"><ArrowRight size={16} className="text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-transform group-hover:translate-x-0.5" /></div>
                                       </div>
                                   ))}
                               </div>
