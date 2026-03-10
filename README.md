@@ -1,9 +1,3 @@
-This `README.md` accurately reflects your **"Zero-Latency" Architecture**, the move to **Self-Hosted Infrastructure** (MinIO/Postgres), and the new **Apps Hub** we just built.
-
-You can create a file named `README.md` in your project root and paste this content.
-
----
-
 # 🦦 Capydam
 
 > **Intelligent Digital Asset Management (DAM) for Instructional Designers**

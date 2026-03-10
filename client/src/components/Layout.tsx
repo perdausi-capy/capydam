@@ -16,7 +16,6 @@ import {
   Users, 
   Menu, 
   X,
-  ChevronLeft,
   ChevronRight,
   Compass,
   HelpCircle,
