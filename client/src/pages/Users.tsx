@@ -3,9 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import client from '../api/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Search, Trash2, Shield, CheckCircle2, XCircle, 
-  ChevronLeft, ChevronRight, Loader2, Plus, Mail, Lock, X, 
-  MoreHorizontal, UserCircle
+  Search, Trash2, Shield, ChevronLeft, 
+  ChevronRight, Loader2, Plus, X, 
+  UserCircle
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
@@ -112,7 +112,6 @@ const UsersPage = () => {
 
   // --- UI COMPONENTS ---
   const RoleBadge = ({ role }: { role: string }) => {
-    const isEditing = editingUserId !== null;
     return (
       <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
           role === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20' :

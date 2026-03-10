@@ -2,9 +2,9 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import client from '../api/client';
 import { toast } from 'react-toastify';
-import { motion } from 'framer-motion';
+// import { motion } from 'framer-motion';
 import { 
-  User, Camera, Loader2, Mail, Shield, Check, 
+  User, Camera, Loader2, Mail, Check, 
   ArrowLeft, Sparkles, HardDrive, Folder, Calendar, Clock, AlertTriangle
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
