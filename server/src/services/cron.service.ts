@@ -262,8 +262,10 @@ const launchDailyQuest = async () => {
 
     // 3. LAUNCH SEQUENCE
     if (questToLaunch) {
+      // ✅ NEW RULE: Force expiration to EXACTLY 12:00 PM PH Time Tomorrow (04:00 UTC)
       const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 24);
+      expiresAt.setUTCDate(expiresAt.getUTCDate() + 1); // Move to tomorrow
+      expiresAt.setUTCHours(4, 0, 0, 0); // Set strictly to 04:00:00 UTC (12:00 PM PH)
 
       await prisma.dailyQuestion.update({
         where: { id: questToLaunch.id },
@@ -275,9 +277,9 @@ const launchDailyQuest = async () => {
         }
       });
 
-      console.log(`   🚀 LAUNCHED: "${questToLaunch.question}"`);
+      console.log(`   🚀 LAUNCHED: "${questToLaunch.question}" | Expires at 12:00 PM tomorrow`);
       await notifyIntegrations(questToLaunch.question);
-    } 
+    }
 
   } catch (error) {
     console.error("🔥 [CRON] Rotation Error:", error);
