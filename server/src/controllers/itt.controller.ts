@@ -25,7 +25,7 @@ export const getWorkstations = async (req: Request, res: Response) => {
 
 export const createWorkstation = async (req: Request, res: Response) => {
   try {
-    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, assignedToId } = req.body;
+    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, assignedToId, notes } = req.body;
 
     // Check if unitId already exists
     const existing = await prisma.workstation.findUnique({ where: { unitId } });
@@ -35,7 +35,7 @@ export const createWorkstation = async (req: Request, res: Response) => {
 
     const workstation = await prisma.workstation.create({
       data: {
-        unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status,
+        unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, notes,
         assignedToId: assignedToId || null
       },
       include: {
@@ -52,12 +52,12 @@ export const createWorkstation = async (req: Request, res: Response) => {
 export const updateWorkstation = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, assignedToId } = req.body;
+    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, assignedToId, notes } = req.body;
 
     const workstation = await prisma.workstation.update({
       where: { id },
       data: {
-        unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status,
+        unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, notes,
         assignedToId: assignedToId || null
       },
       include: {

@@ -310,6 +310,7 @@ model Workstation {
   psu         String?
   storage     String?
   monitor     String?
+  notes       String?  @db.Text
   status      String   @default("active") // active, maintenance, retired
   
   assignedToId String?
