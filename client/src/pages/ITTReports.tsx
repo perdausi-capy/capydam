@@ -1,7 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import client from '../api/client';
 import { toast } from 'react-toastify';
-import { Plus, Edit2, Trash2, Calendar, Clock, PenTool, X } from 'lucide-react';
+import { 
+    Plus, Edit2, Trash2, Clock, 
+    Zap, Activity, FileText, ArrowRight, Search, 
+    PenTool, X
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface User { id: string; name: string; avatar?: string; }
 interface Report {
@@ -47,11 +52,83 @@ const DynamicBulletList = ({ label, items, onChange }: { label: string, items: s
     );
 };
 
+
+
+const ReportDetailModal = ({ report, onClose }: { report: Report | null; onClose: () => void }) => {
+    if (!report) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-sm animate-in fade-in duration-200">
+            <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="bg-white dark:bg-[#1A1D21] rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200 dark:border-white/10"
+            >
+                <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-gray-50 dark:bg-black/20">
+                    <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center text-white"><FileText size={20} /></div>
+                        <div>
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Daily Shift Details</h2>
+                            <p className="text-xs text-gray-500">{new Date(report.date).toLocaleDateString()} • {report.author.name}</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-200 dark:hover:bg-white/10 rounded-full transition-colors"><X size={20} /></button>
+                </div>
+
+                <div className="p-8 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <section>
+                            <h4 className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-red-500" /> Reactive Support
+                            </h4>
+                            <ul className="space-y-2">
+                                {report.reactiveTickets.map((t, i) => (
+                                    <li key={i} className="text-sm bg-gray-50 dark:bg-white/5 p-3 rounded-xl border border-gray-100 dark:border-white/5">{t}</li>
+                                ))}
+                                {report.reactiveTickets.length === 0 && <li className="text-sm text-gray-400 italic">No tickets recorded</li>}
+                            </ul>
+                        </section>
+
+                        <section>
+                            <h4 className="text-[10px] font-black text-green-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-green-500" /> Proactive Maintenance
+                            </h4>
+                            <ul className="space-y-2">
+                                {report.proactiveMaintenance.map((t, i) => (
+                                    <li key={i} className="text-sm bg-gray-50 dark:bg-white/5 p-3 rounded-xl border border-gray-100 dark:border-white/5">{t}</li>
+                                ))}
+                                {report.proactiveMaintenance.length === 0 && <li className="text-sm text-gray-400 italic">No maintenance performed</li>}
+                            </ul>
+                        </section>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 pt-6 border-t border-gray-100 dark:border-white/5">
+                        {report.researchNotes && (
+                            <div>
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Focus & Notes</span>
+                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed bg-blue-50/50 dark:bg-blue-500/5 p-4 rounded-2xl">{report.researchNotes}</p>
+                            </div>
+                        )}
+                        {report.nextSteps && (
+                            <div>
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Next Steps</span>
+                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed bg-purple-50/50 dark:bg-purple-500/5 p-4 rounded-2xl">{report.nextSteps}</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </motion.div>
+        </div>
+    );
+};
+
 const ITTReports = () => {
     const [reports, setReports] = useState<Report[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [viewingReport, setViewingReport] = useState<Report | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
 
     const [formData, setFormData] = useState({
         date: new Date().toISOString().split('T')[0],
@@ -74,6 +151,15 @@ const ITTReports = () => {
     };
 
     useEffect(() => { fetchReports(); }, []);
+
+    // Filtered results memoization for performance
+    const filteredReports = useMemo(() => 
+        reports.filter(r => 
+            r.author.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (r.researchNotes && r.researchNotes.toLowerCase().includes(searchTerm.toLowerCase()))
+        ),
+        [reports, searchTerm]
+    );
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -126,98 +212,113 @@ const ITTReports = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center bg-white dark:bg-[#121418] p-4 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm">
-                <h2 className="text-xl font-bold px-2">Daily Activity Reports</h2>
-                <button onClick={() => openModal()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors shadow-sm">
-                    <Plus size={18} /> New Report
-                </button>
+            {/* Header Controls */}
+            <div className="flex flex-col sm:flex-row justify-between gap-4 items-center">
+                <div className="relative max-w-md w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                        type="text"
+                        placeholder="Search technician reports..."
+                        className="w-full pl-10 pr-4 py-2 bg-white dark:bg-[#121418] border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white text-sm"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <div className="flex items-center gap-4">
+                    <h2 className="hidden md:block text-xl font-bold px-2 text-gray-900 dark:text-white">Daily Activity Reports</h2>
+                    <button onClick={() => openModal()} className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-sm active:scale-95 whitespace-nowrap">
+                        <Plus size={18} /> New Report
+                    </button>
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {loading ? (
-                    <div className="col-span-full text-center py-12 text-gray-500">Loading...</div>
-                ) : reports.length === 0 ? (
-                    <div className="col-span-full text-center py-20 bg-white/50 dark:bg-white/5 rounded-3xl border border-dashed border-gray-300 dark:border-white/10">
-                        <PenTool size={40} className="mx-auto text-gray-400 mb-4" />
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">No Reports Found</h3>
-                        <p className="text-gray-500">Log your first daily tech shift.</p>
-                    </div>
-                ) : (
-                    reports.map((report) => (
-                        <div key={report.id} className="bg-white dark:bg-[#121418] border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group flex flex-col">
-                            {/* Author header */}
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="h-10 w-10 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm overflow-hidden">
-                                        {report.author.avatar ? (
-                                            <img src={report.author.avatar} alt="avatar" className="h-full w-full object-cover" />
-                                        ) : (
-                                            <span>{report.author.name.charAt(0).toUpperCase()}</span>
-                                        )}
-                                    </div>
-                                    <div>
-                                        <h3 className="font-bold text-gray-900 dark:text-white text-sm">{report.author.name}</h3>
-                                        <div className="flex items-center gap-1 text-[11px] text-gray-500">
-                                            <Calendar size={12} /> {new Date(report.date).toLocaleDateString()}
+            {/* Listed Style Table Container */}
+            <div className="bg-white dark:bg-[#121418] border border-gray-200 dark:border-white/10 rounded-2xl shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                        <thead className="bg-gray-50 dark:bg-black/20 border-b border-gray-200 dark:border-white/10 text-[10px] uppercase font-bold text-gray-500 tracking-widest">
+                            <tr>
+                                <th className="px-6 py-4">Technician</th>
+                                <th className="px-6 py-4">Shift Date</th>
+                                <th className="px-6 py-4 text-center">Reactive</th>
+                                <th className="px-6 py-4 text-center">Proactive</th>
+                                <th className="px-6 py-4">Logged Time</th>
+                                <th className="px-6 py-4 w-1/4">Notes Preview</th>
+                                <th className="px-6 py-4 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                            {loading ? (
+                                <tr><td colSpan={7} className="p-12 text-center text-gray-400">Syncing with server...</td></tr>
+                            ) : filteredReports.length === 0 ? (
+                                <tr>
+                                    <td colSpan={7} className="p-20 text-center">
+                                        <div className="flex flex-col items-center gap-4">
+                                            <PenTool size={40} className="text-gray-300 dark:text-gray-600" />
+                                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">No Reports Found</h3>
+                                            <p className="text-gray-500 text-xs">Try adjusting your search filters or log a new shift.</p>
                                         </div>
-                                    </div>
-                                </div>
-                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => openModal(report)} className="p-1.5 text-gray-400 hover:text-blue-500 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-lg"><Edit2 size={14} /></button>
-                                    <button onClick={() => handleDelete(report.id)} className="p-1.5 text-gray-400 hover:text-red-500 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-lg"><Trash2 size={14} /></button>
-                                </div>
-                            </div>
-
-                            {/* Task panels + notes — flex-1 pushes footer to bottom */}
-                            <div className="flex-1">
-                                <div className="grid grid-cols-2 gap-3 mb-4">
-                                    <div className="bg-gray-50 dark:bg-black/20 p-3 rounded-xl min-h-[5rem]">
-                                        <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-2">Reactive Tasks</div>
-                                        {report.reactiveTickets.length > 0 ? (
-                                            <ul className="list-disc list-inside text-sm text-gray-900 dark:text-white space-y-1">
-                                                {report.reactiveTickets.map((val, i) => <li key={i}>{val}</li>)}
-                                            </ul>
-                                        ) : (
-                                            <span className="text-gray-500 italic text-sm">None</span>
-                                        )}
-                                    </div>
-                                    <div className="bg-gray-50 dark:bg-black/20 p-3 rounded-xl min-h-[5rem]">
-                                        <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-2">Proactive Tasks</div>
-                                        {report.proactiveMaintenance.length > 0 ? (
-                                            <ul className="list-disc list-inside text-sm text-gray-900 dark:text-white space-y-1">
-                                                {report.proactiveMaintenance.map((val, i) => <li key={i}>{val}</li>)}
-                                            </ul>
-                                        ) : (
-                                            <span className="text-gray-500 italic text-sm">None</span>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {(report.researchNotes || report.nextSteps) && (
-                                    <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-white/5 text-sm">
-                                        {report.researchNotes && (
-                                            <div>
-                                                <span className="font-bold text-gray-900 dark:text-white block mb-0.5">Focus/Notes:</span>
-                                                <p className="text-gray-600 dark:text-gray-400">{report.researchNotes}</p>
+                                    </td>
+                                </tr>
+                            ) : (
+                                filteredReports.map(report => (
+                                    <tr key={report.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
+                                        {/* Technician Info */}
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-sm overflow-hidden">
+                                                    {report.author.avatar ? <img src={report.author.avatar} className="h-full w-full object-cover" /> : <span>{report.author.name.charAt(0)}</span>}
+                                                </div>
+                                                <span className="font-bold text-gray-900 dark:text-white">{report.author.name}</span>
                                             </div>
-                                        )}
-                                        {report.nextSteps && (
-                                            <div>
-                                                <span className="font-bold text-gray-900 dark:text-white block mb-0.5">Next Steps:</span>
-                                                <p className="text-gray-600 dark:text-gray-400">{report.nextSteps}</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
+                                        </td>
 
-                            {/* Footer — always pinned to card bottom */}
-                            <div className="mt-4 pt-3 border-t border-gray-100 dark:border-white/5 flex items-center gap-1 text-[11px] text-gray-400">
-                                <Clock size={12} /> Logged {report.hours} hours
-                            </div>
-                        </div>
-                    ))
-                )}
+                                        {/* Shift Date */}
+                                        <td className="px-6 py-4 text-gray-600 dark:text-gray-400 font-medium font-mono text-xs">
+                                            {new Date(report.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </td>
+
+                                        {/* Task Counts */}
+                                        <td className="px-6 py-4 text-center">
+                                            <span className="inline-flex items-center gap-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-500/20 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-tighter">
+                                                <Zap size={10} /> {report.reactiveTickets.length} Tasks
+                                            </span>
+                                        </td>
+
+                                        <td className="px-6 py-4 text-center">
+                                            <span className="inline-flex items-center gap-1.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-tighter">
+                                                <Activity size={10} /> {report.proactiveMaintenance.length} Tasks
+                                            </span>
+                                        </td>
+
+                                        {/* Logged Hours */}
+                                        <td className="px-6 py-4">
+                                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-black">
+                                                <Clock size={12} /> {report.hours} HRS
+                                            </div>
+                                        </td>
+
+                                        {/* Research Notes Preview */}
+                                        <td className="px-6 py-4">
+                                            <p className="text-gray-500 dark:text-gray-400 truncate max-w-xs text-xs italic">
+                                                {report.researchNotes || "No notes provided"}
+                                            </p>
+                                        </td>
+
+                                        {/* Actions */}
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => openModal(report)} className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-white/5 rounded-lg transition-colors"><Edit2 size={14} /></button>
+                                                <button onClick={() => handleDelete(report.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-white/5 rounded-lg transition-colors"><Trash2 size={14} /></button>
+                                                <button onClick={() => setViewingReport(report)} className="p-1.5 text-blue-600 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 rounded-lg transition-all"><ArrowRight size={14} /></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             {/* Form Modal */}
@@ -245,12 +346,12 @@ const ITTReports = () => {
 
                             <div className="grid grid-cols-2 gap-4 pt-2">
                                 <DynamicBulletList
-                                    label="Reactive Tickets"
+                                    label="Reactive Tickets (Fixes)"
                                     items={formData.reactiveTickets}
                                     onChange={items => setFormData({ ...formData, reactiveTickets: items })}
                                 />
                                 <DynamicBulletList
-                                    label="Proactive Tasks"
+                                    label="Proactive Maintenance"
                                     items={formData.proactiveMaintenance}
                                     onChange={items => setFormData({ ...formData, proactiveMaintenance: items })}
                                 />
@@ -273,6 +374,16 @@ const ITTReports = () => {
                     </div>
                 </div>
             )}
+
+            {/* Detail Modal */}
+            <AnimatePresence>
+                {viewingReport && (
+                    <ReportDetailModal
+                        report={viewingReport}
+                        onClose={() => setViewingReport(null)}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 };

@@ -15,6 +15,12 @@ interface UserInfo {
     email: string;
 }
 
+interface Monitor {
+    id?: string;
+    model: string;
+    specs?: string;
+}
+
 interface Workstation {
     id: string;
     unitId: string;
@@ -24,7 +30,7 @@ interface Workstation {
     gpu: string;
     psu: string;
     storage: string;
-    monitor: string;
+    monitors: Monitor[];
     status: string;
     notes?: string;
     assignedTo?: UserInfo;
@@ -87,8 +93,13 @@ const WorkstationSpecs = ({
     const extendedSpecs = [
         { label: 'Motherboard', value: viewingWs.mobo, icon: <Layers size={14} /> },
         { label: 'Power Supply', value: viewingWs.psu, icon: <Zap size={14} /> },
-        { label: 'Monitor', value: viewingWs.monitor, icon: <MonitorIcon size={14} /> },
     ];
+
+    const monitorSpecs = viewingWs.monitors.map((m, i) => ({
+        label: i === 0 ? 'Primary Monitor' : `Monitor ${i + 1}`,
+        value: `${m.model}${m.specs ? ` (${m.specs})` : ''}`,
+        icon: <MonitorIcon size={14} />
+    }));
 
     return (
         <div className="w-72 shrink-0 border-r border-white/5 overflow-y-auto p-6 space-y-5 bg-black/10 custom-scrollbar">
@@ -119,6 +130,19 @@ const WorkstationSpecs = ({
                                 <p className="text-gray-700 dark:text-gray-300 font-medium text-sm">{value || "N/A"}</p>
                             </div>
                         ))}
+                        {monitorSpecs.length > 0 ? (
+                            monitorSpecs.map(({ label, value, icon }, idx) => (
+                                <div key={idx}>
+                                    <h4 className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1.5 mb-0.5">{icon}{label}</h4>
+                                    <p className="text-gray-700 dark:text-gray-300 font-medium text-sm">{value}</p>
+                                </div>
+                            ))
+                        ) : (
+                            <div>
+                                <h4 className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1.5 mb-0.5"><MonitorIcon size={14} /> Monitor</h4>
+                                <p className="text-gray-700 dark:text-gray-300 font-medium text-sm">No Monitor Assigned</p>
+                            </div>
+                        )}
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -197,8 +221,18 @@ const ITTWorkstations = () => {
     const [isSavingNotes, setIsSavingNotes] = useState(false);
 
     const [formData, setFormData] = useState({
-        unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', status: 'active', assignedToId: ''
+        unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', status: 'active', assignedToId: ''
     });
+
+    const [monitorList, setMonitorList] = useState<{ model: string, specs: string }[]>([{ model: '', specs: '' }]);
+
+    const addMonitorField = () => {
+        setMonitorList([...monitorList, { model: '', specs: '' }]);
+    };
+
+    const removeMonitorField = (index: number) => {
+        setMonitorList(monitorList.filter((_, i) => i !== index));
+    };
 
     const fetchData = async () => {
         try {
@@ -306,7 +340,11 @@ const ITTWorkstations = () => {
         e.preventDefault();
         if (!formData.unitId) { toast.warning("Unit ID is required"); return; }
         try {
-            const payload = { ...formData, assignedToId: formData.assignedToId || null };
+            const payload = { 
+                ...formData, 
+                assignedToId: formData.assignedToId || null,
+                monitors: monitorList.filter(m => m.model.trim() !== '')
+            };
             if (editingId) {
                 await client.put(`/itt/workstations/${editingId}`, payload);
                 toast.success('Workstation updated');
@@ -338,17 +376,34 @@ const ITTWorkstations = () => {
             setFormData({
                 unitId: ws.unitId || '', mobo: ws.mobo || '', cpu: ws.cpu || '',
                 ram: ws.ram || '', gpu: ws.gpu || '', psu: ws.psu || '',
-                storage: ws.storage || '', monitor: ws.monitor || '',
+                storage: ws.storage || '',
                 status: ws.status || 'active', assignedToId: ws.assignedTo?.id || ''
             });
+            setMonitorList(ws.monitors.length > 0 ? ws.monitors.map(m => ({ model: m.model, specs: m.specs || '' })) : [{ model: '', specs: '' }]);
         } else {
             setEditingId(null);
-            setFormData({ unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', status: 'active', assignedToId: '' });
+            setFormData({ unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', status: 'active', assignedToId: '' });
+            setMonitorList([{ model: '', specs: '' }]);
         }
         setIsModalOpen(true);
     };
 
     const closeModal = () => { setIsModalOpen(false); setEditingId(null); };
+
+    const assignedUserIds = React.useMemo(() => {
+        return new Set(
+            workstations
+                .map(ws => ws.assignedTo?.id)
+                .filter(Boolean)
+        );
+    }, [workstations]);
+
+    const availableUsers = React.useMemo(() => {
+        return users.filter(u => {
+            const isCurrentlyAssignedToThisUnit = editingId && formData.assignedToId === u.id;
+            return !assignedUserIds.has(u.id) || isCurrentlyAssignedToThisUnit;
+        });
+    }, [users, assignedUserIds, editingId, formData.assignedToId]);
 
     const filteredWorkstations = React.useMemo(() =>
         workstations.filter(ws =>
@@ -451,7 +506,17 @@ const ITTWorkstations = () => {
                                 <td className={ws.gpu ? CELL : CELL_MUTED}>{ws.gpu || '—'}</td>
                                 <td className={ws.ram ? CELL : CELL_MUTED}>{ws.ram || '—'}</td>
                                 <td className={ws.storage ? CELL : CELL_MUTED}>{ws.storage || '—'}</td>
-                                <td className={ws.monitor ? CELL : CELL_MUTED}>{ws.monitor || 'No Monitor'}</td>
+                                <td className={ws.monitors.length > 0 ? CELL : CELL_MUTED}>
+                                    {ws.monitors.length > 0 ? (
+                                        <div className="flex flex-col gap-0.5">
+                                            {ws.monitors.map((m, i) => (
+                                                <span key={i} className="truncate max-w-[100px]" title={m.model}>
+                                                    {m.model}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    ) : 'No Monitor'}
+                                </td>
 
                                 {/* Status */}
                                 <td className="px-3 py-2.5">
@@ -521,7 +586,6 @@ const ITTWorkstations = () => {
                                     { label: 'GPU', key: 'gpu', icon: <View size={16} /> },
                                     { label: 'Storage', key: 'storage', icon: <HardDrive size={16} /> },
                                     { label: 'PSU', key: 'psu', icon: <Zap size={16} /> },
-                                    { label: 'Monitor', key: 'monitor', icon: <MonitorIcon size={16} /> },
                                 ].map(({ label, key, icon, required }) => (
                                     <div key={key}>
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{label}</label>
@@ -537,6 +601,66 @@ const ITTWorkstations = () => {
                                         </div>
                                     </div>
                                 ))}
+
+                                {/* Dynamic Monitors Section */}
+                                <div className="md:col-span-2 space-y-4 border-t border-gray-100 dark:border-white/5 pt-4">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                                            <MonitorIcon size={14} /> Display Setup
+                                        </label>
+                                        <button 
+                                            type="button" 
+                                            onClick={addMonitorField}
+                                            className="text-blue-600 dark:text-blue-400 text-xs font-bold flex items-center gap-1 hover:underline"
+                                        >
+                                            <Plus size={14} /> Add Monitor
+                                        </button>
+                                    </div>
+
+                                    <AnimatePresence>
+                                        {monitorList.map((mon, idx) => (
+                                            <motion.div 
+                                                key={idx}
+                                                initial={{ opacity: 0, x: -10 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                exit={{ opacity: 0, x: 10 }}
+                                                className="flex gap-2 items-start"
+                                            >
+                                                <div className="flex-1 grid grid-cols-2 gap-2">
+                                                    <input
+                                                        placeholder="Monitor Model"
+                                                        value={mon.model}
+                                                        onChange={(e) => {
+                                                            const newArr = [...monitorList];
+                                                            newArr[idx].model = e.target.value;
+                                                            setMonitorList(newArr);
+                                                        }}
+                                                        className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white"
+                                                    />
+                                                    <input
+                                                        placeholder="Specs (e.g., 4K, 144Hz)"
+                                                        value={mon.specs}
+                                                        onChange={(e) => {
+                                                            const newArr = [...monitorList];
+                                                            newArr[idx].specs = e.target.value;
+                                                            setMonitorList(newArr);
+                                                        }}
+                                                        className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white"
+                                                    />
+                                                </div>
+                                                {monitorList.length > 1 && (
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => removeMonitorField(idx)}
+                                                        className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
+                                            </motion.div>
+                                        ))}
+                                    </AnimatePresence>
+                                </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
                                     <div className="relative">
@@ -554,7 +678,11 @@ const ITTWorkstations = () => {
                                         <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                                         <select value={formData.assignedToId} onChange={e => setFormData({ ...formData, assignedToId: e.target.value })} className="select-glass select-glass-icon">
                                             <option value="">-- Unassigned --</option>
-                                            {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
+                                            {availableUsers.map(u => (
+                                                <option key={u.id} value={u.id}>
+                                                    {u.name} ({u.email})
+                                                </option>
+                                            ))}
                                         </select>
                                     </div>
                                 </div>

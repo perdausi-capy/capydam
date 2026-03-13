@@ -309,7 +309,10 @@ model Workstation {
   gpu         String?
   psu         String?
   storage     String?
-  monitor     String?
+  
+  // Refactored: One-to-Many Relation
+  monitors    Monitor[] 
+  
   notes       String?  @db.Text
   status      String   @default("active") // active, maintenance, retired
   
@@ -319,6 +322,15 @@ model Workstation {
   ledgers     MaintenanceLedger[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Monitor {
+  id            String      @id @default(uuid())
+  model         String      // e.g., "Dell UltraSharp U2723QE"
+  specs         String?     // e.g., "4K, 60Hz, IPS"
+  workstationId String
+  workstation   Workstation @relation(fields: [workstationId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
 }
 
 model MaintenanceLedger {

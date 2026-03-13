@@ -13,6 +13,7 @@ export const getWorkstations = async (req: Request, res: Response) => {
     const workstations = await prisma.workstation.findMany({
       include: {
         assignedTo: { select: { id: true, name: true, email: true, avatar: true } },
+        monitors: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -25,7 +26,7 @@ export const getWorkstations = async (req: Request, res: Response) => {
 
 export const createWorkstation = async (req: Request, res: Response) => {
   try {
-    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, assignedToId, notes } = req.body;
+    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitors, status, assignedToId, notes } = req.body;
 
     // Check if unitId already exists
     const existing = await prisma.workstation.findUnique({ where: { unitId } });
@@ -35,11 +36,18 @@ export const createWorkstation = async (req: Request, res: Response) => {
 
     const workstation = await prisma.workstation.create({
       data: {
-        unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, notes,
-        assignedToId: assignedToId || null
+        unitId, mobo, cpu, ram, gpu, psu, storage, status, notes,
+        assignedToId: assignedToId || null,
+        monitors: {
+          create: (monitors || []).map((m: any) => ({
+            model: m.model,
+            specs: m.specs
+          }))
+        }
       },
       include: {
         assignedTo: { select: { id: true, name: true, email: true, avatar: true } },
+        monitors: true
       },
     });
     res.status(201).json(workstation);
@@ -52,16 +60,24 @@ export const createWorkstation = async (req: Request, res: Response) => {
 export const updateWorkstation = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, assignedToId, notes } = req.body;
+    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitors, status, assignedToId, notes } = req.body;
 
     const workstation = await prisma.workstation.update({
       where: { id },
       data: {
-        unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, notes,
-        assignedToId: assignedToId || null
+        unitId, mobo, cpu, ram, gpu, psu, storage, status, notes,
+        assignedToId: assignedToId || null,
+        monitors: {
+          deleteMany: {},
+          create: (monitors || []).map((m: any) => ({
+            model: m.model,
+            specs: m.specs
+          }))
+        }
       },
       include: {
         assignedTo: { select: { id: true, name: true, email: true, avatar: true } },
+        monitors: true
       },
     });
     res.json(workstation);
@@ -201,6 +217,8 @@ export const createReport = async (req: Request, res: Response) => {
       data: {
         date: date ? new Date(date) : new Date(),
         hours: parseFloat(hours) || 8.0,
+        reactiveTickets: reactiveTickets || [],
+        proactiveMaintenance: proactiveMaintenance || [],
         researchNotes,
         nextSteps,
         authorId
@@ -226,6 +244,8 @@ export const updateReport = async (req: Request, res: Response) => {
       data: {
         date: date ? new Date(date) : undefined,
         hours: hours ? parseFloat(hours) : undefined,
+        reactiveTickets,
+        proactiveMaintenance,
         researchNotes,
         nextSteps,
       },
