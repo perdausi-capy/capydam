@@ -106,7 +106,7 @@ export const getLedgers = async (req: Request, res: Response) => {
   try {
     const ledgers = await prisma.maintenanceLedger.findMany({
       include: {
-        workstation: { select: { unitId: true } },
+        workstation: { select: { id: true, unitId: true } },
         assignedTech: { select: { id: true, name: true, email: true, avatar: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -137,7 +137,7 @@ export const createLedger = async (req: Request, res: Response) => {
         assignedTechId: assignedTechId || (req as AuthRequest).user?.id || null
       },
       include: {
-        workstation: { select: { unitId: true } },
+        workstation: { select: { id: true, unitId: true } },
         assignedTech: { select: { id: true, name: true, email: true, avatar: true } },
       },
     });
@@ -160,10 +160,11 @@ export const updateLedger = async (req: Request, res: Response) => {
         issue,
         actionTaken,
         status,
-        assignedTechId: assignedTechId || null
+        // ✅ FIX: If undefined, do nothing. If empty string, set to null. Otherwise, use the ID.
+        assignedTechId: assignedTechId === undefined ? undefined : (assignedTechId || null)
       },
       include: {
-        workstation: { select: { unitId: true } },
+        workstation: { select: { id: true, unitId: true } },
         assignedTech: { select: { id: true, name: true, email: true, avatar: true } },
       },
     });

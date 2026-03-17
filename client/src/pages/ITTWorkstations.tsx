@@ -192,7 +192,7 @@ const WorkstationSpecs = ({
                         </div>
                     </div>
                 ) : (
-                    <p className="text-gray-500 italic text-xs px-2">No user assigned.</p>
+                    <p className="text-green-500 dark:text-green-400 font-bold text-xs px-2">Available</p>
                 )}
             </div>
         </div>
@@ -438,7 +438,6 @@ const ITTWorkstations = () => {
                         <tr>
                             <th className={COL_HEADER}>Name</th>
                             <th className={COL_HEADER}>Computer Number</th>
-                            <th className={COL_HEADER}>Allocation</th>
                             <th className={COL_HEADER}>Motherboard</th>
                             <th className={COL_HEADER}>CPU</th>
                             <th className={COL_HEADER}>GPU</th>
@@ -473,7 +472,7 @@ const ITTWorkstations = () => {
                                                 <span className="font-medium truncate max-w-[120px]">{ws.assignedTo.name}</span>
                                             </>
                                         ) : (
-                                            <span className="text-gray-400 italic text-xs">Unassigned</span>
+                                            <span className="text-green-500 dark:text-green-400 font-bold text-xs">Available</span>
                                         )}
                                     </div>
                                 </td>
@@ -483,14 +482,6 @@ const ITTWorkstations = () => {
                                     <span className="font-semibold text-gray-900 dark:text-white">{ws.unitId}</span>
                                 </td>
 
-                                {/* Allocation (department / general purpose — same field as assignedTo label) */}
-                                <td className={ws.assignedTo ? CELL : CELL_MUTED}>
-                                    {ws.assignedTo ? (
-                                        <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-500/20 px-2 py-0.5 rounded-md">
-                                            {ws.assignedTo.name}
-                                        </span>
-                                    ) : '—'}
-                                </td>
 
                                 {/* Hardware columns */}
                                 <td className={ws.mobo ? CELL : CELL_MUTED}>{ws.mobo || '—'}</td>
