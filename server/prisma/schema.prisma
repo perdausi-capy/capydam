@@ -366,3 +366,21 @@ model DailyReport {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }
+
+// ✅ NEW ITT HARDWARE INVENTORY
+model IttInventory {
+  id           String    @id @default(uuid())
+  itemName     String    // ✅ NEW: e.g., "Intel Core i7-13700K"
+  serialNumber String    @unique
+  type         String    // MOBO, CPU, GPU, RAM, STORAGE, MONITOR, PSU
+  purchaseDate DateTime?
+  status       String    @default("Active") // Active, Defective, Custom
+  notes        String?   @db.Text
+  
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Optional: If you ever want to link a specific part to a workstation later
+  // workstationId String?
+  // workstation   Workstation? @relation(fields: [workstationId], references: [id])
+}

@@ -26,7 +26,7 @@ import {
   Hash,
   Box,
   Sparkles,
-  Shield // ✅ Imported Shield
+  Monitor // ✅ Imported Monitor
 } from 'lucide-react';
 import FloatingThemeToggle from './FloatingThemeToggle';
 
@@ -303,7 +303,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
 
               <NavItem
                 to="/admin/itt"
-                icon={<Shield size={20} />}
+                icon={<Monitor size={20} />}
                 label="ITT System"
                 isCollapsed={isCollapsed}
                 active={isActive('/admin/itt')}

@@ -322,12 +322,119 @@ export const replyToIttTicket = async (req: Request, res: Response) => {
       data: {
         adminReply: message,
         repliedAt: new Date(),
-        status: 'resolved'
       }
     });
     res.json(updated);
   } catch (error) {
     console.error("Error replying to ITT ticket:", error);
     res.status(500).json({ error: "Failed to reply to ticket" });
+  }
+};
+
+export const updateIttTicketStatus = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    const updated = await prisma.feedback.update({
+      where: { id },
+      data: { status }
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error("Error updating ITT ticket status:", error);
+    res.status(500).json({ error: "Failed to update ticket status" });
+  }
+};
+
+// ==========================================
+// HARDWARE INVENTORY
+// ==========================================
+
+// Get all inventory items (optionally filtered by type)
+export const getInventory = async (req: Request, res: Response) => {
+  try {
+    const { type } = req.query;
+    
+    const whereClause = type ? { type: String(type) } : {};
+
+    const inventory = await prisma.ittInventory.findMany({
+      where: whereClause,
+      orderBy: { createdAt: 'desc' },
+    });
+    
+    res.json(inventory);
+  } catch (error) {
+    console.error('Error fetching inventory:', error);
+    res.status(500).json({ error: 'Failed to fetch inventory' });
+  }
+};
+
+// Add a new hardware component
+export const createInventoryItem = async (req: Request, res: Response) => {
+  try {
+    const { itemName, serialNumber, type, purchaseDate, status, notes } = req.body;
+
+    // Check for duplicate serial number
+    const existing = await prisma.ittInventory.findUnique({ 
+        where: { serialNumber } 
+    });
+    
+    if (existing) {
+      return res.status(400).json({ error: 'Serial Number already exists in inventory' });
+    }
+
+    const item = await prisma.ittInventory.create({
+      data: {
+        itemName,
+        serialNumber,
+        type,
+        purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
+        status: status || 'Active',
+        notes: notes || null
+      },
+    });
+    
+    res.status(201).json(item);
+  } catch (error) {
+    console.error('Error creating inventory item:', error);
+    res.status(500).json({ error: 'Failed to add item to inventory' });
+  }
+};
+
+// Update an existing hardware component
+export const updateInventoryItem = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { itemName, serialNumber, type, purchaseDate, status, notes } = req.body;
+
+    const item = await prisma.ittInventory.update({
+      where: { id },
+      data: {
+        itemName,
+        serialNumber,
+        type,
+        purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
+        status,
+        notes
+      },
+    });
+    
+    res.json(item);
+  } catch (error) {
+    console.error('Error updating inventory item:', error);
+    res.status(500).json({ error: 'Failed to update inventory item' });
+  }
+};
+
+// Delete a hardware component
+export const deleteInventoryItem = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.ittInventory.delete({ where: { id } });
+    res.json({ message: 'Inventory item deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting inventory item:', error);
+    res.status(500).json({ error: 'Failed to delete inventory item' });
   }
 };

@@ -7,6 +7,7 @@ import {
     PenTool, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ConfirmModal from '../components/ConfirmModal';
 
 interface User { id: string; name: string; avatar?: string; }
 interface Report {
@@ -128,6 +129,7 @@ const ITTReports = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [viewingReport, setViewingReport] = useState<Report | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [deleteId, setDeleteId] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
     const [formData, setFormData] = useState({
@@ -178,14 +180,17 @@ const ITTReports = () => {
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!window.confirm('Delete this report?')) return;
+    const executeDelete = async () => {
+        if (!deleteId) return;
+        
         try {
-            await client.delete(`/itt/reports/${id}`);
+            await client.delete(`/itt/reports/${deleteId}`);
             toast.success('Report deleted');
             fetchReports();
         } catch {
             toast.error('Failed to delete report');
+        } finally {
+            setDeleteId(null);
         }
     };
 
@@ -309,7 +314,13 @@ const ITTReports = () => {
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <button onClick={() => openModal(report)} className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-white/5 rounded-lg transition-colors"><Edit2 size={14} /></button>
-                                                <button onClick={() => handleDelete(report.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-white/5 rounded-lg transition-colors"><Trash2 size={14} /></button>
+                                                <button 
+                                                    onClick={() => setDeleteId(report.id)} 
+                                                    className="p-1.5 text-gray-400 hover:text-red-500 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-lg"
+                                                    title="Delete Report"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
                                                 <button onClick={() => setViewingReport(report)} className="p-1.5 text-blue-600 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 rounded-lg transition-all"><ArrowRight size={14} /></button>
                                             </div>
                                         </td>
@@ -329,7 +340,12 @@ const ITTReports = () => {
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                                 {editingId ? 'Edit Report' : 'Daily Shift Report'}
                             </h2>
-                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-red-500">Close</button>
+                            <button 
+                                onClick={() => setIsModalOpen(false)} 
+                                className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
                         </div>
 
                         <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -384,6 +400,17 @@ const ITTReports = () => {
                     />
                 )}
             </AnimatePresence>
+
+            {/* Delete Confirmation Modal */}
+            <ConfirmModal 
+                isOpen={!!deleteId} 
+                onClose={() => setDeleteId(null)} 
+                onConfirm={executeDelete} 
+                title="Delete Daily Report" 
+                message="Are you sure you want to delete this daily report? This action cannot be undone." 
+                confirmText="Delete" 
+                isDangerous={true} 
+            />
         </div>
     );
 };

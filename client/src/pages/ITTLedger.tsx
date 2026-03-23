@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import client from '../api/client';
 import { toast } from 'react-toastify';
-import { Plus, Edit2, Trash2, Monitor as MonitorIcon, Search } from 'lucide-react';
+import { Plus, Edit2, Trash2, Monitor as MonitorIcon, Search, X } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 
 interface Workstation { id: string; unitId: string; }
 interface User { id: string; name: string; }
@@ -22,6 +23,7 @@ const ITTLedger = () => {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [deleteId, setDeleteId] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
     const [formData, setFormData] = useState({
@@ -67,14 +69,17 @@ const ITTLedger = () => {
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!window.confirm('Delete this ledger record? This action cannot be undone.')) return;
+    const executeDelete = async () => {
+        if (!deleteId) return;
+        
         try {
-            await client.delete(`/itt/ledgers/${id}`);
-            toast.success('Ledger record struck from log');
+            await client.delete(`/itt/ledgers/${deleteId}`);
+            toast.success('Log deleted');
             fetchData();
         } catch (error) {
-            toast.error('Failed to delete record');
+            toast.error('Failed to delete log');
+        } finally {
+            setDeleteId(null);
         }
     };
 
@@ -186,7 +191,7 @@ const ITTLedger = () => {
                                     <td className="px-4 py-3 text-center align-middle">
                                         <div className="flex gap-2 justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                             <button onClick={() => openModal(log)} className="p-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-500 hover:text-blue-600 hover:border-blue-400 rounded shadow-sm transition-colors" title="Edit Entry"><Edit2 size={14} /></button>
-                                            <button onClick={() => handleDelete(log.id)} className="p-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-500 hover:text-red-600 hover:border-red-400 rounded shadow-sm transition-colors" title="Strike Record"><Trash2 size={14} /></button>
+                                            <button onClick={() => setDeleteId(log.id)} className="p-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-500 hover:text-red-600 hover:border-red-400 rounded shadow-sm transition-colors" title="Strike Record"><Trash2 size={14} /></button>
                                         </div>
                                     </td>
                                 </tr>
@@ -204,7 +209,12 @@ const ITTLedger = () => {
                             <h2 className="text-lg font-black uppercase tracking-widest text-gray-900 dark:text-white">
                                 {editingId ? 'Amend Ledger Entry' : 'New Ledger Entry'}
                             </h2>
-                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-red-500 transition-colors">Close</button>
+                            <button 
+                                onClick={() => setIsModalOpen(false)} 
+                                className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
                         </div>
 
                         <form onSubmit={handleSubmit} className="p-6 space-y-5">
@@ -246,6 +256,17 @@ const ITTLedger = () => {
                     </div>
                 </div>
             )}
+
+            {/* Delete Confirmation Modal */}
+            <ConfirmModal 
+                isOpen={!!deleteId} 
+                onClose={() => setDeleteId(null)} 
+                onConfirm={executeDelete} 
+                title="Delete Maintenance Log" 
+                message="Are you sure you want to delete this maintenance log? This action cannot be undone." 
+                confirmText="Delete" 
+                isDangerous={true} 
+            />
         </div>
     );
 };

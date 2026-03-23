@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Shield, Monitor, Wrench, FileText, ArrowLeft } from 'lucide-react';
+import { Shield, Monitor, Wrench, FileText, ArrowLeft, Package } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ITTWorkstations from './ITTWorkstations';
 import ITTLedger from './ITTLedger';
 import ITTReports from './ITTReports';
+import ITTInventory from './ITTInventory';
 
 const ITTDashboard = () => {
-    const [activeTab, setActiveTab] = useState<'workstations' | 'ledger' | 'reports'>('workstations');
+    const [activeTab, setActiveTab] = useState<'workstations' | 'ledger' | 'reports' | 'inventory'>('workstations');
 
     return (
         <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] text-gray-900 dark:text-white p-6 lg:p-12 transition-colors duration-500 relative overflow-hidden font-sans">
@@ -49,6 +50,7 @@ const ITTDashboard = () => {
                 <div className="flex overflow-x-auto hide-scrollbar gap-2 mb-8 bg-white/60 dark:bg-[#121418] border border-gray-200 dark:border-white/5 p-2 rounded-2xl shadow-sm backdrop-blur-md sticky top-6 z-20">
                     {[
                         { id: 'workstations', icon: Monitor, label: 'Workstations' },
+                        { id: 'inventory', icon: Package, label: 'Inventory' },
                         { id: 'ledger', icon: Wrench, label: 'Maintenance Ledger' },
                         { id: 'reports', icon: FileText, label: 'Daily Reports' },
                     ].map((tab) => (
@@ -72,6 +74,7 @@ const ITTDashboard = () => {
                 {/* --- CONTENT AREA --- */}
                 <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
                     {activeTab === 'workstations' && <ITTWorkstations />}
+                    {activeTab === 'inventory' && <ITTInventory />}
                     {activeTab === 'ledger' && <ITTLedger />}
                     {activeTab === 'reports' && <ITTReports />}
                 </div>
