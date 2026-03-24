@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import logo from '../assets/capytech-fav.png'; // Small Icon
+import logo from '../assets/capytech-fav.png'; 
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -16,7 +16,6 @@ import {
   Users,
   Menu,
   X,
-  ChevronLeft,
   ChevronRight,
   Compass,
   HelpCircle,
@@ -28,15 +27,13 @@ import {
   Sparkles,
   Monitor // ✅ Imported Monitor
 } from 'lucide-react';
-import FloatingThemeToggle from './FloatingThemeToggle';
+import FloatingClickUp from './FloatingClickUp';
 
-// Define Stats Interface
 interface AdminStats {
   pendingUsers: number;
   newFeedback: number;
 }
 
-// 💎 ANIMATED BRAND TITLE (Falling Letters Effect)
 const BrandTitle = ({ isOpen }: { isOpen: boolean }) => {
 
   // ✅ 2. Explicitly type as Variants
@@ -51,48 +48,19 @@ const BrandTitle = ({ isOpen }: { isOpen: boolean }) => {
     }
   };
 
-  // ✅ 3. Explicitly type as Variants
   const letterVars: Variants = {
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: {
-        type: "spring",
-        damping: 12,
-        stiffness: 200,
-      }
-    },
-    hidden: {
-      y: -25,
-      opacity: 0,
-      transition: {
-        type: "spring",
-        damping: 12,
-        stiffness: 200
-      }
-    }
+    visible: { y: 0, opacity: 1, transition: { type: "spring", damping: 12, stiffness: 200 } },
+    hidden: { y: -25, opacity: 0, transition: { type: "spring", damping: 12, stiffness: 200 } }
   };
 
   return (
-    <div className="flex items-center gap-3 select-none overflow-hidden h-10">
-      {/* LOGO (Rotates in) */}
-      <motion.div
-        layout
-        transition={{ duration: 0.5, type: 'spring' }}
-        className="relative z-20 flex-shrink-0"
-      >
-        <img src={logo} alt="CapyTech" className="h-8 w-8 object-contain" />
+    <div className="flex items-center gap-2 select-none overflow-hidden h-10">
+      <motion.div layout transition={{ duration: 0.5, type: 'spring' }} className="relative z-20 flex-shrink-0">
+        <img src={logo} alt="CapyTech" className="h-7 w-7 object-contain" />
       </motion.div>
 
-      {/* TEXT (Only renders if sidebar is Open) */}
       {isOpen && (
-        <motion.div
-          className="flex items-center"
-          variants={containerVars}
-          initial="hidden"
-          animate="visible"
-        >
-          {/* "CAPY" - Dark/White */}
+        <motion.div className="flex items-center" variants={containerVars} initial="hidden" animate="visible">
           {"CAPY".split("").map((char, index) => (
             <motion.span
               key={`c-${index}`}
@@ -119,6 +87,16 @@ const BrandTitle = ({ isOpen }: { isOpen: boolean }) => {
   );
 };
 
+const NavSectionHeader = ({ label, isCollapsed }: { label: string, isCollapsed: boolean }) => {
+  if (isCollapsed) return <div className="my-2 border-t border-gray-200 dark:border-white/10 mx-3" />;
+  
+  return (
+    <div className="px-4 text-[10px] font-extrabold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500 mt-5 mb-1.5 flex items-center gap-2">
+      {label}
+    </div>
+  );
+};
+
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const { logout, user } = useAuth();
   const { theme } = useTheme();
@@ -141,7 +119,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       const { data } = await client.get('/admin/stats');
       return data;
     },
-    enabled: isAdmin, // This will now be false for Editors
+    enabled: isAdmin, 
     staleTime: 1000 * 60 * 1
   });
 
@@ -190,7 +168,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       <aside
         className={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] transition-all duration-300 ease-in-out
             ${isMobileMenuOpen ? 'translate-x-0 w-64 shadow-2xl' : '-translate-x-full lg:translate-x-0 lg:shadow-none'}
-            ${isCollapsed ? 'lg:w-20' : 'lg:w-64'}
+            ${activeCollapsed ? 'lg:w-20' : 'lg:w-64'}
           `}
       >
 
@@ -229,7 +207,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           <NavItem to="/library" icon={<LayoutDashboard size={20} />} label="Library" isCollapsed={isCollapsed} active={isActive('/library')} onClick={handleNavClick} />
 
           {user?.role !== 'viewer' && (
-            <NavItem to="/upload" icon={<UploadCloud size={20} />} label="Upload" isCollapsed={isCollapsed} active={isActive('/upload')} onClick={handleNavClick} />
+            <NavItem to="/upload" icon={<UploadCloud size={20} />} label="Upload" isCollapsed={activeCollapsed} active={isActive('/upload')} onClick={handleNavClick} />
           )}
 
           <NavItem to="/collections" icon={<Folder size={20} />} label="Collections" isCollapsed={isCollapsed} active={isActive('/collections')} onClick={handleNavClick} />
@@ -323,7 +301,6 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           )}
         </nav>
 
-        {/* PROFILE SECTION */}
         <div className="border-t border-gray-100 dark:border-white/10 bg-gray-50/50 dark:bg-black/20 p-3 mt-auto shrink-0 transition-colors">
           <div className={`flex items-center rounded-xl border border-transparent transition-all duration-200 ${!isCollapsed ? 'bg-white dark:bg-white/5 shadow-sm border-gray-100 dark:border-white/5 p-2' : 'justify-center p-0'}`}>
 
@@ -367,16 +344,15 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         </div>
       </aside>
 
-      {isMobileMenuOpen && <div className="fixed inset-0 z-10 bg-gray-900/50 backdrop-blur-sm lg:hidden" onClick={() => setIsMobileMenuOpen(false)} />}
+      {isMobileMenuOpen && <div className="fixed inset-0 z-30 bg-gray-900/50 backdrop-blur-sm lg:hidden" onClick={() => setIsMobileMenuOpen(false)} />}
 
-      <main className={`min-h-screen w-full pt-20 lg:pt-0 transition-all duration-300 ease-in-out dark:text-white ${isCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
+      <main className={`min-h-screen w-full pt-16 lg:pt-0 transition-all duration-300 ease-in-out dark:text-white ${activeCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
         {children}
       </main>
     </div>
   );
 };
 
-// NavItem Helper
 const NavItem = ({ to, icon, label, isCollapsed, active, onClick, badge }: any) => {
   return (
     <Link
@@ -414,6 +390,32 @@ const NavItem = ({ to, icon, label, isCollapsed, active, onClick, badge }: any) 
         </div>
       )}
     </Link>
+  );
+};
+
+// ✅ MODIFIED: Accepts targetId so we can track the exact icon location
+const NavButton = ({ id, targetId, icon, label, isCollapsed, onClick }: any) => {
+  return (
+    <button
+      id={id}
+      onClick={onClick}
+      title={isCollapsed ? label : ''}
+      className={`
+        w-full group relative flex items-center rounded-xl px-3 py-2 mb-1 transition-all duration-300 
+        text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white
+        ${isCollapsed ? 'justify-center' : 'text-left'}
+      `}
+    >
+      {/* Target ID is placed exactly on the icon container */}
+      <div id={targetId} className="relative shrink-0 flex items-center justify-center text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-white transition-colors">
+        {icon}
+      </div>
+      {!isCollapsed && (
+        <div className="flex flex-1 items-center justify-between ml-3 overflow-hidden">
+          <span className="truncate font-medium text-sm">{label}</span>
+        </div>
+      )}
+    </button>
   );
 };
 
