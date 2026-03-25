@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import client from '../api/client';
 import { toast } from 'react-toastify';
+import { useQueryClient } from '@tanstack/react-query';
 import {
     Plus, Edit2, Trash2, Cpu, HardDrive, Monitor as MonitorIcon,
     Search, Hash, Activity, Layers, Database, View, Zap, User,
     Eye, X, MessageSquare, Send, Clock, CheckCircle, RefreshCw,
     AlertCircle, FileText, Loader2, Check, ChevronUp, ChevronDown, ChevronRight,
-    Settings, Package
+    Settings, Package, Wrench, XCircle, UserMinus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmModal from '../components/ConfirmModal';
@@ -25,12 +26,21 @@ interface UserInfo {
     id: string;
     name: string;
     email: string;
+    avatar?: string;
 }
 
 interface Monitor {
     id?: string;
     model: string;
     specs?: string;
+}
+
+interface PartItem {
+    id: string;
+    itemName: string;
+    serialNumber: string;
+    type: string;
+    status: string;
 }
 
 interface Workstation {
@@ -42,7 +52,9 @@ interface Workstation {
     gpu: string;
     psu: string;
     storage: string;
+    monitor?: string;
     monitors: Monitor[];
+    parts: PartItem[];
     status: string;
     notes?: string;
     assignedTo?: UserInfo;
@@ -93,19 +105,13 @@ const WorkstationSpecs = ({
 }) => {
     const [showFullSpecs, setShowFullSpecs] = useState(false);
 
-    // Primary specs shown by default
-    const primarySpecs = [
-        { label: 'Processor', value: viewingWs.cpu, icon: <Cpu size={14} /> },
-        { label: 'Memory (RAM)', value: viewingWs.ram, icon: <Database size={14} /> },
-        { label: 'Storage', value: viewingWs.storage, icon: <HardDrive size={14} /> },
-        { label: 'Graphics (GPU)', value: viewingWs.gpu, icon: <View size={14} /> },
-    ];
-
-    // Secondary specs revealed on "See More"
-    const extendedSpecs = [
-        { label: 'Motherboard', value: viewingWs.mobo, icon: <Layers size={14} /> },
-        { label: 'Power Supply', value: viewingWs.psu, icon: <Zap size={14} /> },
-    ];
+    // Use relational parts instead of static strings
+    const parts = viewingWs.parts || [];
+    
+    // Sort into primary/extended simply for layout consistency
+    const primaryTypes = ['CPU', 'RAM', 'STORAGE', 'GPU'];
+    const primaryParts = parts.filter(p => primaryTypes.includes(p.type));
+    const extendedParts = parts.filter(p => !primaryTypes.includes(p.type));
 
     const monitorSpecs = viewingWs.monitors.map((m, i) => ({
         label: i === 0 ? 'Primary Monitor' : `Monitor ${i + 1}`,
@@ -115,16 +121,28 @@ const WorkstationSpecs = ({
 
     return (
         <div className="w-72 shrink-0 border-r border-white/5 overflow-y-auto p-6 space-y-5 bg-black/10 custom-scrollbar">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Hardware Specs</h3>
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <View size={14} className="text-blue-500" /> 
+                Relational Specs
+            </h3>
 
             {/* Primary Grid */}
             <div className="space-y-5">
-                {primarySpecs.map(({ label, value, icon }) => (
-                    <div key={label}>
-                        <h4 className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 mb-0.5">{icon}{label}</h4>
-                        <p className="text-gray-900 dark:text-white font-medium text-sm">{value || "Not Specified"}</p>
+                {primaryParts.length > 0 ? primaryParts.map(part => (
+                    <div key={part.id}>
+                        <h4 className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 mb-0.5">
+                            {part.type === 'CPU' ? <Cpu size={14} /> : 
+                             part.type === 'RAM' ? <Database size={14} /> :
+                             part.type === 'STORAGE' ? <HardDrive size={14} /> :
+                             part.type === 'GPU' ? <View size={14} /> : <Package size={14} />}
+                            {part.type}
+                        </h4>
+                        <p className="text-gray-900 dark:text-white font-medium text-sm">{part.itemName}</p>
+                        <p className="text-[9px] text-gray-500 font-mono">SN: {part.serialNumber}</p>
                     </div>
-                ))}
+                )) : (
+                    <p className="text-xs italic text-gray-400">No primary hardware assigned.</p>
+                )}
             </div>
 
             {/* Extended Section */}
@@ -136,10 +154,14 @@ const WorkstationSpecs = ({
                         exit={{ height: 0, opacity: 0 }}
                         className="space-y-5 overflow-hidden pt-5 border-t border-white/5"
                     >
-                        {extendedSpecs.map(({ label, value, icon }) => (
-                            <div key={label}>
-                                <h4 className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1.5 mb-0.5">{icon}{label}</h4>
-                                <p className="text-gray-700 dark:text-gray-300 font-medium text-sm">{value || "N/A"}</p>
+                        {extendedParts.map(part => (
+                            <div key={part.id}>
+                                <h4 className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1.5 mb-0.5">
+                                    {part.type === 'MOBO' ? <Layers size={14} /> :
+                                     part.type === 'PSU' ? <Zap size={14} /> : <Package size={14} />}
+                                    {part.type}
+                                </h4>
+                                <p className="text-gray-700 dark:text-gray-300 font-medium text-sm">{part.itemName}</p>
                             </div>
                         ))}
                         {monitorSpecs.length > 0 ? (
@@ -211,13 +233,22 @@ const WorkstationSpecs = ({
     );
 };
 
+const statusConfig = {
+    active: { label: 'Active', icon: <CheckCircle size={14} />, color: 'text-green-500' },
+    maintenance: { label: 'Maintenance', icon: <Wrench size={14} />, color: 'text-amber-500' },
+    retired: { label: 'Retired', icon: <XCircle size={14} />, color: 'text-red-500' },
+};
+
 const ITTWorkstations = () => {
+    const queryClient = useQueryClient(); // Added useQueryClient
     const [workstations, setWorkstations] = useState<Workstation[]>([]);
     const [users, setUsers] = useState<UserInfo[]>([]);
     const [loading, setLoading] = useState(true);
     const [stock, setStock] = useState<InventoryItem[]>([]);
     const [partsToDeploy, setPartsToDeploy] = useState<Set<string>>(new Set());
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isStatusOpen, setIsStatusOpen] = useState(false);
+    const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [initialHardware, setInitialHardware] = useState<Record<string, string>>({});
     const [searchTerm, setSearchTerm] = useState('');
@@ -263,15 +294,8 @@ const ITTWorkstations = () => {
         unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', status: 'active', assignedToId: ''
     });
 
-    const [monitorList, setMonitorList] = useState<{ model: string, specs: string }[]>([{ model: '', specs: '' }]);
+    const selectedUser = users.find(u => u.id === formData.assignedToId);
 
-    const addMonitorField = () => {
-        setMonitorList([...monitorList, { model: '', specs: '' }]);
-    };
-
-    const removeMonitorField = (index: number) => {
-        setMonitorList(monitorList.filter((_, i) => i !== index));
-    };
 
     const fetchData = async () => {
         try {
@@ -400,7 +424,31 @@ const ITTWorkstations = () => {
         e.preventDefault();
         if (!formData.unitId) { toast.warning("Unit ID is required"); return; }
         try {
-            const payload = { ...formData, assignedToId: formData.assignedToId || null };
+            // Build the list of inventory items to release (swapped out)
+            const releasedItemIds: string[] = [];
+            if (editingId) {
+                const hardwareKeys = ['mobo', 'cpu', 'ram', 'gpu', 'psu', 'storage', 'monitor'];
+                hardwareKeys.forEach(key => {
+                    const oldVal = (initialHardware as any)[key];
+                    const newVal = (formData as any)[key];
+                    if (oldVal !== newVal && oldVal) {
+                        const snMatch = oldVal.match(/\(SN:\s*(.+?)\)/);
+                        if (snMatch?.[1]) {
+                            const invItem = stock.find(i => i.serialNumber === snMatch[1].trim());
+                            if (invItem) releasedItemIds.push(invItem.id);
+                        }
+                    }
+                });
+            }
+
+            // Build payload — backend handles deploy/release atomically in one transaction
+            const payload = {
+                ...formData,
+                assignedToId: formData.assignedToId || null,
+                deployedItemIds: Array.from(partsToDeploy),
+                releasedItemIds,
+            };
+
             if (editingId) {
                 await client.put(`/itt/workstations/${editingId}`, payload);
                 toast.success('Workstation updated');
@@ -409,54 +457,17 @@ const ITTWorkstations = () => {
                 toast.success('Workstation created');
             }
 
-            // FREE OLD PARTS
-            if (editingId) {
-                const hardwareKeys = ['mobo', 'cpu', 'ram', 'gpu', 'psu', 'storage', 'monitor'];
-                const partsToFree = new Set<string>();
-
-                hardwareKeys.forEach(key => {
-                    const oldVal = (initialHardware as any)[key];
-                    const newVal = (formData as any)[key];
-
-                    // If the field changed and it had a previous value
-                    if (oldVal !== newVal && oldVal) {
-                        // Extract SN using Regex: Looks for "(SN: XYZ)"
-                        const snMatch = oldVal.match(/\(SN:\s*(.+?)\)/);
-                        if (snMatch && snMatch[1]) {
-                            const oldSn = snMatch[1].trim();
-                            // Find the item in our fetched stock list
-                            const invItem = stock.find(i => i.serialNumber === oldSn);
-                            if (invItem) {
-                                partsToFree.add(invItem.id);
-                            }
-                        }
-                    }
-                });
-
-                if (partsToFree.size > 0) {
-                    await Promise.all(Array.from(partsToFree).map(async (invId) => {
-                        const item = stock.find(i => i.id === invId);
-                        if (item) {
-                            await client.put(`/itt/inventory/${invId}`, { ...item, status: 'Active' });
-                        }
-                    }));
-                    toast.info(`Returned ${partsToFree.size} old part(s) to Active stock`);
-                }
-            }
-
-            // Auto-Deploy selected inventory parts
             if (partsToDeploy.size > 0) {
-                await Promise.all(Array.from(partsToDeploy).map(async (invId) => {
-                    const item = stock.find(i => i.id === invId);
-                    if (item) {
-                        await client.put(`/itt/inventory/${invId}`, { ...item, status: 'Deployed' });
-                    }
-                }));
-                toast.info(`Marked ${partsToDeploy.size} inventory items as Deployed`);
+                toast.info(`${partsToDeploy.size} inventory item(s) deployed`);
+            }
+            if (releasedItemIds.length > 0) {
+                toast.info(`${releasedItemIds.length} old part(s) returned to stock`);
             }
 
             closeModal();
             fetchData();
+            queryClient.invalidateQueries({ queryKey: ['workstations'] }); // Invalidate workstations query
+            queryClient.invalidateQueries({ queryKey: ['inventory'] }); // Invalidate inventory query
         } catch (error: any) {
             toast.error(error.response?.data?.error || 'Operation failed');
         }
@@ -469,6 +480,8 @@ const ITTWorkstations = () => {
             await client.delete(`/itt/workstations/${deleteId}`);
             toast.success('Workstation deleted');
             fetchData();
+            queryClient.invalidateQueries({ queryKey: ['workstations'] }); // Invalidate workstations query
+            queryClient.invalidateQueries({ queryKey: ['inventory'] }); // Invalidate inventory query
         } catch {
             toast.error('Failed to delete workstation');
         } finally {
@@ -479,31 +492,34 @@ const ITTWorkstations = () => {
     const openModal = (ws?: Workstation) => {
         if (ws) {
             setEditingId(ws.id);
-            const wsAny = ws as any;
             setFormData({
-                unitId: ws.unitId || '', mobo: ws.mobo || '', cpu: ws.cpu || '',
-                ram: ws.ram || '', gpu: ws.gpu || '', psu: ws.psu || '',
-                storage: ws.storage || '', monitor: wsAny.monitor || '',
-                status: ws.status || 'active', assignedToId: ws.assignedTo?.id || ''
+                unitId: ws.unitId || '',
+                mobo: ws.mobo || '',
+                cpu: ws.cpu || '',
+                ram: ws.ram || '',
+                gpu: ws.gpu || '',
+                psu: ws.psu || '',
+                storage: ws.storage || '',
+                monitor: ws.monitor || '',
+                status: ws.status || 'active',
+                assignedToId: ws.assignedTo?.id || ''
             });
             setInitialHardware({
                 mobo: ws.mobo || '', cpu: ws.cpu || '', ram: ws.ram || '',
-                gpu: ws.gpu || '', psu: ws.psu || '', storage: ws.storage || '', monitor: wsAny.monitor || ''
+                gpu: ws.gpu || '', psu: ws.psu || '', storage: ws.storage || '', monitor: ws.monitor || ''
             });
-            setMonitorList(ws.monitors.length > 0 ? ws.monitors.map(m => ({ model: m.model, specs: m.specs || '' })) : [{ model: '', specs: '' }]);
         } else {
             setEditingId(null);
             setFormData({ unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', status: 'active', assignedToId: '' });
             setInitialHardware({});
-            setMonitorList([{ model: '', specs: '' }]);
         }
         setPartsToDeploy(new Set());
         setIsModalOpen(true);
     };
 
-    const closeModal = () => { 
-        setIsModalOpen(false); 
-        setEditingId(null); 
+    const closeModal = () => {
+        setIsModalOpen(false);
+        setEditingId(null);
         setPartsToDeploy(new Set());
     };
 
@@ -625,16 +641,8 @@ const ITTWorkstations = () => {
                                 <td className={ws.gpu ? CELL : CELL_MUTED}>{ws.gpu || '—'}</td>
                                 <td className={ws.ram ? CELL : CELL_MUTED}>{ws.ram || '—'}</td>
                                 <td className={ws.storage ? CELL : CELL_MUTED}>{ws.storage || '—'}</td>
-                                <td className={ws.monitors.length > 0 ? CELL : CELL_MUTED}>
-                                    {ws.monitors.length > 0 ? (
-                                        <div className="flex flex-col gap-0.5">
-                                            {ws.monitors.map((m, i) => (
-                                                <span key={i} className="truncate max-w-[100px]" title={m.model}>
-                                                    {m.model}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    ) : 'No Monitor'}
+                                <td className={(ws as any).monitor ? CELL : CELL_MUTED}>
+                                    {(ws as any).monitor || 'No Monitor'}
                                 </td>
 
                                 {/* Status */}
@@ -759,8 +767,8 @@ const ITTWorkstations = () => {
             {/* ── Form Modal ── */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/70 animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden border border-gray-200 dark:border-white/10">
-                        <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center">
+                    <div className="bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl w-full max-w-2xl overflow-visible border border-gray-200 dark:border-white/10">
+                        <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center rounded-t-2xl overflow-hidden">
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white">{editingId ? 'Edit Workstation' : 'Add Workstation'}</h2>
                             <button onClick={closeModal} className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"><X size={20} /></button>
                         </div>
@@ -776,7 +784,7 @@ const ITTWorkstations = () => {
                                     { label: 'PSU', key: 'psu', icon: <Zap size={16} />, invType: 'PSU' },
                                     { label: 'Monitor', key: 'monitor', icon: <MonitorIcon size={16} />, invType: 'MONITOR' },
                                 ].map(({ label, key, icon, required, invType }) => {
-                                    
+
                                     // Check if we have active stock for this specific hardware type
                                     const availableStock = invType ? stock.filter(s => s.type === invType && s.status === 'Active') : [];
 
@@ -798,7 +806,7 @@ const ITTWorkstations = () => {
                                         {availableStock.length > 0 && (
                                             <div className="relative mt-1.5">
                                                 <Package className="absolute left-2.5 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none" size={12} />
-                                                <select 
+                                                <select
                                                     className="w-full bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-blue-700 dark:text-blue-400 text-[11px] rounded-md pl-7 pr-6 py-1.5 outline-none cursor-pointer appearance-none"
                                                     onChange={(e) => {
                                                         if (!e.target.value) return;
@@ -826,88 +834,132 @@ const ITTWorkstations = () => {
                                     </div>
                                 )})}
 
-                                {/* Dynamic Monitors Section */}
-                                <div className="md:col-span-2 space-y-4 border-t border-gray-100 dark:border-white/5 pt-4">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                                            <MonitorIcon size={14} /> Display Setup
-                                        </label>
-                                        <button
-                                            type="button"
-                                            onClick={addMonitorField}
-                                            className="text-blue-600 dark:text-blue-400 text-xs font-bold flex items-center gap-1 hover:underline"
-                                        >
-                                            <Plus size={14} /> Add Monitor
-                                        </button>
-                                    </div>
 
-                                    <AnimatePresence>
-                                        {monitorList.map((mon, idx) => (
-                                            <motion.div
-                                                key={idx}
-                                                initial={{ opacity: 0, x: -10 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                exit={{ opacity: 0, x: 10 }}
-                                                className="flex gap-2 items-start"
-                                            >
-                                                <div className="flex-1 grid grid-cols-2 gap-2">
-                                                    <input
-                                                        placeholder="Monitor Model"
-                                                        value={mon.model}
-                                                        onChange={(e) => {
-                                                            const newArr = [...monitorList];
-                                                            newArr[idx].model = e.target.value;
-                                                            setMonitorList(newArr);
-                                                        }}
-                                                        className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white"
-                                                    />
-                                                    <input
-                                                        placeholder="Specs (e.g., 4K, 144Hz)"
-                                                        value={mon.specs}
-                                                        onChange={(e) => {
-                                                            const newArr = [...monitorList];
-                                                            newArr[idx].specs = e.target.value;
-                                                            setMonitorList(newArr);
-                                                        }}
-                                                        className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white"
-                                                    />
-                                                </div>
-                                                {monitorList.length > 1 && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removeMonitorField(idx)}
-                                                        className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                )}
-                                            </motion.div>
-                                        ))}
-                                    </AnimatePresence>
-                                </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
                                     <div className="relative">
-                                        <Activity className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                                        <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} className="select-glass select-glass-icon">
-                                            <option value="active">Active</option>
-                                            <option value="maintenance">Maintenance</option>
-                                            <option value="retired">Retired</option>
-                                        </select>
+                                        {/* The Glassmorphic Trigger */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsStatusOpen(!isStatusOpen)}
+                                            className="select-glass flex items-center justify-between w-full"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <span className={statusConfig[formData.status as keyof typeof statusConfig]?.color}>
+                                                    {statusConfig[formData.status as keyof typeof statusConfig]?.icon}
+                                                </span>
+                                                <span className="capitalize">{formData.status}</span>
+                                            </div>
+                                            <ChevronDown size={14} className={`transition-transform ${isStatusOpen ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        {/* Custom Dropdown List */}
+                                        <AnimatePresence>
+                                            {isStatusOpen && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: -10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, y: -10 }}
+                                                    className="absolute top-full left-0 w-full mt-2 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-[60] backdrop-blur-xl"
+                                                >
+                                                    {Object.entries(statusConfig).map(([key, cfg]) => (
+                                                        <button
+                                                            key={key}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setFormData({ ...formData, status: key });
+                                                                setIsStatusOpen(false);
+                                                            }}
+                                                            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium hover:bg-gray-100 dark:hover:bg-white/5 transition-colors border-b border-gray-100 dark:border-white/5 last:border-0"
+                                                        >
+                                                            <span className={cfg.color}>{cfg.icon}</span>
+                                                            <span className="text-gray-900 dark:text-white">{cfg.label}</span>
+                                                        </button>
+                                                    ))}
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
                                     </div>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Assigned User</label>
                                     <div className="relative">
-                                        <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                                        <select value={formData.assignedToId} onChange={e => setFormData({ ...formData, assignedToId: e.target.value })} className="select-glass select-glass-icon">
-                                            <option value="">-- Unassigned --</option>
-                                            {availableUsers.map(u => (
-                                                <option key={u.id} value={u.id}>
-                                                    {u.name} ({u.email})
-                                                </option>
-                                            ))}
-                                        </select>
+                                        {/* The Glassmorphic Trigger Button */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
+                                            className="select-glass flex items-center justify-between w-full h-[42px]"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-white/10 flex items-center justify-center overflow-hidden shrink-0 border border-gray-100 dark:border-white/10 text-gray-400">
+                                                    {selectedUser?.avatar ? (
+                                                        <img src={selectedUser.avatar} alt="" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <User size={14} />
+                                                    )}
+                                                </div>
+                                                <span className="text-sm truncate">
+                                                    {selectedUser ? selectedUser.name : '-- Unassigned --'}
+                                                </span>
+                                            </div>
+                                            <ChevronDown size={14} className={`text-gray-400 transition-transform ${isUserDropdownOpen ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        {/* Dropdown List */}
+                                        <AnimatePresence>
+                                            {isUserDropdownOpen && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: -10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, y: -10 }}
+                                                    className="absolute top-full left-0 w-full mt-2 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl z-[100] backdrop-blur-xl max-h-60 overflow-y-auto custom-scrollbar"
+                                                >
+                                                    {/* Unassigned Option */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData({ ...formData, assignedToId: '' });
+                                                            setIsUserDropdownOpen(false);
+                                                        }}
+                                                        className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium hover:bg-gray-100 dark:hover:bg-white/5 transition-colors border-b border-gray-100 dark:border-white/5"
+                                                    >
+                                                        <div className="w-7 h-7 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-400">
+                                                            <UserMinus size={14} />
+                                                        </div>
+                                                        <span className="flex-1 text-left">-- Unassigned --</span>
+                                                        {!formData.assignedToId && <Check size={14} className="text-blue-500" />}
+                                                    </button>
+
+                                                    {/* User List */}
+                                                    {availableUsers.map((u) => (
+                                                        <button
+                                                            key={u.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setFormData({ ...formData, assignedToId: u.id });
+                                                                setIsUserDropdownOpen(false);
+                                                            }}
+                                                            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium hover:bg-gray-100 dark:hover:bg-white/5 transition-colors border-b border-gray-100 dark:border-white/5 last:border-0"
+                                                        >
+                                                            <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center overflow-hidden shrink-0 border border-gray-200 dark:border-white/10">
+                                                                {u.avatar ? (
+                                                                    <img src={u.avatar} alt="" className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                                                                        {u.name?.charAt(0).toUpperCase()}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex flex-col items-start min-w-0">
+                                                                <span className="text-gray-900 dark:text-white truncate w-full">{u.name}</span>
+                                                                <span className="text-[10px] text-gray-500 truncate w-full">{u.email}</span>
+                                                            </div>
+                                                            {formData.assignedToId === u.id && <Check size={14} className="text-blue-500" />}
+                                                        </button>
+                                                    ))}
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
                                     </div>
                                 </div>
                             </div>

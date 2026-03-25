@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { 
     Layers, Cpu, Database, View, HardDrive, 
     Monitor as MonitorIcon, Zap, Plus, Search, Package,
-    Edit2, Trash2, Calendar, FileText, Hash, X, Tag
+    Edit2, Trash2, Calendar, FileText, Hash, X, Tag, AlertCircle
 } from 'lucide-react';
 
 // --- TYPES ---
@@ -18,6 +18,9 @@ interface InventoryItem {
     status: string;
     notes: string | null;
     createdAt: string;
+    workstation?: {
+        unitId: string;
+    } | null;
 }
 
 const inventoryCategories = [
@@ -34,6 +37,7 @@ const ITTInventory = () => {
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState(inventoryCategories[0].id);
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
 
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -89,13 +93,17 @@ const ITTInventory = () => {
     };
 
     const handleDelete = async (id: string) => {
-        if (!window.confirm('Are you sure you want to delete this item?')) return;
+        if (!window.confirm('Are you sure you want to permanently remove this item?')) return;
         try {
-            await client.delete(`/itt/inventory/${id}`);
-            toast.success('Item deleted');
+            const response = await client.delete(`/itt/inventory/${id}`);
+            toast.success(response.data.message);
             fetchInventory();
-        } catch (error) {
-            toast.error('Failed to delete item');
+        } catch (error: any) {
+            const errorMessage = error.response?.data?.error || "Failed to delete item";
+            toast.error(errorMessage, {
+                autoClose: 5000,
+                icon: <AlertCircle className="text-red-500" />
+            });
         }
     };
 
@@ -157,14 +165,51 @@ const ITTInventory = () => {
             {/* Header Controls */}
             <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white dark:bg-[#121418] p-4 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm">
                 <div className="relative w-full md:w-64">
-                    <ActiveIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
-                    <select 
-                        value={selectedCategory} 
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                        className="select-glass select-glass-icon w-full cursor-pointer"
+                    <button 
+                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                        className="flex items-center gap-3 w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121418] shadow-sm hover:border-blue-500/50 transition-all text-left"
                     >
-                        {inventoryCategories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                    </select>
+                        <span className="text-blue-500 dark:text-blue-400">
+                            <ActiveIcon size={18} />
+                        </span>
+                        <span className="flex-1 text-sm font-bold text-gray-900 dark:text-white">
+                            {activeCat?.label}
+                        </span>
+                        <div className={`transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`}>
+                            <X size={14} className="rotate-45 text-gray-400" />
+                        </div>
+                    </button>
+
+                    <AnimatePresence>
+                        {isDropdownOpen && (
+                            <motion.div 
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 10 }}
+                                className="absolute top-full left-0 w-full mt-2 py-1.5 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50"
+                            >
+                                {inventoryCategories.map((cat) => (
+                                    <button
+                                        key={cat.id}
+                                        onClick={() => {
+                                            setSelectedCategory(cat.id);
+                                            setIsDropdownOpen(false);
+                                        }}
+                                        className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors
+                                            ${selectedCategory === cat.id 
+                                                ? 'bg-blue-600 text-white' 
+                                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
+                                            }`}
+                                    >
+                                        <span className={selectedCategory === cat.id ? 'text-white' : 'text-blue-500 dark:text-blue-400'}>
+                                            <cat.icon size={18} />
+                                        </span>
+                                        {cat.label}
+                                    </button>
+                                ))}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
                     <div className="relative w-full sm:w-64">
@@ -218,8 +263,9 @@ const ITTInventory = () => {
                                     <tr>
                                         <th className="px-6 py-4">Item Details</th>
                                         <th className="px-6 py-4">Status</th>
+                                        <th className="px-6 py-4">Deployment</th>
                                         <th className="px-6 py-4">Purchase Date</th>
-                                        <th className="px-6 py-4 w-1/3">Notes</th>
+                                        <th className="px-6 py-4 w-1/4">Notes</th>
                                         <th className="px-6 py-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
@@ -241,9 +287,19 @@ const ITTInventory = () => {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
-                                                {item.purchaseDate ? new Date(item.purchaseDate).toLocaleDateString() : <span className="italic text-gray-400">Not recorded</span>}
+                                                {item.workstation ? (
+                                                    <div className="flex items-center gap-2 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-lg border border-indigo-100 dark:border-indigo-800/50 w-fit font-bold">
+                                                        <MonitorIcon size={12} />
+                                                        <span className="text-xs">{item.workstation.unitId}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-[10px] text-gray-400 uppercase font-bold italic">In Storage</span>
+                                                )}
                                             </td>
-                                            <td className="px-6 py-4 truncate max-w-xs text-gray-600 dark:text-gray-400">
+                                            <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
+                                                {item.purchaseDate ? new Date(item.purchaseDate).toLocaleDateString() : <span className="italic text-gray-400 text-xs">Not recorded</span>}
+                                            </td>
+                                            <td className="px-6 py-4 truncate max-w-xs text-gray-600 dark:text-gray-400 text-xs">
                                                 {item.notes || <span className="italic text-gray-400">No notes</span>}
                                             </td>
                                             <td className="px-6 py-4 text-right">

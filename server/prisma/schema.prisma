@@ -301,27 +301,29 @@ model SeasonArchive {
 
 // ✅ NEW ITT MODELS
 model Workstation {
-  id          String   @id @default(uuid())
-  unitId      String   @unique
-  mobo        String?
-  cpu         String?
-  ram         String?
-  gpu         String?
-  psu         String?
-  storage     String?
-  
+  id           String          @id @default(uuid())
+  unitId       String          @unique
+  mobo         String?
+  cpu          String?
+  ram          String?
+  gpu          String?
+  psu          String?
+  storage      String?
+  monitor      String?
+
   // Refactored: One-to-Many Relation
-  monitors    Monitor[] 
+  monitors     Monitor[] 
   
-  notes       String?  @db.Text
-  status      String   @default("active") // active, maintenance, retired
+  notes        String?         @db.Text
+  status       String          @default("active") // active, maintenance, retired
   
   assignedToId String?
-  assignedTo  User?    @relation("AssignedWorkstation", fields: [assignedToId], references: [id])
+  assignedTo   User?           @relation("AssignedWorkstation", fields: [assignedToId], references: [id])
 
-  ledgers     MaintenanceLedger[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  ledgers      MaintenanceLedger[]
+  parts        IttInventory[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 }
 
 model Monitor {
@@ -380,7 +382,7 @@ model IttInventory {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  // Optional: If you ever want to link a specific part to a workstation later
-  // workstationId String?
-  // workstation   Workstation? @relation(fields: [workstationId], references: [id])
+  // Link a specific part to a workstation
+  workstationId String?
+  workstation   Workstation? @relation(fields: [workstationId], references: [id], onDelete: SetNull)
 }
