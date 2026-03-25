@@ -43,6 +43,11 @@ model User {
   streak        Int       @default(0)
   lastDailyDate DateTime? // To track if they voted yesterday
   score         Int      @default(0)
+
+  // ✅ NEW ITT RELATIONS
+  workstationsAssigned Workstation[] @relation("AssignedWorkstation")
+  maintenanceLedgers   MaintenanceLedger[]
+  dailyReports         DailyReport[]
 }
 
 // ✅ FEEDBACK MODEL
@@ -292,4 +297,90 @@ model SeasonArchive {
   winnerAvatar String?
   winnerScore  Int      // The score they achieved during that season
   prizeAwarded Int      // XP amount given (e.g. 5000)
+}
+
+// ✅ NEW ITT MODELS
+model Workstation {
+  id          String   @id @default(uuid())
+  unitId      String   @unique
+  mobo        String?
+  cpu         String?
+  ram         String?
+  gpu         String?
+  psu         String?
+  storage     String?
+  
+  // Refactored: One-to-Many Relation
+  monitors    Monitor[] 
+  
+  notes       String?  @db.Text
+  status      String   @default("active") // active, maintenance, retired
+  
+  assignedToId String?
+  assignedTo  User?    @relation("AssignedWorkstation", fields: [assignedToId], references: [id])
+
+  ledgers     MaintenanceLedger[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Monitor {
+  id            String      @id @default(uuid())
+  model         String      // e.g., "Dell UltraSharp U2723QE"
+  specs         String?     // e.g., "4K, 60Hz, IPS"
+  workstationId String
+  workstation   Workstation @relation(fields: [workstationId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+}
+
+model MaintenanceLedger {
+  id            String      @id @default(uuid())
+  workstationId String
+  workstation   Workstation @relation(fields: [workstationId], references: [id], onDelete: Cascade)
+  
+  issue         String
+  actionTaken   String?
+  status        String      @default("open") // open, in-progress, resolved
+  
+  assignedTechId String?
+  assignedTech  User?       @relation(fields: [assignedTechId], references: [id])
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model DailyReport {
+  id                  String   @id @default(uuid())
+  date                DateTime @default(now())
+  hours               Float    @default(8.0)
+  
+  reactiveTickets      String[] @default([])
+  proactiveMaintenance String[] @default([])
+  
+  researchNotes       String?
+  nextSteps           String?
+  
+  authorId            String
+  author              User     @relation(fields: [authorId], references: [id])
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+// ✅ NEW ITT HARDWARE INVENTORY
+model IttInventory {
+  id           String    @id @default(uuid())
+  itemName     String    // ✅ NEW: e.g., "Intel Core i7-13700K"
+  serialNumber String    @unique
+  type         String    // MOBO, CPU, GPU, RAM, STORAGE, MONITOR, PSU
+  purchaseDate DateTime?
+  status       String    @default("Active") // Active, Defective, Custom
+  notes        String?   @db.Text
+  
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Optional: If you ever want to link a specific part to a workstation later
+  // workstationId String?
+  // workstation   Workstation? @relation(fields: [workstationId], references: [id])
 }

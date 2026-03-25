@@ -2,8 +2,8 @@ import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
-import http from 'http'; 
-import { Server } from 'socket.io'; 
+import http from 'http';
+import { Server } from 'socket.io';
 
 dotenv.config();
 
@@ -12,11 +12,12 @@ import authRoutes from './routes/auth.routes';
 import assetRoutes from './routes/asset.routes';
 import userRoutes from './routes/user.routes';
 import collectionRoutes from './routes/collection.routes';
-import categoryRoutes from './routes/category.routes'; 
+import categoryRoutes from './routes/category.routes';
 import feedbackRoutes from './routes/feedback.routes';
 import adminRoutes from './routes/admin.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import uploadRoutes from './routes/uploadRoutes'; // ✅ Imported
+import ittRoutes from './routes/itt.routes'; // ✅ ITT System
 
 // Import Services
 import { initCronJobs } from './services/cron.service';
@@ -34,8 +35,8 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: [
-      'http://localhost:5173', 
-      process.env.CLIENT_URL || "" 
+      'http://localhost:5173',
+      process.env.CLIENT_URL || ""
     ],
     methods: ["GET", "POST"],
     credentials: true
@@ -45,11 +46,11 @@ const io = new Server(server, {
 // ✅ MIDDLEWARES
 app.use(cors({
   origin: [
-    'http://localhost:5173', 
-    process.env.CLIENT_URL || "" 
+    'http://localhost:5173',
+    process.env.CLIENT_URL || ""
   ],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  credentials: true 
+  credentials: true
 }));
 
 app.use(express.json());
@@ -64,8 +65,11 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/feedback', feedbackRoutes);
 
+// ✅ NEW ITT ROUTES
+app.use('/api/itt', ittRoutes);
+
 // ✅ NEW: Chat Upload Route (This was missing!)
-app.use('/api/upload', uploadRoutes); 
+app.use('/api/upload', uploadRoutes);
 app.use('/api/gsap-library', gsapRoutes);
 // ✅ Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
@@ -86,7 +90,7 @@ server.listen(PORT, () => {
   console.log(`   - Auth Routes: /api/auth`);
   console.log(`   - Asset Routes: /api/assets`);
   console.log(`   - Upload Route: /api/upload`); // ✅ Verify this shows up
-   console.log(`   - GSAP Routes: /api/gsap-library`); // ✅ Confirmed
+  console.log(`   - GSAP Routes: /api/gsap-library`); // ✅ Confirmed
   console.log(`   - Socket.io: Enabled 🟢`);
 
   // Initialize Cron Jobs
