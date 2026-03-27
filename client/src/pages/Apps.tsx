@@ -1,6 +1,6 @@
 
 import { useNavigate } from 'react-router-dom';
-import { Box, FileCode, Database, ArrowRight, Link as LinkIcon } from 'lucide-react';
+import { Box, FileCode, Database, ArrowRight, Link as LinkIcon, Shield } from 'lucide-react';
 
 const apps = [
   {
@@ -30,6 +30,15 @@ const apps = [
     color: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',
     isExternal: false,       // ✅ Change to false
     openInNewTab: false      // ✅ Change to false
+  },
+  {
+    id: 'itt',
+    name: 'ITT System',
+    description: 'Workstation and support management. Manage IT hardware inventory and maintenance logs.',
+    icon: <Shield size={32} className="text-blue-600" />,
+    route: '/admin/itt', // Use internal route path
+    isExternal: false,   // Ensure this is false 
+    color: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
   }
 ];
 

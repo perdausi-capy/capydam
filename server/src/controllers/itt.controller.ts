@@ -14,6 +14,7 @@ export const getWorkstations = async (req: Request, res: Response) => {
       include: {
         assignedTo: { select: { id: true, name: true, email: true, avatar: true } },
         monitors: true,
+        parts: { select: { id: true, itemName: true, serialNumber: true, type: true, status: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -26,7 +27,7 @@ export const getWorkstations = async (req: Request, res: Response) => {
 
 export const createWorkstation = async (req: Request, res: Response) => {
   try {
-    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitors, status, assignedToId, notes } = req.body;
+    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, monitors, status, assignedToId, notes, deployedItemIds } = req.body;
 
     // Check if unitId already exists
     const existing = await prisma.workstation.findUnique({ where: { unitId } });
@@ -34,22 +35,33 @@ export const createWorkstation = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Workstation Unit ID already exists' });
     }
 
-    const workstation = await prisma.workstation.create({
-      data: {
-        unitId, mobo, cpu, ram, gpu, psu, storage, status, notes,
-        assignedToId: assignedToId || null,
-        monitors: {
-          create: (monitors || []).map((m: any) => ({
-            model: m.model,
-            specs: m.specs
-          }))
-        }
-      },
-      include: {
-        assignedTo: { select: { id: true, name: true, email: true, avatar: true } },
-        monitors: true
-      },
+    const workstation = await prisma.$transaction(async (tx) => {
+      const ws = await tx.workstation.create({
+        data: {
+          unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, notes,
+          assignedToId: assignedToId || null,
+          monitors: {
+            create: (monitors || []).map((m: any) => ({ model: m.model, specs: m.specs }))
+          }
+        },
+        include: {
+          assignedTo: { select: { id: true, name: true, email: true, avatar: true } },
+          monitors: true,
+          parts: true,
+        },
+      });
+
+      // Atomically link and deploy selected inventory items
+      if (deployedItemIds?.length) {
+        await tx.ittInventory.updateMany({
+          where: { id: { in: deployedItemIds } },
+          data: { status: 'Deployed', workstationId: ws.id },
+        });
+      }
+
+      return ws;
     });
+
     res.status(201).json(workstation);
   } catch (error) {
     console.error('Error creating workstation:', error);
@@ -60,26 +72,44 @@ export const createWorkstation = async (req: Request, res: Response) => {
 export const updateWorkstation = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitors, status, assignedToId, notes } = req.body;
+    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, monitors, status, assignedToId, notes, deployedItemIds, releasedItemIds } = req.body;
 
-    const workstation = await prisma.workstation.update({
-      where: { id },
-      data: {
-        unitId, mobo, cpu, ram, gpu, psu, storage, status, notes,
-        assignedToId: assignedToId || null,
-        monitors: {
-          deleteMany: {},
-          create: (monitors || []).map((m: any) => ({
-            model: m.model,
-            specs: m.specs
-          }))
-        }
-      },
-      include: {
-        assignedTo: { select: { id: true, name: true, email: true, avatar: true } },
-        monitors: true
-      },
+    const workstation = await prisma.$transaction(async (tx) => {
+      // 1. Release any items being swapped out (set back to Active, unlink)
+      if (releasedItemIds?.length) {
+        await tx.ittInventory.updateMany({
+          where: { id: { in: releasedItemIds } },
+          data: { status: 'Active', workstationId: null },
+        });
+      }
+
+      // 2. Deploy and link newly selected items
+      if (deployedItemIds?.length) {
+        await tx.ittInventory.updateMany({
+          where: { id: { in: deployedItemIds } },
+          data: { status: 'Deployed', workstationId: id },
+        });
+      }
+
+      // 3. Update the workstation record
+      return tx.workstation.update({
+        where: { id },
+        data: {
+          unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, notes,
+          assignedToId: assignedToId || null,
+          monitors: {
+            deleteMany: {},
+            create: (monitors || []).map((m: any) => ({ model: m.model, specs: m.specs }))
+          }
+        },
+        include: {
+          assignedTo: { select: { id: true, name: true, email: true, avatar: true } },
+          monitors: true,
+          parts: true,
+        },
+      });
     });
+
     res.json(workstation);
   } catch (error) {
     console.error('Error updating workstation:', error);
@@ -90,8 +120,25 @@ export const updateWorkstation = async (req: Request, res: Response) => {
 export const deleteWorkstation = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    await prisma.workstation.delete({ where: { id } });
-    res.json({ message: 'Workstation deleted successfully' });
+
+    // 1. Transactional Update: Release parts then delete
+    await prisma.$transaction(async (tx) => {
+      // Find the workstation to identify its components
+      const ws = await tx.workstation.findUnique({ where: { id } });
+      
+      if (ws) {
+        // Find and free any inventory items assigned to this workstation
+        await tx.ittInventory.updateMany({
+           where: { workstationId: id },
+           data: { status: 'Active', workstationId: null }
+        });
+      }
+
+      // 2. Delete the workstation
+      await tx.workstation.delete({ where: { id } });
+    });
+
+    res.json({ message: 'Workstation deleted and components released to inventory.' });
   } catch (error) {
     console.error('Error deleting workstation:', error);
     res.status(500).json({ error: 'Failed to delete workstation' });
@@ -360,6 +407,11 @@ export const getInventory = async (req: Request, res: Response) => {
 
     const inventory = await prisma.ittInventory.findMany({
       where: whereClause,
+      include: {
+        workstation: {
+          select: { unitId: true }
+        }
+      },
       orderBy: { createdAt: 'desc' },
     });
     
@@ -429,12 +481,43 @@ export const updateInventoryItem = async (req: Request, res: Response) => {
 
 // Delete a hardware component
 export const deleteInventoryItem = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
   try {
-    const { id } = req.params;
-    await prisma.ittInventory.delete({ where: { id } });
-    res.json({ message: 'Inventory item deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting inventory item:', error);
-    res.status(500).json({ error: 'Failed to delete inventory item' });
+    // 1. Transactional delete to ensure data integrity
+    await prisma.$transaction(async (tx) => {
+      // Find the item first to check its deployment status
+      const item = await tx.ittInventory.findUnique({
+        where: { id },
+        select: { status: true, workstationId: true }
+      });
+
+      if (!item) throw new Error("ITEM_NOT_FOUND");
+
+      // Safety check: Don't delete if actually deployed
+      if (item.status === 'Deployed' || item.workstationId) {
+        throw new Error("ITEM_DEPLOYED");
+      }
+
+      // 2. CLEAR REFERENCES: Though SetNull handles this, we ensure it's removed from any collections
+      await tx.workstation.updateMany({
+        where: { parts: { some: { id } } },
+        data: {} // Connect/Disconnect handled by SetNull on schema
+      });
+
+      // 3. Delete the item
+      await tx.ittInventory.delete({ where: { id } });
+    });
+
+    res.json({ message: 'Item deleted and removed from all dashboards.' });
+  } catch (error: any) {
+    if (error.message === "ITEM_DEPLOYED") {
+      return res.status(400).json({ error: "Cannot delete hardware currently in use." });
+    }
+    if (error.message === "ITEM_NOT_FOUND") {
+      return res.status(404).json({ error: "Item not found." });
+    }
+    console.error('Inventory Delete Error:', error);
+    res.status(500).json({ error: "Failed to delete inventory item." });
   }
 };

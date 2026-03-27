@@ -44,6 +44,11 @@ const io = new Server(server, {
 });
 
 // ✅ MIDDLEWARES
+app.use((req, res, next) => {
+  res.setHeader("X-Frame-Options", "SAMEORIGIN"); // Allows framing only by your own site
+  next();
+});
+
 app.use(cors({
   origin: [
     'http://localhost:5173',
