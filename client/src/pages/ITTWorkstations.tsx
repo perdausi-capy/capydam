@@ -4,7 +4,7 @@ import { toast } from 'react-toastify';
 import { useQueryClient } from '@tanstack/react-query';
 import {
     Plus, Edit2, Trash2, Cpu, HardDrive, Monitor as MonitorIcon,
-    Search, Hash, Activity, Layers, Database, View, Zap, User,
+    Search, Hash, Layers, Database, View, Zap, User,
     Eye, X, MessageSquare, Send, Clock, CheckCircle, RefreshCw,
     AlertCircle, FileText, Loader2, Check, ChevronUp, ChevronDown, ChevronRight,
     Settings, Package, Wrench, XCircle, UserMinus
@@ -13,10 +13,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface InventoryItem {
-    id: string; 
-    itemName: string; 
-    serialNumber: string; 
-    type: string; 
+    id: string;
+    itemName: string;
+    serialNumber: string;
+    type: string;
     status: string;
     purchaseDate?: string | null;
     notes?: string | null;
@@ -107,7 +107,7 @@ const WorkstationSpecs = ({
 
     // Use relational parts instead of static strings
     const parts = viewingWs.parts || [];
-    
+
     // Sort into primary/extended simply for layout consistency
     const primaryTypes = ['CPU', 'RAM', 'STORAGE', 'GPU'];
     const primaryParts = parts.filter(p => primaryTypes.includes(p.type));
@@ -122,7 +122,7 @@ const WorkstationSpecs = ({
     return (
         <div className="w-72 shrink-0 border-r border-white/5 overflow-y-auto p-6 space-y-5 bg-black/10 custom-scrollbar">
             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <View size={14} className="text-blue-500" /> 
+                <View size={14} className="text-blue-500" />
                 Relational Specs
             </h3>
 
@@ -131,10 +131,10 @@ const WorkstationSpecs = ({
                 {primaryParts.length > 0 ? primaryParts.map(part => (
                     <div key={part.id}>
                         <h4 className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 mb-0.5">
-                            {part.type === 'CPU' ? <Cpu size={14} /> : 
-                             part.type === 'RAM' ? <Database size={14} /> :
-                             part.type === 'STORAGE' ? <HardDrive size={14} /> :
-                             part.type === 'GPU' ? <View size={14} /> : <Package size={14} />}
+                            {part.type === 'CPU' ? <Cpu size={14} /> :
+                                part.type === 'RAM' ? <Database size={14} /> :
+                                    part.type === 'STORAGE' ? <HardDrive size={14} /> :
+                                        part.type === 'GPU' ? <View size={14} /> : <Package size={14} />}
                             {part.type}
                         </h4>
                         <p className="text-gray-900 dark:text-white font-medium text-sm">{part.itemName}</p>
@@ -158,7 +158,7 @@ const WorkstationSpecs = ({
                             <div key={part.id}>
                                 <h4 className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1.5 mb-0.5">
                                     {part.type === 'MOBO' ? <Layers size={14} /> :
-                                     part.type === 'PSU' ? <Zap size={14} /> : <Package size={14} />}
+                                        part.type === 'PSU' ? <Zap size={14} /> : <Package size={14} />}
                                     {part.type}
                                 </h4>
                                 <p className="text-gray-700 dark:text-gray-300 font-medium text-sm">{part.itemName}</p>
@@ -789,50 +789,51 @@ const ITTWorkstations = () => {
                                     const availableStock = invType ? stock.filter(s => s.type === invType && s.status === 'Active') : [];
 
                                     return (
-                                    <div key={key}>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{label}</label>
-                                        <div className="relative">
-                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">{icon}</span>
-                                            <input
-                                                type="text"
-                                                required={required}
-                                                value={(formData as any)[key]}
-                                                onChange={e => setFormData({ ...formData, [key]: e.target.value })}
-                                                className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg pl-10 pr-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white"
-                                            />
-                                        </div>
-
-                                        {/* Stock Picker Dropdown */}
-                                        {availableStock.length > 0 && (
-                                            <div className="relative mt-1.5">
-                                                <Package className="absolute left-2.5 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none" size={12} />
-                                                <select
-                                                    className="w-full bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-blue-700 dark:text-blue-400 text-[11px] rounded-md pl-7 pr-6 py-1.5 outline-none cursor-pointer appearance-none"
-                                                    onChange={(e) => {
-                                                        if (!e.target.value) return;
-                                                        const item = availableStock.find(i => i.id === e.target.value);
-                                                        if (item) {
-                                                            // Populate the text field with Name + Serial Number
-                                                            setFormData({ ...formData, [key]: `${item.itemName} (SN: ${item.serialNumber})` });
-                                                            // Track this ID to update it to "Deployed" on save
-                                                            setPartsToDeploy(prev => new Set(prev).add(item.id));
-                                                        }
-                                                    }}
-                                                >
-                                                    <option value="">Assign from local inventory...</option>
-                                                    {availableStock.map(item => (
-                                                        <option key={item.id} value={item.id}>
-                                                            {item.itemName} (SN: {item.serialNumber})
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                                <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none">
-                                                    <svg className="w-3 h-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                                                </div>
+                                        <div key={key}>
+                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{label}</label>
+                                            <div className="relative">
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">{icon}</span>
+                                                <input
+                                                    type="text"
+                                                    required={required}
+                                                    value={(formData as any)[key]}
+                                                    onChange={e => setFormData({ ...formData, [key]: e.target.value })}
+                                                    className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg pl-10 pr-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white"
+                                                />
                                             </div>
-                                        )}
-                                    </div>
-                                )})}
+
+                                            {/* Stock Picker Dropdown */}
+                                            {availableStock.length > 0 && (
+                                                <div className="relative mt-1.5">
+                                                    <Package className="absolute left-2.5 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none" size={12} />
+                                                    <select
+                                                        className="w-full bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-blue-700 dark:text-blue-400 text-[11px] rounded-md pl-7 pr-6 py-1.5 outline-none cursor-pointer appearance-none"
+                                                        onChange={(e) => {
+                                                            if (!e.target.value) return;
+                                                            const item = availableStock.find(i => i.id === e.target.value);
+                                                            if (item) {
+                                                                // Populate the text field with Name + Serial Number
+                                                                setFormData({ ...formData, [key]: `${item.itemName} (SN: ${item.serialNumber})` });
+                                                                // Track this ID to update it to "Deployed" on save
+                                                                setPartsToDeploy(prev => new Set(prev).add(item.id));
+                                                            }
+                                                        }}
+                                                    >
+                                                        <option value="">Assign from local inventory...</option>
+                                                        {availableStock.map(item => (
+                                                            <option key={item.id} value={item.id}>
+                                                                {item.itemName} (SN: {item.serialNumber})
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none">
+                                                        <svg className="w-3 h-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
 
 
                                 <div>
