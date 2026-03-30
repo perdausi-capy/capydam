@@ -301,7 +301,7 @@ const ITTWorkstations = () => {
         try {
             const [wsRes, usersRes, ticketsRes, invRes] = await Promise.all([
                 client.get('/itt/workstations'),
-                client.get('/users'),
+                client.get('/users?limit=1000'),
                 client.get('/itt/tickets'),
                 client.get('/itt/inventory')
             ]);
