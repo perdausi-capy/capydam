@@ -3,8 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 // ✅ 1. Import Terminal Context & Component
-import { TerminalProvider } from './context/TerminalContext';
-import GlobalTerminal from './components/GlobalTerminal';
+// import { TerminalProvider } from './context/TerminalContext';
+// import GlobalTerminal from './components/GlobalTerminal';
 
 import Layout from './components/Layout';
 
@@ -41,6 +41,9 @@ import AdminDailyQuest from './pages/AdminDailyQuest';
 
 // ✅ NEW ITT DASHBOARD
 import ITTDashboard from './pages/ITTDashboard';
+import client from './api/client';
+
+import { useSessionTracker } from './hooks/useSessionTracker';
 
 // --- WRAPPERS ---
 
@@ -61,15 +64,31 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   return <Layout>{children}</Layout>;
 };
 
+// ✅ NEW: This invisible component exists purely to run the tracker safely inside the AuthProvider
+const GlobalTracker = () => {
+  useSessionTracker();
+  return null; 
+};
 function App() {
+
+  // ✅ NEW: Track Site Visit Once Per Session
+  React.useEffect(() => {
+    if (!sessionStorage.getItem('capydam_visited')) {
+      client.post('/analytics/visit').catch(() => {}).finally(() => {
+        sessionStorage.setItem('capydam_visited', 'true');
+      });
+    }
+  }, []);
+  
   return (
     <AuthProvider>
       <ThemeProvider>
         {/* ✅ SOCKET PROVIDER (Needs Auth first) */}
         <SocketProvider>
+        <GlobalTracker />
           <Router>
             {/* ✅ TERMINAL PROVIDER (Can be anywhere inside Router) */}
-            <TerminalProvider>
+            {/* <TerminalProvider> */}
 
               <Routes>
                 {/* --- Public Routes --- */}
@@ -121,12 +140,12 @@ function App() {
               </Routes>
 
               {/* ✅ GLOBAL COMPONENTS (Persist across pages) */}
-              <GlobalTerminal />
+              {/* <GlobalTerminal /> */}
               <FloatingDailyQuestion />
 
               {/* 🗑️ REMOVED: <GlobalChat /> (Floating widget no longer needed) */}
 
-            </TerminalProvider>
+            {/* </TerminalProvider> */}
           </Router>
         </SocketProvider>
       </ThemeProvider>

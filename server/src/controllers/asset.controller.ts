@@ -181,7 +181,18 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
             where: { id: asset.id },
             data: { aiData: JSON.stringify(mergedAiData) }
         });
+        
     }
+    // ✅ NEW: Log the Upload
+    await prisma.userLog.create({
+      data: {
+        userId: userId!, // added ! to ensure TypeScript knows it's not null
+        action: 'UPLOAD',
+        details: `Uploaded asset: ${finalOriginalName}`,
+        assetId: asset.id
+      }
+    });
+    
 
     res.status(201).json({
       message: 'Asset uploaded and analyzed successfully',
@@ -549,6 +560,16 @@ export const deleteAsset = async (req: Request, res: Response): Promise<void> =>
     await prisma.asset.update({
         where: { id },
         data: { deletedAt: new Date() }
+    });
+
+    // ✅ NEW: Log the Deletion
+    await prisma.userLog.create({
+      data: {
+        userId: userId,
+        action: 'DELETE',
+        details: `Moved asset to recycle bin: ${asset.originalName}`,
+        assetId: asset.id
+      }
     });
     
     res.json({ message: 'Asset moved to recycle bin' });

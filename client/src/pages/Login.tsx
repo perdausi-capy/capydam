@@ -24,6 +24,11 @@ const Login = () => {
   const handleLoginSuccess = (token: string, user: any) => {
     if (showPortal) return; 
     login(token, user);
+
+    // ✅ NEW: Log the login
+    client.post('/analytics/log', { action: 'LOGIN', details: 'User authenticated successfully' }, {
+        headers: { Authorization: `Bearer ${token}` } // Must attach token manually since state hasn't updated yet
+    }).catch(() => {});
     setShowPortal(true);
   };
 

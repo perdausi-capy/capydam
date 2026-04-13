@@ -48,6 +48,8 @@ model User {
   workstationsAssigned Workstation[] @relation("AssignedWorkstation")
   maintenanceLedgers   MaintenanceLedger[]
   dailyReports         DailyReport[]
+
+  userLogs      UserLog[]
 }
 
 // ✅ FEEDBACK MODEL
@@ -113,6 +115,11 @@ model Asset {
 
   deletedAt      DateTime?
   @@index([deletedAt])
+
+  // Analytics Tracking
+  viewCount     Int       @default(0)
+  downloadCount Int       @default(0)
+  userLogs      UserLog[]
 }
 
 model Collection {
@@ -385,4 +392,31 @@ model IttInventory {
   // Link a specific part to a workstation
   workstationId String?
   workstation   Workstation? @relation(fields: [workstationId], references: [id], onDelete: SetNull)
+}
+
+
+// ✅ NEW: Tracks unique daily or session visits
+model SiteVisit {
+  id        String   @id @default(uuid())
+  userId    String?  // Optional: if they are logged in
+  ipHash    String?  // To count unique visitors without storing raw IPs
+  userAgent String?  // Browser/Device info
+  createdAt DateTime @default(now())
+}
+
+// ✅ NEW: The Master Audit Trail
+model UserLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String   // e.g., "LOGIN", "UPLOAD", "DOWNLOAD", "DELETE", "SESSION_TIME"
+  details   String?  // e.g., "Downloaded banner-v2.jpg"
+  duration  Int?     // Browsing time in seconds (only used for SESSION_TIME action)
+  metadata  Json?    // Extra data (e.g., Device type, browser)
+  
+  // Optional: Link directly to the asset they interacted with
+  assetId   String?  
+  asset     Asset?   @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  
+  createdAt DateTime @default(now())
 }

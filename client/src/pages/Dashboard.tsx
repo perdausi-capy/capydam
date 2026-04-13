@@ -385,6 +385,8 @@ const Dashboard = () => {
   const handleDownload = useCallback(async (e: React.MouseEvent, asset: Asset) => {
     e.preventDefault(); e.stopPropagation();
     try {
+    // ✅ NEW: Log the download
+    client.post('/analytics/log', { action: 'DOWNLOAD', details: asset.originalName }).catch(() => {});
       toast.info('Downloading...', { autoClose: 1000 });
       const response = await fetch(asset.path);
       const blob = await response.blob();

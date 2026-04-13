@@ -315,89 +315,102 @@ const notifyIntegrations = async (questionText: string) => {
 /* =========================================
    TASK 3: SEASON AUTO-PILOT
    ========================================= */
-const checkAndEndSeason = async () => {
-  try {
-      const now = new Date();
-      // 22:00 UTC = 06:00 AM PH (+1 Day).
-      const phTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
-      
-      if (phTime.getDate() !== 1) return; 
+   const checkAndEndSeason = async () => {
+    try {
+        const now = new Date();
+        // 22:00 UTC = 06:00 AM PH (+1 Day).
+        const phTime = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+        if (phTime.getDate() !== 1) return; 
+    
+        console.log("🗓️ [CRON] It is the 1st of the month (PH). Ending season...");
+        const startConfig = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_START' } });
+        const startDate = startConfig ? new Date(startConfig.value) : new Date(0);
+        
+        const seasonName = startDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+        const responses = await prisma.dailyResponse.findMany({
+            where: { createdAt: { gte: startDate }, option: { isCorrect: true } },
+            include: { user: true }
+        });
   
-      console.log("🗓️ [CRON] It is the 1st of the month (PH). Ending season...");
+        let top3: any[] = [];
+        let sortedUsers: any[] = []; // ✅ FIX: Lifted outside the 'if' block so the snapshot can see it!
+    
+        if (responses.length > 0) {
+            const scoreMap = new Map<string, any>();
+            const timeMap = new Map<string, number>(); 
+            
+            responses.forEach(r => {
+                const existing = scoreMap.get(r.userId) || { ...r.user, score: 0, streak: r.user.streak || 0 };
+                existing.score += 10;
+                scoreMap.set(r.userId, existing);
   
-      const startConfig = await prisma.systemConfig.findUnique({ where: { key: 'SEASON_START' } });
-      const startDate = startConfig ? new Date(startConfig.value) : new Date(0);
-      
-      const seasonName = startDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+                const rTime = new Date(r.createdAt).getTime();
+                const currentLastTime = timeMap.get(r.userId) || 0;
+                if (rTime > currentLastTime) timeMap.set(r.userId, rTime);
+            });
   
-      const responses = await prisma.dailyResponse.findMany({
-          where: { createdAt: { gte: startDate }, option: { isCorrect: true } },
-          include: { user: true }
-      });
+            // ✅ FIX: Removed 'const' so it assigns data to the outer variable
+            sortedUsers = Array.from(scoreMap.values()).map(u => ({
+                ...u,
+                timeReached: timeMap.get(u.id) || 0
+            })).sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                if ((b.streak || 0) !== (a.streak || 0)) return (b.streak || 0) - (a.streak || 0);
+                if (a.timeReached !== b.timeReached) return a.timeReached - b.timeReached;
+                return (a.name || '').localeCompare(b.name || '');
+            });
   
-      let top3: any[] = [];
+            const first = sortedUsers[0];
+            const second = sortedUsers[1];
+            const third = sortedUsers[2];
+            
+            top3 = [first, second, third].filter(Boolean);
   
-      if (responses.length > 0) {
-          const scoreMap = new Map<string, any>();
-          const timeMap = new Map<string, number>(); 
-          
-          responses.forEach(r => {
-              const existing = scoreMap.get(r.userId) || { ...r.user, score: 0, streak: r.user.streak || 0 };
-              existing.score += 10;
-              scoreMap.set(r.userId, existing);
-
-              const rTime = new Date(r.createdAt).getTime();
-              const currentLastTime = timeMap.get(r.userId) || 0;
-              if (rTime > currentLastTime) timeMap.set(r.userId, rTime);
-          });
-
-          const sortedUsers = Array.from(scoreMap.values()).map(u => ({
-              ...u,
-              timeReached: timeMap.get(u.id) || 0
-          })).sort((a, b) => {
-              if (b.score !== a.score) return b.score - a.score;
-              if ((b.streak || 0) !== (a.streak || 0)) return (b.streak || 0) - (a.streak || 0);
-              if (a.timeReached !== b.timeReached) return a.timeReached - b.timeReached;
-              return (a.name || '').localeCompare(b.name || '');
-          });
-
-          const first = sortedUsers[0];
-          const second = sortedUsers[1];
-          const third = sortedUsers[2];
-          
-          top3 = [first, second, third].filter(Boolean);
+            if (top3[0]) {
+                await prisma.seasonArchive.create({
+                    data: { seasonName, winnerId: top3[0].id, winnerName: top3[0].name, winnerAvatar: top3[0].avatar, winnerScore: top3[0].score, prizeAwarded: 5000 }
+                });
+                await prisma.user.update({ where: { id: top3[0].id }, data: { score: { increment: 5000 } } });
+            }
+            if (top3[1]) await prisma.user.update({ where: { id: top3[1].id }, data: { score: { increment: 2500 } } });
+            if (top3[2]) await prisma.user.update({ where: { id: top3[2].id }, data: { score: { increment: 1000 } } });
+        }
+    
+        // 📸 CREATE THE FROZEN SNAPSHOT (Top 50 users)
+        const recapSnapshot = {
+            seasonName: seasonName,
+            leaders: sortedUsers.slice(0, 50) 
+        };
   
-          if (top3[0]) {
-              await prisma.seasonArchive.create({
-                  data: { seasonName, winnerId: top3[0].id, winnerName: top3[0].name, winnerAvatar: top3[0].avatar, winnerScore: top3[0].score, prizeAwarded: 5000 }
-              });
-              await prisma.user.update({ where: { id: top3[0].id }, data: { score: { increment: 5000 } } });
-          }
-          if (top3[1]) await prisma.user.update({ where: { id: top3[1].id }, data: { score: { increment: 2500 } } });
-          if (top3[2]) await prisma.user.update({ where: { id: top3[2].id }, data: { score: { increment: 1000 } } });
-      }
+        // 🛑 Freezing Season Status and Saving Snapshot
+        await prisma.$transaction([
+            prisma.systemConfig.upsert({ where: { key: 'SEASON_STATUS' }, update: { value: 'ENDED' }, create: { key: 'SEASON_STATUS', value: 'ENDED' } }),
+            prisma.systemConfig.upsert({ where: { key: 'SEASON_END' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_END', value: new Date().toISOString() } }),
+            // ✅ NEW: Save the snapshot to the config table!
+            prisma.systemConfig.upsert({ 
+                where: { key: 'LAST_SEASON_RECAP' }, 
+                update: { value: JSON.stringify(recapSnapshot) }, 
+                create: { key: 'LAST_SEASON_RECAP', value: JSON.stringify(recapSnapshot) } 
+            })
+        ]);
   
-      // 🛑 Freezing Season Status
-      await prisma.$transaction([
-          prisma.systemConfig.upsert({ where: { key: 'SEASON_STATUS' }, update: { value: 'ENDED' }, create: { key: 'SEASON_STATUS', value: 'ENDED' } }),
-          prisma.systemConfig.upsert({ where: { key: 'SEASON_END' }, update: { value: new Date().toISOString() }, create: { key: 'SEASON_END', value: new Date().toISOString() } })
-      ]);
+        // 📣 FIRE CLICKUP ANNOUNCEMENT
+        const token = process.env.CLICKUP_API_TOKEN;
+        const chatId = process.env.CLICKUP_LIST_ID;
   
-      // 📣 FIRE CLICKUP ANNOUNCEMENT
-      const token = process.env.CLICKUP_API_TOKEN;
-      const chatId = process.env.CLICKUP_LIST_ID;
-      if (token && chatId && top3.length > 0) {
-          try {
-              await axios.post(
-                  `https://api.clickup.com/api/v2/view/${chatId}/comment`,
-                  buildSeasonRecapPayload(seasonName, top3), 
-                  { headers: { 'Authorization': token, 'Content-Type': 'application/json' } }
-              );
-          } catch (err: any) { console.error("ClickUp Finale Post Failed:", err.message); }
-      }
-      
-      console.log("✅ [CRON] Season Ended Successfully. Top 3 rewarded and announced.");
-  } catch (error) {
-      console.error("❌ [CRON] Season End Error:", error);
-  }
-};
+        if (token && chatId && top3.length > 0) {
+            try {
+                await axios.post(
+                    `https://api.clickup.com/api/v2/view/${chatId}/comment`,
+                    buildSeasonRecapPayload(seasonName, top3), 
+                    { headers: { 'Authorization': token, 'Content-Type': 'application/json' } }
+                );
+            } catch (err: any) { console.error("ClickUp Finale Post Failed:", err.message); }
+        }
+        
+        console.log("✅ [CRON] Season Ended Successfully. Top 3 rewarded and announced.");
+  
+    } catch (error) {
+        console.error("❌ [CRON] Season End Error:", error);
+    }
+  };

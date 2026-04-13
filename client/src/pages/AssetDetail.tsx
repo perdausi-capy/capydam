@@ -220,6 +220,9 @@ const AssetDetail = () => {
   const handleDownload = async () => {
     if (!asset) return;
     try {
+    // ✅ NEW: Log the download asynchronously (we catch errors so it doesn't break the download if tracking fails)
+      client.post('/analytics/log', { action: 'DOWNLOAD', details: asset.originalName }).catch(() => {});
+
       toast.info('Downloading...');
       const response = await fetch(asset.path);
       const blob = await response.blob();
