@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import client from '../api/client';
 import { 
   HardDrive, Users, FileVideo, FileImage, Activity, 
-  FileText, Music, Box, Download, LogIn, Eye, Globe, Clock, ChevronRight,
+  FileText, Music, Box, Globe, Clock, ChevronRight,
   X, Search, UserX, UserCheck, Trophy
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
