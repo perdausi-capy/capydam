@@ -1,0 +1,88 @@
+=================================================
+   ASSETS MISSING SOURCE LINKS REPORT
+   Total Missing: 82
+   Generated: 3/10/2026, 1:04:25 AM
+=================================================
+
+[2025-07-16] Adcb Journey Hover Clickandreveal-1.mp4 | Uploader: Raf Pogi | ID: 576ef9fc-c51d-460e-9a0f-eb8be975ad9f
+[2025-03-04] Baesystem M01 Healthandsafety Slide02.mp4 | Uploader: Raf Pogi | ID: 65253766-549d-4d5f-bf74-89bafd03ac32
+[2025-08-24] ADCB_CPR_Module02_Slid07_Tap.mp4 | Uploader: Raf Pogi | ID: a3369ce4-7b1e-4731-82b8-0e4167f428b0
+[2026-01-19] Ethos_FDF_Module03_SectionB_PreventionAndPromotion_DragandDrop.mp4 | Uploader: dam1 | ID: 6d84410c-f2b3-41be-b53f-5eddd81302b6
+[2026-01-20] ProTraining_Capsule02_Dial.m4v | Uploader: dam1 | ID: 45c1c88a-4bb7-4f0f-8e86-f3747fa2ebe5
+[2026-01-20] ProTraining_Capsule01_FreeNav_TapandReveal.m4v | Uploader: dam1 | ID: db5fbc1d-3324-48d2-bf34-ac1d8b9373f4
+[2025-12-19] dau.jpg | Uploader: Raf Pogi | ID: e4708f82-9b43-406c-8c0d-af6931f8c08f
+[2026-01-20] ProTraining_Capsule02_Slider.m4v | Uploader: dam1 | ID: a44e90a3-287c-426e-a745-0d7fd5afaa53
+[2026-01-20] ETHOS_FDF_Module04_SectionB_EmotionalIntelligence_DragandDrop.m4v | Uploader: dam1 | ID: ab6d2fb3-808c-4074-81f5-c17dcd15ec50
+[2026-01-21] EtisalatAcademy_Scenario03_EN_TapandReveal.m4v | Uploader: dam1 | ID: 8b76cd9d-4e9b-44bd-ba90-77f48b50a7df
+[2026-01-22] EtisalatAcademy_Scenario05_EN_TapandReveal.m4v | Uploader: dam1 | ID: d1e66ca1-b09d-4c91-926d-35c260135ac8
+[2026-01-22] FAB_RiskAwareness_Simplified_TapandReveal.m4v | Uploader: dam1 | ID: 8ca1cc33-d8ff-4f12-8b5b-544e8b9b5b7c
+[2026-01-26] Kerzner_LuxuryConsortia_DragandDrop.m4v | Uploader: dam1 | ID: d6d3cc08-36d6-41d8-9861-f327fd9c49ec
+[2026-01-27] Kerzner_SOP2_TapandReveal.m4v | Uploader: dam1 | ID: 6d1fc2a1-f5d1-46ff-9892-8af476fd63a3
+[2026-01-27] Kerzner_SOP3_freenav_TapandReveal.m4v | Uploader: dam1 | ID: e787267a-48b1-488a-bfa2-df4ff489d2f9
+[2026-01-28] Kerzner_Strategic_Selling_Module01_Dial.mp4 | Uploader: dam1 | ID: 516dad3a-6ecf-4a5b-8582-171ca23694f4
+[2025-03-06] Video 2025-03-06 13.49.29.mp4 | Uploader: Raf Pogi | ID: 6998f77b-b5e8-4bda-b8f8-a837ff26b0a8
+[2025-03-05] ADCB_Health and Safety_Slide15_Tap and reveal.mp4 | Uploader: Raf Pogi | ID: a1b9176e-1a5e-4c9a-9383-8789869b82e2
+[2025-12-11] circular.mp4 | Uploader: Bam Pogi | ID: 21afebef-557f-4dd1-98f6-6ab72633fcc8
+[2025-03-04] ADCB_Module01_DataProtection_Slide00_Cover page.jpg | Uploader: Raf Pogi | ID: 4f54a941-3096-4337-9fd5-7ebef0f154b9
+[2025-09-29] DPWorld_Yard_Strategy_TapandReveal_2.mp4 | Uploader: Raf Pogi | ID: d5ac5e0d-d6df-4128-b39d-b6f1d50cec2e
+[2025-08-15] DPW_Enterprise_Risk_Management_TapandReveal.mp4 | Uploader: Raf Pogi | ID: 3c1eff06-a740-4796-a849-71342d42a6eb
+[2026-01-06] damian | Uploader: CapyAdmin | ID: ee6488cb-b6fa-4b6d-b363-7e742290cf39
+[2026-01-07] alted | Uploader: Perdausi Hairul | ID: afe76257-cf31-4ce4-86b3-cd6e57b4d79c
+[2026-01-12] working-with-blueprint.webp | Uploader: CapyAdmin | ID: 4eb088ff-c293-4bd7-af74-5bef07d4c853
+[2025-09-29] ADCB_Journey_DragandDrop.mp4 | Uploader: Raf Pogi | ID: 564afa3c-0629-4925-9193-8ce4374564b7
+[2025-12-17] bam.jpg | Uploader: Bam Pogi | ID: be8846b6-afcc-4e98-b1c4-aa2b197973bc
+[2025-12-17] raffy.webp | Uploader: Bam Pogi | ID: 087803dc-ac5d-42b0-9157-fd90b2916d38
+[2025-12-19] june.jpeg | Uploader: CapyAdmin | ID: 71fd162f-00f4-4354-83da-c49f6eaaa587
+[2025-12-10] Dubai Building | Uploader: Bam Pogi | ID: 21e74c61-99b0-40fb-999a-e36528aae2bf
+[2025-08-24] ADCB_Consumer Protection Regulations - Module 01_Slide03_Tap Interactive..mp4 | Uploader: Raf Pogi | ID: e8dc29d8-57bc-4097-8d92-c789f8d66ad0
+[2025-09-29] heh | Uploader: Raf Pogi | ID: 34001b32-78a6-4992-b506-aff69953dbfe
+[2025-09-29] Adcb Journey Hover Clickandreveal-1.mp4 | Uploader: Raf Pogi | ID: c58103a3-e6ab-4fb9-ab23-359e945706fb
+[2026-01-15] screenshot-2026-01-15_11-20-44.png | Uploader: Perdausi Hairul | ID: 8a330b4e-69c9-48f2-90cb-409dace924de
+[2026-01-23] Kerzner_CoC_Dial.m4v | Uploader: dam1 | ID: 68465f9b-09e8-430d-907a-1693e7ee6cca
+[2026-01-19] Ethos_FDF_Module03_SectionB_PreventionAndPromotion_TapandReveal.mp4 | Uploader: dam1 | ID: 8eeb957b-6ea8-4533-8e9e-7199dd1f2d5b
+[2026-01-20] ProTraining_Capsule02_DragandDrop.m4v | Uploader: dam1 | ID: e37c9f7d-a8d5-4a44-b1d9-f23cfc09e511
+[2026-01-20] ProTraining_Capsule01_FreeNav_DragandDrop.m4v | Uploader: dam1 | ID: 87eda400-39bf-43ab-8022-67670471b94c
+[2026-01-19] Ethos_FDF_Module03_SectionB_PreventionAndPromotion_Slider.mp4 | Uploader: dam1 | ID: f009cd58-3b5f-4884-b702-5d3b50b30b62
+[2026-01-19] ETHOSFDF_Module04_SectionA_CommunityIntelligence_TapandReveal.mp4 | Uploader: dam1 | ID: e22876e0-5b53-4a90-b8ed-6b22dbb09d71
+[2026-01-19] ETHOSFDF_Module04_SectionA_CommunityIntelligence_Slider.mp4 | Uploader: dam1 | ID: e3ac2c51-0df0-4ed4-8c1f-942300c21bec
+[2026-01-20] ProTraining_Capsule01_FreeNav_Slider.m4v | Uploader: dam1 | ID: 613be408-e656-412d-b116-a86237a29a24
+[2026-01-19] ETHOSFDF_Module04_SectionA_DragandDrop.mp4 | Uploader: dam1 | ID: 32f15349-c8a3-4d29-8094-95a47af9d7dc
+[2026-01-21] ProTraining_Capsule03_Slider.m4v | Uploader: dam1 | ID: a94f2edd-0f67-43cc-94a5-2c7d8e836b71
+[2026-01-19] ETHOSFDF_Module04_SectionA_CommunityIntelligence_TapandReveal2.mp4 | Uploader: dam1 | ID: b42206df-6963-4791-a296-a6709a3395a3
+[2026-01-20] ETHOS_FDF_Module04_SectionB_EmotionalIntelligence_TapandReveal.m4v | Uploader: dam1 | ID: 71ad3460-bd18-4561-97f1-aacc01289cf5
+[2026-01-20] ETHOS_FDF_Module04_SectionB_EmotionalIntelligence_TapandReveal2.m4v | Uploader: dam1 | ID: 4dc664bf-455a-4df8-8207-2001366b8403
+[2026-01-20] ETHOS_FDF_Module04_SectionB_EmotionalIntelligence_Slider.m4v | Uploader: dam1 | ID: b1c232dc-7eb8-49c6-ab36-6b89194dad31
+[2026-01-21] EtisalatAcademy_Scenario01_EN_TapandReveal.mp4 | Uploader: dam1 | ID: 0a3edfd2-e19f-4574-94d7-6c01cdb1dbb0
+[2026-01-21] ProTraining_Capsule03_TapandReveal.m4v | Uploader: dam1 | ID: b3bacb97-359f-441e-8017-70f1bb1ad5b3
+[2026-01-21] ProTraining_Capsule03_DragandDrop.m4v | Uploader: dam1 | ID: 26130dc7-5855-4039-b0ef-39449c024cbc
+[2026-01-21] EtisalatAcademy_Scenario01_EN_Intro.mp4 | Uploader: dam1 | ID: daf40a2a-9982-4b20-9879-b0af53128704
+[2026-01-21] EtisalatAcademy_Scenario02_EN_DragandDrop.mp4 | Uploader: dam1 | ID: 86e92f9f-252d-4574-b931-8a47288029ed
+[2026-01-22] EtisalatAcademy_Scenario04_EN_Dial.m4v | Uploader: dam1 | ID: c22028be-cf5c-454f-afa9-61f9f12d9568
+[2026-01-22] EtisalatAcademy_Scenario04_EN_Tapandreveal.m4v | Uploader: dam1 | ID: 3bc87182-e7ae-428e-9a90-9cff8031899b
+[2026-01-23] FAB_CombatingFinancialCrime_TapandReveal.m4v | Uploader: dam1 | ID: 1e1752d7-f1d1-4f1e-b355-b2fb75584979
+[2026-01-22] FAB_RegulatoryComplianceSimplified_TapandReveal.m4v | Uploader: dam1 | ID: f50b98dc-bc5c-4e4a-835a-0e95316ddf5a
+[2026-01-23] FAB_CombatingFinancialCrime_TapandReveal2.m4v | Uploader: dam1 | ID: 99767b1f-9af8-4554-99aa-a6ff37a13216
+[2026-01-23] Kerzner_CoC_DragandDrop.m4v | Uploader: dam1 | ID: c96e97ca-3fe3-4ba9-b42d-fb0306dcfed0
+[2026-01-23] Kerzner_CoC_Slider.m4v | Uploader: dam1 | ID: a84b752f-7180-41e6-a6ac-7c9bbba52a1c
+[2026-01-23] Kerzner_CoC_TapandReveal.m4v | Uploader: dam1 | ID: 13b964db-e6dc-41c6-aa8d-b92d8d41b710
+[2026-01-26] Kerzner_Anti_Harassment_FreeNav_Slider.m4v | Uploader: dam1 | ID: 26e5bc50-209e-4b8f-ae97-4fa33b07c975
+[2026-01-26] Kerzner_Anti_Harassment_FreeNav_DragandDrop.m4v | Uploader: dam1 | ID: 3acc207c-4a54-4489-b3ea-9d3eec894522
+[2026-01-26] Kerzner_Anti_Harassment_FreeNav_TapandReveal.m4v | Uploader: dam1 | ID: 68e376e2-19d6-4bc8-9e6c-ba6bbd5c874c
+[2026-01-26] Kerzner_LuxuryConsortia_Slider.m4v | Uploader: dam1 | ID: e358296b-aa3b-4b60-9008-b37ea56944d6
+[2026-01-26] Kerzner_LuxuryConsortia_TapandReveal.m4v | Uploader: dam1 | ID: 247713d7-59d7-4721-bcc5-afe041455e72
+[2026-01-26] Kerzner_SOP1_Freenav_TapandReveal.m4v | Uploader: dam1 | ID: e3ea980a-9416-4db5-8cbc-254400981fa5
+[2026-01-27] Kerzner_Sales_Excellence_Module01_Slider.mp4 | Uploader: dam1 | ID: 42f99c52-d462-4d8b-a4b6-8189cfbd9c41
+[2026-01-27] Kerzner_SOP4_freenav_TapandReveal.mp4 | Uploader: dam1 | ID: bf959f6d-bff6-494a-8664-1f367a77b19c
+[2026-01-27] Kerzner_Sales_Excellence_Module01_TapandReveal.mp4 | Uploader: dam1 | ID: 426620a9-f566-4aa0-a007-72514a583e6f
+[2026-01-28] Video_Generation_Request_Fulfilled.mp4 | Uploader: Perdausi Hairul | ID: 16c32345-7e0b-4180-973a-13e543d4250a
+[2026-01-27] Kerzner_Sales_Excellence_Module01_Dial.mp4 | Uploader: dam1 | ID: bd588256-a7d0-4f9f-8e86-540c9ab35c44
+[2026-01-27] Kerzner_Sales_Excellence_Module01_DragandDrop.mp4 | Uploader: dam1 | ID: 5c626eab-b97c-483b-a3cd-130ec2f84a31
+[2026-01-28] Kerzner_Strategic_Selling_Module01_Slider.mp4 | Uploader: dam1 | ID: 46bfd222-bf34-4506-a89b-9bf03b55b44a
+[2026-01-28] Kerzner_Strategic_Selling_Module01_TapandReveal.mp4 | Uploader: dam1 | ID: c00523fa-de33-459c-bf02-11b49166267a
+[2026-01-28] Kerzner_Strategic_Selling_Module01_DragandDrop.mp4 | Uploader: dam1 | ID: dee9afe4-c763-42e8-8f59-bdcf5c71ba9c
+[2026-01-28] EtisalatAcademy_Scenario04_EN_Dial2.m4v | Uploader: Perdausi Hairul | ID: 7cfea1c2-fb75-4811-9aa5-d4fe48feb4a8
+[2026-01-29] 30118873_7669963.jpg | Uploader: Perdausi Hairul | ID: 70859736-c924-4562-b9f5-255bb70a669e
+[2025-09-02] DPW_SecurityAwareness_Ungated_TapandReveal.mp4 | Uploader: Raf Pogi | ID: 4ff6bcae-4575-4f5e-ba66-18d8f820c0de
+[2025-09-29] ADCB_Journey_Hover_ClickandReveal.mp4 | Uploader: Raf Pogi | ID: 58164bc5-4c7c-4fa3-b7eb-3460111e7686
+[2025-08-26] DPW_Caucedo_General_Induction_TapandReveal_2.mp4 | Uploader: Raf Pogi | ID: 95e82bd2-1e0a-428f-ba79-f3df3c757632
+[2025-08-24] ADCB_CPR_Module02_Slide10_Tap.mp4 | Uploader: Raf Pogi | ID: c200b68c-01ee-43a9-a0e7-64b5f3f1eba4

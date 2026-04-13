@@ -19,6 +19,6 @@ const storage = multer_1.default.diskStorage({
         cb(null, uniqueSuffix + path_1.default.extname(file.originalname));
     }
 });
-const upload = (0, multer_1.default)({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = (0, multer_1.default)({ storage, limits: { fileSize: 100 * 1024 * 1024 } });
 router.post('/', upload.single('file'), uploadController_1.uploadFile);
 exports.default = router;

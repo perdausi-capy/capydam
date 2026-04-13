@@ -210,6 +210,7 @@ const getAssets = async (req, res) => {
             thumbnailPath: true,
             previewFrames: true, // ✅ Return frames to frontend
             aiData: true,
+            createdAt: true,
             uploadedBy: { select: { name: true } }
         };
         // --- MODE A: BROWSE (No Text Search) ---
@@ -238,23 +239,28 @@ const getAssets = async (req, res) => {
         }
         // --- MODE B: SEARCH (Optimized) ---
         const scoredMap = new Map();
-        let searchTerms = [cleanSearch];
+        // ✅ FIX 1: Split search into multiple words so "red car" searches for "red" AND "car"
+        let searchTerms = cleanSearch.split(/\s+/).filter(Boolean);
         // Ensure activeFilters (including deletedAt: null) are applied to search
         const keywordWhere = {
             AND: [activeFilters]
         };
         if (searchTerms.length > 0) {
             keywordWhere.AND.push({
-                OR: searchTerms.flatMap(term => [
-                    { originalName: { contains: term, mode: 'insensitive' } },
-                    { aiData: { contains: term, mode: 'insensitive' } },
-                ])
+                // Require ALL words to match somewhere in the asset (Title or AI)
+                AND: searchTerms.map(term => ({
+                    OR: [
+                        { originalName: { contains: term, mode: 'insensitive' } },
+                        { aiData: { contains: term, mode: 'insensitive' } },
+                    ]
+                }))
             });
         }
         // Fetch Candidates
         const keywordAssets = await prisma_1.prisma.asset.findMany({
             where: keywordWhere,
             select: lightweightSelect,
+            orderBy: { createdAt: 'desc' }, // ✅ FIX 2: Ensure we pull the 200 NEWEST matches first!
             take: 200,
         });
         // Score Candidates
@@ -262,16 +268,27 @@ const getAssets = async (req, res) => {
             let score = 0;
             const lowerName = (asset.originalName || '').toLowerCase();
             const lowerAI = (String(asset.aiData) || '').toLowerCase();
+            // Score based on the full exact phrase first
             if (lowerName === cleanSearch)
                 score += 100;
             else if (lowerName.includes(cleanSearch))
                 score += 50;
-            if (lowerAI.includes(cleanSearch))
-                score += 30;
+            // Then score based on individual words
+            searchTerms.forEach(term => {
+                if (lowerName.includes(term))
+                    score += 20;
+                if (lowerAI.includes(term))
+                    score += 10;
+            });
             scoredMap.set(asset.id, { asset, score });
         });
         let finalResults = Array.from(scoredMap.values())
-            .sort((a, b) => b.score - a.score)
+            .sort((a, b) => {
+            // ✅ FIX 3: Primary sort by score. If tied, secondary sort by Newest!
+            if (b.score !== a.score)
+                return b.score - a.score;
+            return new Date(b.asset.createdAt).getTime() - new Date(a.asset.createdAt).getTime();
+        })
             .map(item => item.asset);
         const totalSearch = finalResults.length;
         const paginatedResults = finalResults.slice(skip, skip + limitNum);

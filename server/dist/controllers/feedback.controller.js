@@ -5,10 +5,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteOwnFeedback = exports.getMyFeedback = exports.deleteFeedback = exports.replyToFeedback = exports.updateFeedbackStatus = exports.getAllFeedback = exports.submitFeedback = void 0;
 const client_1 = require("@prisma/client");
-const supabase_1 = require("../utils/supabase"); // ✅ Import upload utility
-const fs_extra_1 = __importDefault(require("fs-extra")); // ✅ Import fs for cleanup
+// ✅ CORRECTED IMPORT: Pointing to MinIO service
+const storage_service_1 = require("../services/storage.service");
+const fs_extra_1 = __importDefault(require("fs-extra"));
 const prisma = new client_1.PrismaClient();
-// --- 1. Create Feedback (With Attachment Support) ---
+// 1. Create Feedback (With Attachment Support)
 const submitFeedback = async (req, res) => {
     const authReq = req;
     const { type, subject, message } = req.body;
@@ -25,14 +26,14 @@ const submitFeedback = async (req, res) => {
                 const { path: tempPath, originalname, mimetype } = authReq.file;
                 const ext = originalname.split('.').pop();
                 const filename = `feedback/${userId}-${Date.now()}.${ext}`;
-                // Upload to Supabase bucket
-                attachmentUrl = await (0, supabase_1.uploadToSupabase)(tempPath, filename, mimetype);
+                // Upload to MinIO bucket
+                attachmentUrl = await (0, storage_service_1.uploadToSupabase)(tempPath, filename, mimetype);
                 // Clean up temp file
                 await fs_extra_1.default.remove(tempPath).catch(() => { });
             }
             catch (uploadError) {
                 console.error("Attachment upload failed:", uploadError);
-                // We continue creating the feedback even if upload fails, but you could return error here
+                // We continue creating the feedback even if upload fails
             }
         }
         // Save to Database
@@ -42,7 +43,7 @@ const submitFeedback = async (req, res) => {
                 type,
                 subject,
                 message,
-                attachment: attachmentUrl, // ✅ Save the URL
+                attachment: attachmentUrl, // ✅ Save the MinIO URL
                 status: 'new'
             }
         });
@@ -58,7 +59,7 @@ const submitFeedback = async (req, res) => {
     }
 };
 exports.submitFeedback = submitFeedback;
-// --- 2. Get All Feedback (Admin) ---
+// 2. Get All Feedback (Admin)
 const getAllFeedback = async (req, res) => {
     try {
         const allFeedback = await prisma.feedback.findMany({
@@ -75,7 +76,7 @@ const getAllFeedback = async (req, res) => {
     }
 };
 exports.getAllFeedback = getAllFeedback;
-// --- 3. Update Status (Admin) ---
+// 3. Update Status (Admin)
 const updateFeedbackStatus = async (req, res) => {
     try {
         const { id } = req.params;
@@ -91,7 +92,7 @@ const updateFeedbackStatus = async (req, res) => {
     }
 };
 exports.updateFeedbackStatus = updateFeedbackStatus;
-// --- 4. Reply to Feedback (Admin) ---
+// 4. Reply to Feedback (Admin)
 const replyToFeedback = async (req, res) => {
     try {
         const { id } = req.params;
@@ -114,7 +115,7 @@ const replyToFeedback = async (req, res) => {
     }
 };
 exports.replyToFeedback = replyToFeedback;
-// --- 5. Delete Feedback (Admin) ---
+// 5. Delete Feedback (Admin)
 const deleteFeedback = async (req, res) => {
     try {
         const { id } = req.params;
@@ -126,7 +127,7 @@ const deleteFeedback = async (req, res) => {
     }
 };
 exports.deleteFeedback = deleteFeedback;
-// --- 6. Get My Feedback (User view) ---
+// 6. Get My Feedback (User view)
 const getMyFeedback = async (req, res) => {
     try {
         const userId = req.user?.id;
@@ -143,7 +144,7 @@ const getMyFeedback = async (req, res) => {
     }
 };
 exports.getMyFeedback = getMyFeedback;
-// --- 7. Delete Own Feedback (User) ---
+// 7. Delete Own Feedback (User)
 const deleteOwnFeedback = async (req, res) => {
     try {
         const { id } = req.params;

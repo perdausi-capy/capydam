@@ -6,9 +6,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteUser = exports.getUserById = exports.updateProfile = exports.createUser = exports.updateUserRole = exports.rejectUser = exports.approveUser = exports.getAllUsers = void 0;
 const prisma_1 = require("../lib/prisma");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const supabase_1 = require("../utils/supabase");
+// ✅ CORRECTED IMPORT: Pointing to MinIO service
+const storage_service_1 = require("../services/storage.service");
 const fs_extra_1 = __importDefault(require("fs-extra"));
-// ✅ 1. Get All Users
+// 1. Get All Users
 const getAllUsers = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
@@ -22,7 +23,7 @@ const getAllUsers = async (req, res) => {
                     OR: [
                         { name: { contains: search, mode: 'insensitive' } },
                         { email: { contains: search, mode: 'insensitive' } },
-                    ],
+                    ]
                 } : {},
                 role !== 'all' ? { role: role } : {},
             ],
@@ -38,7 +39,7 @@ const getAllUsers = async (req, res) => {
                     role: true,
                     status: true,
                     createdAt: true,
-                    updatedAt: true, // ✅ ADDED THIS LINE
+                    updatedAt: true,
                     avatar: true
                 },
                 orderBy: { createdAt: 'desc' },
@@ -141,7 +142,7 @@ const createUser = async (req, res) => {
     }
 };
 exports.createUser = createUser;
-// 6. Update Profile (Preserved & Safe)
+// 6. Update Profile
 const updateProfile = async (req, res) => {
     const multerReq = req;
     const user = req.user;
@@ -155,7 +156,9 @@ const updateProfile = async (req, res) => {
         let avatarPath = undefined;
         if (multerReq.file) {
             const { path: tempPath, mimetype } = multerReq.file;
-            avatarPath = await (0, supabase_1.uploadToSupabase)(tempPath, `avatars/${userId}-${Date.now()}`, mimetype);
+            // ✅ Using the new storage service (MinIO)
+            avatarPath = await (0, storage_service_1.uploadToSupabase)(tempPath, `avatars/${userId}-${Date.now()}`, mimetype);
+            // Cleanup local temp file
             await fs_extra_1.default.remove(tempPath).catch(() => { });
         }
         const updatedUser = await prisma_1.prisma.user.update({
@@ -206,7 +209,7 @@ const getUserById = async (req, res) => {
     }
 };
 exports.getUserById = getUserById;
-// 8. Delete User (Transaction Safe)
+// 8. Delete User (Transaction Safe - Nukes Everything)
 const deleteUser = async (req, res) => {
     try {
         const { id } = req.params;
@@ -215,12 +218,24 @@ const deleteUser = async (req, res) => {
             res.status(400).json({ message: 'You cannot delete your own admin account.' });
             return;
         }
+        // 1. Find assets owned by the user (to clean up their links)
         const userAssets = await prisma_1.prisma.asset.findMany({
             where: { userId: id },
             select: { id: true }
         });
         const assetIds = userAssets.map(a => a.id);
+        // 2. GIANT TRANSACTION: Clean up EVERY table linked to User
         await prisma_1.prisma.$transaction([
+            // A. Quest & Gamification
+            prisma_1.prisma.dailyResponse.deleteMany({ where: { userId: id } }),
+            // B. Communication & Social
+            prisma_1.prisma.reaction.deleteMany({ where: { userId: id } }),
+            prisma_1.prisma.notification.deleteMany({ where: { userId: id } }),
+            prisma_1.prisma.message.deleteMany({ where: { userId: id } }),
+            prisma_1.prisma.membership.deleteMany({ where: { userId: id } }),
+            // C. Support
+            prisma_1.prisma.feedback.deleteMany({ where: { userId: id } }),
+            // D. Asset Management (Complex)
             // Remove asset links in collections
             prisma_1.prisma.assetOnCollection.deleteMany({
                 where: { assetId: { in: assetIds } }
@@ -232,11 +247,13 @@ const deleteUser = async (req, res) => {
             prisma_1.prisma.collection.deleteMany({
                 where: { userId: id }
             }),
+            // Remove click tracking
+            prisma_1.prisma.assetClick.deleteMany({ where: { userId: id } }),
             // Remove assets owned by user
             prisma_1.prisma.asset.deleteMany({
                 where: { userId: id }
             }),
-            // Finally, delete user
+            // E. Finally, delete the user
             prisma_1.prisma.user.delete({
                 where: { id }
             })
@@ -245,7 +262,7 @@ const deleteUser = async (req, res) => {
     }
     catch (error) {
         console.error("Delete User Error:", error);
-        res.status(500).json({ message: 'Error deleting user. Ensure all dependencies are cleared.' });
+        res.status(500).json({ message: 'Error deleting user. Ensure all dependencies are cleared.', error });
     }
 };
 exports.deleteUser = deleteUser;

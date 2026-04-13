@@ -20,9 +20,12 @@ const feedback_routes_1 = __importDefault(require("./routes/feedback.routes"));
 const admin_routes_1 = __importDefault(require("./routes/admin.routes"));
 const analytics_routes_1 = __importDefault(require("./routes/analytics.routes"));
 const uploadRoutes_1 = __importDefault(require("./routes/uploadRoutes")); // ✅ Imported
+const itt_routes_1 = __importDefault(require("./routes/itt.routes")); // ✅ ITT System
 // Import Services
 const cron_service_1 = require("./services/cron.service");
 const socketHandler_1 = require("./socket/socketHandler");
+const gsap_routes_1 = __importDefault(require("./routes/gsap.routes"));
+const daily_routes_1 = __importDefault(require("./routes/daily.routes"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 // ✅ CREATE HTTP SERVER
@@ -39,12 +42,16 @@ const io = new socket_io_1.Server(server, {
     }
 });
 // ✅ MIDDLEWARES
+app.use((req, res, next) => {
+    res.setHeader("X-Frame-Options", "SAMEORIGIN"); // Allows framing only by your own site
+    next();
+});
 app.use((0, cors_1.default)({
     origin: [
         'http://localhost:5173',
         process.env.CLIENT_URL || ""
     ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true
 }));
 app.use(express_1.default.json());
@@ -57,10 +64,14 @@ app.use('/api/categories', category_routes_1.default);
 app.use('/api/admin', admin_routes_1.default);
 app.use('/api/analytics', analytics_routes_1.default);
 app.use('/api/feedback', feedback_routes_1.default);
+// ✅ NEW ITT ROUTES
+app.use('/api/itt', itt_routes_1.default);
 // ✅ NEW: Chat Upload Route (This was missing!)
 app.use('/api/upload', uploadRoutes_1.default);
+app.use('/api/gsap-library', gsap_routes_1.default);
 // ✅ Serve uploaded files statically
 app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, '../uploads')));
+app.use('/api/daily', daily_routes_1.default);
 // ✅ SOCKET LOGIC (Only call this once)
 console.log('🛠️ [Server] Initializing Socket.io...');
 (0, socketHandler_1.setupSocketIO)(io);
@@ -74,6 +85,7 @@ server.listen(PORT, () => {
     console.log(`   - Auth Routes: /api/auth`);
     console.log(`   - Asset Routes: /api/assets`);
     console.log(`   - Upload Route: /api/upload`); // ✅ Verify this shows up
+    console.log(`   - GSAP Routes: /api/gsap-library`); // ✅ Confirmed
     console.log(`   - Socket.io: Enabled 🟢`);
     // Initialize Cron Jobs
     (0, cron_service_1.initCronJobs)();

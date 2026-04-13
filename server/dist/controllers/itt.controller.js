@@ -1,0 +1,504 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.deleteInventoryItem = exports.updateInventoryItem = exports.createInventoryItem = exports.getInventory = exports.updateIttTicketStatus = exports.replyToIttTicket = exports.getIttTicketsByUser = exports.getIttTickets = exports.deleteReport = exports.updateReport = exports.createReport = exports.getReports = exports.deleteLedger = exports.updateLedger = exports.createLedger = exports.getLedgers = exports.deleteWorkstation = exports.updateWorkstation = exports.createWorkstation = exports.getWorkstations = void 0;
+const client_1 = require("@prisma/client");
+const prisma = new client_1.PrismaClient();
+// ==========================================
+// WORKSTATIONS
+// ==========================================
+const getWorkstations = async (req, res) => {
+    try {
+        const workstations = await prisma.workstation.findMany({
+            include: {
+                assignedTo: { select: { id: true, name: true, email: true, avatar: true } },
+                monitors: true,
+                parts: { select: { id: true, itemName: true, serialNumber: true, type: true, status: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+        res.json(workstations);
+    }
+    catch (error) {
+        console.error('Error fetching workstations:', error);
+        res.status(500).json({ error: 'Failed to fetch workstations' });
+    }
+};
+exports.getWorkstations = getWorkstations;
+const createWorkstation = async (req, res) => {
+    try {
+        const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, monitors, status, assignedToId, notes, deployedItemIds } = req.body;
+        // Check if unitId already exists
+        const existing = await prisma.workstation.findUnique({ where: { unitId } });
+        if (existing) {
+            return res.status(400).json({ error: 'Workstation Unit ID already exists' });
+        }
+        const workstation = await prisma.$transaction(async (tx) => {
+            const ws = await tx.workstation.create({
+                data: {
+                    unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, notes,
+                    assignedToId: assignedToId || null,
+                    monitors: {
+                        create: (monitors || []).map((m) => ({ model: m.model, specs: m.specs }))
+                    }
+                },
+                include: {
+                    assignedTo: { select: { id: true, name: true, email: true, avatar: true } },
+                    monitors: true,
+                    parts: true,
+                },
+            });
+            // Atomically link and deploy selected inventory items
+            if (deployedItemIds?.length) {
+                await tx.ittInventory.updateMany({
+                    where: { id: { in: deployedItemIds } },
+                    data: { status: 'Deployed', workstationId: ws.id },
+                });
+            }
+            return ws;
+        });
+        res.status(201).json(workstation);
+    }
+    catch (error) {
+        console.error('Error creating workstation:', error);
+        res.status(500).json({ error: 'Failed to create workstation' });
+    }
+};
+exports.createWorkstation = createWorkstation;
+const updateWorkstation = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, monitors, status, assignedToId, notes, deployedItemIds, releasedItemIds } = req.body;
+        const workstation = await prisma.$transaction(async (tx) => {
+            // 1. Release any items being swapped out (set back to Active, unlink)
+            if (releasedItemIds?.length) {
+                await tx.ittInventory.updateMany({
+                    where: { id: { in: releasedItemIds } },
+                    data: { status: 'Active', workstationId: null },
+                });
+            }
+            // 2. Deploy and link newly selected items
+            if (deployedItemIds?.length) {
+                await tx.ittInventory.updateMany({
+                    where: { id: { in: deployedItemIds } },
+                    data: { status: 'Deployed', workstationId: id },
+                });
+            }
+            // 3. Update the workstation record
+            return tx.workstation.update({
+                where: { id },
+                data: {
+                    unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, notes,
+                    assignedToId: assignedToId || null,
+                    monitors: {
+                        deleteMany: {},
+                        create: (monitors || []).map((m) => ({ model: m.model, specs: m.specs }))
+                    }
+                },
+                include: {
+                    assignedTo: { select: { id: true, name: true, email: true, avatar: true } },
+                    monitors: true,
+                    parts: true,
+                },
+            });
+        });
+        res.json(workstation);
+    }
+    catch (error) {
+        console.error('Error updating workstation:', error);
+        res.status(500).json({ error: 'Failed to update workstation' });
+    }
+};
+exports.updateWorkstation = updateWorkstation;
+const deleteWorkstation = async (req, res) => {
+    try {
+        const { id } = req.params;
+        // 1. Transactional Update: Release parts then delete
+        await prisma.$transaction(async (tx) => {
+            // Find the workstation to identify its components
+            const ws = await tx.workstation.findUnique({ where: { id } });
+            if (ws) {
+                // Find and free any inventory items assigned to this workstation
+                await tx.ittInventory.updateMany({
+                    where: { workstationId: id },
+                    data: { status: 'Active', workstationId: null }
+                });
+            }
+            // 2. Delete the workstation
+            await tx.workstation.delete({ where: { id } });
+        });
+        res.json({ message: 'Workstation deleted and components released to inventory.' });
+    }
+    catch (error) {
+        console.error('Error deleting workstation:', error);
+        res.status(500).json({ error: 'Failed to delete workstation' });
+    }
+};
+exports.deleteWorkstation = deleteWorkstation;
+// ==========================================
+// MAINTENANCE LEDGERS
+// ==========================================
+const getLedgers = async (req, res) => {
+    try {
+        const ledgers = await prisma.maintenanceLedger.findMany({
+            include: {
+                workstation: { select: { id: true, unitId: true } },
+                assignedTech: { select: { id: true, name: true, email: true, avatar: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+        res.json(ledgers);
+    }
+    catch (error) {
+        console.error('Error fetching ledgers:', error);
+        res.status(500).json({ error: 'Failed to fetch ledgers' });
+    }
+};
+exports.getLedgers = getLedgers;
+const createLedger = async (req, res) => {
+    try {
+        const { workstationId, issue, actionTaken, status, assignedTechId } = req.body;
+        // Ensure workstation exists
+        const ws = await prisma.workstation.findUnique({ where: { id: workstationId } });
+        if (!ws) {
+            return res.status(404).json({ error: 'Workstation not found' });
+        }
+        const ledger = await prisma.maintenanceLedger.create({
+            data: {
+                workstationId,
+                issue,
+                actionTaken,
+                status: status || 'open',
+                assignedTechId: assignedTechId || req.user?.id || null
+            },
+            include: {
+                workstation: { select: { id: true, unitId: true } },
+                assignedTech: { select: { id: true, name: true, email: true, avatar: true } },
+            },
+        });
+        res.status(201).json(ledger);
+    }
+    catch (error) {
+        console.error('Error creating ledger:', error);
+        res.status(500).json({ error: 'Failed to create ledger' });
+    }
+};
+exports.createLedger = createLedger;
+const updateLedger = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { workstationId, issue, actionTaken, status, assignedTechId } = req.body;
+        const ledger = await prisma.maintenanceLedger.update({
+            where: { id },
+            data: {
+                workstationId,
+                issue,
+                actionTaken,
+                status,
+                // ✅ FIX: If undefined, do nothing. If empty string, set to null. Otherwise, use the ID.
+                assignedTechId: assignedTechId === undefined ? undefined : (assignedTechId || null)
+            },
+            include: {
+                workstation: { select: { id: true, unitId: true } },
+                assignedTech: { select: { id: true, name: true, email: true, avatar: true } },
+            },
+        });
+        res.json(ledger);
+    }
+    catch (error) {
+        console.error('Error updating ledger:', error);
+        res.status(500).json({ error: 'Failed to update ledger' });
+    }
+};
+exports.updateLedger = updateLedger;
+const deleteLedger = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await prisma.maintenanceLedger.delete({ where: { id } });
+        res.json({ message: 'Ledger deleted successfully' });
+    }
+    catch (error) {
+        console.error('Error deleting ledger:', error);
+        res.status(500).json({ error: 'Failed to delete ledger' });
+    }
+};
+exports.deleteLedger = deleteLedger;
+// ==========================================
+// DAILY REPORTS
+// ==========================================
+const getReports = async (req, res) => {
+    try {
+        const reports = await prisma.dailyReport.findMany({
+            include: {
+                author: { select: { id: true, name: true, email: true, avatar: true } },
+            },
+            orderBy: { date: 'desc' },
+        });
+        res.json(reports);
+    }
+    catch (error) {
+        console.error('Error fetching reports:', error);
+        res.status(500).json({ error: 'Failed to fetch reports' });
+    }
+};
+exports.getReports = getReports;
+const createReport = async (req, res) => {
+    try {
+        const { date, hours, reactiveTickets, proactiveMaintenance, researchNotes, nextSteps } = req.body;
+        const authorId = req.user?.id;
+        if (!authorId) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+        const report = await prisma.dailyReport.create({
+            data: {
+                date: date ? new Date(date) : new Date(),
+                hours: parseFloat(hours) || 8.0,
+                reactiveTickets: reactiveTickets || [],
+                proactiveMaintenance: proactiveMaintenance || [],
+                researchNotes,
+                nextSteps,
+                authorId
+            },
+            include: {
+                author: { select: { id: true, name: true, email: true, avatar: true } },
+            },
+        });
+        res.status(201).json(report);
+    }
+    catch (error) {
+        console.error('Error creating report:', error);
+        res.status(500).json({ error: 'Failed to create report' });
+    }
+};
+exports.createReport = createReport;
+const updateReport = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { date, hours, reactiveTickets, proactiveMaintenance, researchNotes, nextSteps } = req.body;
+        const report = await prisma.dailyReport.update({
+            where: { id },
+            data: {
+                date: date ? new Date(date) : undefined,
+                hours: hours ? parseFloat(hours) : undefined,
+                reactiveTickets,
+                proactiveMaintenance,
+                researchNotes,
+                nextSteps,
+            },
+            include: {
+                author: { select: { id: true, name: true, email: true, avatar: true } },
+            },
+        });
+        res.json(report);
+    }
+    catch (error) {
+        console.error('Error updating report:', error);
+        res.status(500).json({ error: 'Failed to update report' });
+    }
+};
+exports.updateReport = updateReport;
+const deleteReport = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await prisma.dailyReport.delete({ where: { id } });
+        res.json({ message: 'Report deleted successfully' });
+    }
+    catch (error) {
+        console.error('Error deleting report:', error);
+        res.status(500).json({ error: 'Failed to delete report' });
+    }
+};
+exports.deleteReport = deleteReport;
+// ==========================================
+// ITT SUPPORT TICKETS
+// ==========================================
+const getIttTickets = async (req, res) => {
+    try {
+        const tickets = await prisma.feedback.findMany({
+            where: { type: 'itt_support' },
+            include: {
+                user: { select: { name: true, email: true, avatar: true } }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(tickets);
+    }
+    catch (error) {
+        console.error("Error fetching ITT tickets:", error);
+        res.status(500).json({ error: "Failed to fetch ITT tickets" });
+    }
+};
+exports.getIttTickets = getIttTickets;
+// Get ITT support tickets by assigned user (for workstation detail view)
+const getIttTicketsByUser = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const tickets = await prisma.feedback.findMany({
+            where: { type: 'itt_support', userId },
+            include: {
+                user: { select: { name: true, email: true, avatar: true } }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(tickets);
+    }
+    catch (error) {
+        console.error("Error fetching ITT tickets by user:", error);
+        res.status(500).json({ error: "Failed to fetch tickets" });
+    }
+};
+exports.getIttTicketsByUser = getIttTicketsByUser;
+// Reply to an ITT support ticket
+const replyToIttTicket = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { message } = req.body;
+        if (!message)
+            return res.status(400).json({ error: "Reply message is required" });
+        const updated = await prisma.feedback.update({
+            where: { id },
+            data: {
+                adminReply: message,
+                repliedAt: new Date(),
+            }
+        });
+        res.json(updated);
+    }
+    catch (error) {
+        console.error("Error replying to ITT ticket:", error);
+        res.status(500).json({ error: "Failed to reply to ticket" });
+    }
+};
+exports.replyToIttTicket = replyToIttTicket;
+const updateIttTicketStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+        const updated = await prisma.feedback.update({
+            where: { id },
+            data: { status }
+        });
+        res.json(updated);
+    }
+    catch (error) {
+        console.error("Error updating ITT ticket status:", error);
+        res.status(500).json({ error: "Failed to update ticket status" });
+    }
+};
+exports.updateIttTicketStatus = updateIttTicketStatus;
+// ==========================================
+// HARDWARE INVENTORY
+// ==========================================
+// Get all inventory items (optionally filtered by type)
+const getInventory = async (req, res) => {
+    try {
+        const { type } = req.query;
+        const whereClause = type ? { type: String(type) } : {};
+        const inventory = await prisma.ittInventory.findMany({
+            where: whereClause,
+            include: {
+                workstation: {
+                    select: { unitId: true }
+                }
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+        res.json(inventory);
+    }
+    catch (error) {
+        console.error('Error fetching inventory:', error);
+        res.status(500).json({ error: 'Failed to fetch inventory' });
+    }
+};
+exports.getInventory = getInventory;
+// Add a new hardware component
+const createInventoryItem = async (req, res) => {
+    try {
+        const { itemName, serialNumber, type, purchaseDate, status, notes } = req.body;
+        // Check for duplicate serial number
+        const existing = await prisma.ittInventory.findUnique({
+            where: { serialNumber }
+        });
+        if (existing) {
+            return res.status(400).json({ error: 'Serial Number already exists in inventory' });
+        }
+        const item = await prisma.ittInventory.create({
+            data: {
+                itemName,
+                serialNumber,
+                type,
+                purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
+                status: status || 'Active',
+                notes: notes || null
+            },
+        });
+        res.status(201).json(item);
+    }
+    catch (error) {
+        console.error('Error creating inventory item:', error);
+        res.status(500).json({ error: 'Failed to add item to inventory' });
+    }
+};
+exports.createInventoryItem = createInventoryItem;
+// Update an existing hardware component
+const updateInventoryItem = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { itemName, serialNumber, type, purchaseDate, status, notes } = req.body;
+        const item = await prisma.ittInventory.update({
+            where: { id },
+            data: {
+                itemName,
+                serialNumber,
+                type,
+                purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
+                status,
+                notes
+            },
+        });
+        res.json(item);
+    }
+    catch (error) {
+        console.error('Error updating inventory item:', error);
+        res.status(500).json({ error: 'Failed to update inventory item' });
+    }
+};
+exports.updateInventoryItem = updateInventoryItem;
+// Delete a hardware component
+const deleteInventoryItem = async (req, res) => {
+    const { id } = req.params;
+    try {
+        // 1. Transactional delete to ensure data integrity
+        await prisma.$transaction(async (tx) => {
+            // Find the item first to check its deployment status
+            const item = await tx.ittInventory.findUnique({
+                where: { id },
+                select: { status: true, workstationId: true }
+            });
+            if (!item)
+                throw new Error("ITEM_NOT_FOUND");
+            // Safety check: Don't delete if actually deployed
+            if (item.status === 'Deployed' || item.workstationId) {
+                throw new Error("ITEM_DEPLOYED");
+            }
+            // 2. CLEAR REFERENCES: Though SetNull handles this, we ensure it's removed from any collections
+            await tx.workstation.updateMany({
+                where: { parts: { some: { id } } },
+                data: {} // Connect/Disconnect handled by SetNull on schema
+            });
+            // 3. Delete the item
+            await tx.ittInventory.delete({ where: { id } });
+        });
+        res.json({ message: 'Item deleted and removed from all dashboards.' });
+    }
+    catch (error) {
+        if (error.message === "ITEM_DEPLOYED") {
+            return res.status(400).json({ error: "Cannot delete hardware currently in use." });
+        }
+        if (error.message === "ITEM_NOT_FOUND") {
+            return res.status(404).json({ error: "Item not found." });
+        }
+        console.error('Inventory Delete Error:', error);
+        res.status(500).json({ error: "Failed to delete inventory item." });
+    }
+};
+exports.deleteInventoryItem = deleteInventoryItem;

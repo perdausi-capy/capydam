@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.analyzeAudioVideo = exports.analyzePdf = exports.analyzeImage = exports.generateEmbedding = exports.expandQuery = void 0;
+exports.parseQuestionsWithAI = exports.generateQuestWithAI = exports.analyzeAudioVideo = exports.analyzePdf = exports.analyzeImage = exports.generateEmbedding = exports.expandQuery = void 0;
 const fs_extra_1 = __importDefault(require("fs-extra"));
 const openai_1 = __importDefault(require("openai"));
 const path_1 = __importDefault(require("path"));
@@ -103,38 +103,65 @@ const saveAiData = async (id, data) => {
         await prisma_1.prisma.asset.update({ where: { id }, data: { aiData: JSON.stringify(data) } });
     }
 };
+// ✅ UPDATED: Robust Keyframe Extraction (Fixes .m4v empty tags)
 const extractKeyFrames = async (videoPath) => {
     const screenshots = [];
     const absoluteVideoPath = path_1.default.resolve(videoPath);
-    const duration = await new Promise((resolve, reject) => {
+    // 1. Try to get Duration
+    const duration = await new Promise((resolve) => {
         fluent_ffmpeg_1.default.ffprobe(absoluteVideoPath, (err, metadata) => {
-            if (err)
-                return reject(err);
+            // If error or missing duration, return 0
+            if (err || !metadata || !metadata.format || !metadata.format.duration) {
+                resolve(0);
+                return;
+            }
             const d = parseFloat(metadata.format.duration);
             resolve(isNaN(d) ? 0 : d);
         });
     });
+    // 2. Decide Timestamps (Use Percentages if duration fails!)
     let timestamps = [];
     if (duration > 0) {
-        // Extract more frames if video is long
-        if (duration > 60)
+        // Good metadata? Use exact seconds
+        if (duration > 60) {
             timestamps = [duration * 0.1, duration * 0.5, duration * 0.9];
-        else
+        }
+        else {
             timestamps = [duration * 0.2, duration * 0.8];
+        }
     }
     else {
-        timestamps = [0];
+        // ⚠️ FIX: If duration is 0 (common with .m4v), use percentages!
+        // This forces FFmpeg to scan the file stream instead of relying on broken metadata.
+        console.log("⚠️ Duration not detected. Using percentage fallbacks for AI frames.");
+        timestamps = ['20%', '50%', '80%'];
     }
+    // 3. Extract Frames
     for (let i = 0; i < timestamps.length; i++) {
         const filename = `frame-${i}-${Date.now()}.jpg`;
         const outPath = path_1.default.join(path_1.default.dirname(absoluteVideoPath), filename);
         await new Promise((resolve, reject) => {
             (0, fluent_ffmpeg_1.default)(absoluteVideoPath)
-                .screenshots({ timestamps: [timestamps[i]], filename, folder: path_1.default.dirname(absoluteVideoPath), size: '400x?' })
+                .screenshots({
+                // ✅ FIX: Wrap in String() or template literal
+                timestamps: [String(timestamps[i])],
+                filename,
+                folder: path_1.default.dirname(absoluteVideoPath),
+                size: '400x?'
+            })
                 .on('end', resolve)
-                .on('error', reject);
+                .on('error', (err) => {
+                console.warn(`Frame ${i} extraction failed:`, err);
+                resolve(null); // Continue even if one frame fails
+            });
         });
-        screenshots.push(outPath);
+        // Only add if file was actually created
+        if (await fs_extra_1.default.pathExists(outPath)) {
+            screenshots.push(outPath);
+        }
+    }
+    if (screenshots.length === 0) {
+        console.error("❌ No frames extracted for AI analysis.");
     }
     return screenshots;
 };
@@ -176,7 +203,6 @@ const analyzeImage = async (assetId, filePath, options) => {
         aiData.assetType = 'image';
         await saveAiData(assetId, aiData);
         console.log(`✅ Image Analysis complete (Spec: ${options?.specificity}, Temp: ${options?.creativity})`);
-        // 2. ✅ ADD THIS: Return the data so our script can use the tags
         return aiData;
     }
     catch (e) {
@@ -216,7 +242,7 @@ const analyzeAudioVideo = async (assetId, filePath, options) => {
         const absolutePath = path_1.default.resolve(filePath);
         const stats = await fs_extra_1.default.stat(absolutePath);
         const ext = path_1.default.extname(absolutePath).toLowerCase();
-        const isVideo = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.gif'].includes(ext);
+        const isVideo = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.gif', '.m4v'].includes(ext);
         if (isVideo) {
             console.log(`🎥 Starting Motion Analysis for: ${assetId}`);
             let transcript = "";
@@ -285,3 +311,80 @@ const analyzeAudioVideo = async (assetId, filePath, options) => {
     }
 };
 exports.analyzeAudioVideo = analyzeAudioVideo;
+// --- 7. QUEST & IMPORT TOOLS ---
+const generateQuestWithAI = async (topic = "Instructional Design, E-Learning, or Creative Tech") => {
+    try {
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            temperature: 0.7,
+            messages: [
+                {
+                    role: "system",
+                    content: `You are a Trivia Master for a creative tech agency. 
+          Generate a "Question of the Day".
+          Output JSON ONLY format:
+          {
+            "question": "The question text?",
+            "options": [
+              { "text": "Option A", "isCorrect": false },
+              { "text": "Option B", "isCorrect": true },
+              { "text": "Option C", "isCorrect": false },
+              { "text": "Option D", "isCorrect": false }
+            ]
+          }
+          Keep it witty, short, and engaging.`
+                },
+                { role: "user", content: `Generate a question about ${topic}.` }
+            ],
+            response_format: { type: "json_object" },
+        });
+        return JSON.parse(response.choices[0].message.content || '{}');
+    }
+    catch (error) {
+        console.error("AI Quest Gen Error:", error);
+        return null;
+    }
+};
+exports.generateQuestWithAI = generateQuestWithAI;
+const parseQuestionsWithAI = async (rawText) => {
+    try {
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o", // Stronger model needed for parsing logic
+            temperature: 0.2, // Low temperature = strictly follow instructions, no creativity
+            messages: [
+                {
+                    role: "system",
+                    content: `You are a Data Parsing Assistant. 
+          The user will provide raw text containing a list of questions (multiple choice or simple).
+          
+          YOUR TASK:
+          Extract every question and formatted it into this JSON array structure:
+          [
+            {
+              "question": "The Question Text?",
+              "options": [
+                { "text": "Option A", "isCorrect": false },
+                { "text": "Option B", "isCorrect": true } 
+                // Ensure there are always 2-4 options. If none provided, generate plausible ones based on the answer.
+                // If no answer is marked in text, assume the first one is correct (or make a best guess).
+              ]
+            }
+          ]
+          
+          Output JSON ONLY. No markdown, no chat.`
+                },
+                { role: "user", content: `Here is the raw document text:\n\n${rawText}` }
+            ],
+            response_format: { type: "json_object" },
+        });
+        // The model might return { "questions": [...] } or just [...] depending on training
+        // We try to parse efficiently
+        const content = JSON.parse(response.choices[0].message.content || '{}');
+        return content.questions || content; // Handle both wrapper styles
+    }
+    catch (error) {
+        console.error("AI Parse Error:", error);
+        return null;
+    }
+};
+exports.parseQuestionsWithAI = parseQuestionsWithAI;

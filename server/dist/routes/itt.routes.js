@@ -58,4 +58,12 @@ router.delete('/reports/:id', ittController.deleteReport);
 router.get('/tickets', ittController.getIttTickets);
 router.get('/tickets/user/:userId', ittController.getIttTicketsByUser);
 router.post('/tickets/:id/reply', ittController.replyToIttTicket);
+router.patch('/tickets/:id/status', ittController.updateIttTicketStatus);
+// ==========================================
+// Hardware Inventory Routes
+// ==========================================
+router.get('/inventory', ittController.getInventory);
+router.post('/inventory', ittController.createInventoryItem);
+router.put('/inventory/:id', ittController.updateInventoryItem);
+router.delete('/inventory/:id', ittController.deleteInventoryItem);
 exports.default = router;
