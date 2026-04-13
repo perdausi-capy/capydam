@@ -7,10 +7,11 @@ import {
     Search, Hash, Layers, Database, View, Zap, User,
     Eye, X, MessageSquare, Send, Clock, CheckCircle, RefreshCw,
     AlertCircle, FileText, Loader2, Check, ChevronUp, ChevronDown, ChevronRight,
-    Settings, Package, Wrench, XCircle, UserMinus
+    Settings, Package, Wrench, XCircle, UserMinus, List, Grid
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmModal from '../components/ConfirmModal';
+import { WorkstationFloorPlan } from '../components/WorkstationFloorPlan';
 
 interface InventoryItem {
     id: string;
@@ -258,6 +259,7 @@ const ITTWorkstations = () => {
         gpu: '',
         storage: ''
     });
+    const [viewMode, setViewMode] = useState<'list'|'floor'>('list');
 
     // Extract unique values for dynamic dropdowns
     const uniqueSpecs = useMemo(() => {
@@ -684,7 +686,22 @@ const ITTWorkstations = () => {
         <div className="space-y-6">
             {/* Controls */}
             <div className="flex flex-col sm:flex-row justify-between gap-4">
-                <div className="relative max-w-md w-full">
+                <div className="flex items-center gap-2 bg-gray-100 dark:bg-white/5 p-1 rounded-xl w-full sm:w-auto overflow-hidden shrink-0 shadow-inner">
+                    <button
+                        onClick={() => setViewMode('list')}
+                        className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-[#1A1D21] text-blue-600 dark:text-blue-400 shadow-sm border border-gray-200 dark:border-white/5' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white border border-transparent'}`}
+                    >
+                       <List size={16} /> List
+                    </button>
+                    <button
+                        onClick={() => setViewMode('floor')}
+                        className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-all ${viewMode === 'floor' ? 'bg-white dark:bg-[#1A1D21] text-blue-600 dark:text-blue-400 shadow-sm border border-gray-200 dark:border-white/5' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white border border-transparent'}`}
+                    >
+                       <Grid size={16} /> Floor Plan
+                    </button>
+                </div>
+                
+                <div className="relative max-w-md w-full shrink">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     <input
                         type="text"
@@ -694,11 +711,13 @@ const ITTWorkstations = () => {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <button onClick={() => openModal()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors shadow-sm">
+                <button onClick={() => openModal()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors shadow-sm shrink-0">
                     <Plus size={18} /> Add Workstation
                 </button>
             </div>
 
+            {viewMode === 'list' ? (
+                <>
             {/* --- ADVANCED SPEC FILTERS --- */}
             <div className="flex flex-wrap gap-3 bg-white/40 dark:bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm mb-6">
                 <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest mr-2">
@@ -763,6 +782,15 @@ const ITTWorkstations = () => {
             </div>
 
             {renderWorkstationsTable}
+                </>
+            ) : (
+                <WorkstationFloorPlan 
+                    workstations={workstations} 
+                    filteredWorkstations={filteredWorkstations} 
+                    onOpenDetail={openDetail}
+                    unreadMap={unreadMap}
+                />
+            )}
 
             {/* ── Form Modal ── */}
             {isModalOpen && (
