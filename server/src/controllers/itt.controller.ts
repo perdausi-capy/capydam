@@ -521,3 +521,38 @@ export const deleteInventoryItem = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Failed to delete inventory item." });
   }
 };
+
+// ==========================================
+// FLOOR PLAN LAYOUT
+// ==========================================
+
+export const getFloorPlan = async (req: Request, res: Response) => {
+  try {
+    const config = await prisma.systemConfig.findUnique({
+      where: { key: 'workstation_floor_plan' }
+    });
+    if (config) {
+      res.json(JSON.parse(config.value));
+    } else {
+      res.json({});
+    }
+  } catch(error) {
+    console.error('Error fetching floor plan:', error);
+    res.status(500).json({ error: 'Failed to fetch floor plan' });
+  }
+};
+
+export const saveFloorPlan = async (req: Request, res: Response) => {
+  try {
+    const layout = req.body;
+    await prisma.systemConfig.upsert({
+      where: { key: 'workstation_floor_plan' },
+      update: { value: JSON.stringify(layout) },
+      create: { key: 'workstation_floor_plan', value: JSON.stringify(layout) }
+    });
+    res.json({ success: true });
+  } catch(error) {
+    console.error('Error saving floor plan:', error);
+    res.status(500).json({ error: 'Failed to save floor plan' });
+  }
+};
