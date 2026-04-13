@@ -54,6 +54,7 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
     
     const [zoom, setZoom] = useState(1);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [panPos, setPanPos] = useState({ x: 0, y: 0 });
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Autosave positions whenever they mutate
@@ -123,6 +124,25 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
 
         document.addEventListener('pointermove', handlePointerMove);
         document.addEventListener('pointerup', handlePointerUp);
+    };
+
+    const handlePanEnd = (e: any, info: any) => {
+        const dx = info.offset.x / zoom;
+        const dy = info.offset.y / zoom;
+
+        if (Math.abs(dx) < 2 && Math.abs(dy) < 2) return;
+
+        setPositions(prev => {
+            const next = { ...prev };
+            workstations.forEach((ws, i) => {
+                const p = next[ws.id] || initialGridAlign(i);
+                next[ws.id] = { ...p, x: p.x + dx, y: p.y + dy };
+            });
+            return next;
+        });
+
+        setPanPos({ x: -info.offset.x * 0.0001, y: -info.offset.y * 0.0001 }); 
+        setTimeout(() => setPanPos({ x: 0, y: 0 }), 10);
     };
     
     // Quick reset layout
@@ -195,9 +215,13 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                 }}
             >
                 {/* Expanding wrapper to ensure scrolling works if dragged out of view */}
-                <div 
-                    className="absolute w-[200vw] h-[200vh] origin-top-left"
-                    style={{ transform: `scale(${zoom})` }}
+                <motion.div 
+                    drag
+                    dragMomentum={false}
+                    animate={{ x: panPos.x, y: panPos.y, scale: zoom }}
+                    onDragEnd={handlePanEnd}
+                    style={{ transformOrigin: "0 0" }}
+                    className="absolute w-[200vw] h-[200vh] cursor-grab active:cursor-grabbing"
                 >
                     {workstations.map((ws, i) => {
                     const pos = positions[ws.id] || initialGridAlign(i);
@@ -276,7 +300,7 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                         </motion.div>
                     );
                 })}
-                </div>
+                </motion.div>
             </div>
 
             {/* Instruction tooltip */}
