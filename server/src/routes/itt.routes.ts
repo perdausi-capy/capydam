@@ -39,4 +39,10 @@ router.post('/inventory', ittController.createInventoryItem);
 router.put('/inventory/:id', ittController.updateInventoryItem);
 router.delete('/inventory/:id', ittController.deleteInventoryItem);
 
+// ==========================================
+// FLOOR PLAN LAYOUT
+// ==========================================
+router.get('/floorplan', ittController.getFloorPlan);
+router.post('/floorplan', ittController.saveFloorPlan);
+
 export default router;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Monitor, User, Grid, CheckCircle, Wrench, XCircle, ZoomIn, ZoomOut, Maximize, Minimize } from 'lucide-react';
+import client from '../api/client';
 
 export interface UserInfo {
     id: string;
@@ -42,25 +43,45 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
     onOpenDetail, 
     unreadMap 
 }) => {
-    const [positions, setPositions] = useState<Record<string, { x: number; y: number; w?: number; h?: number }>>(() => {
-        try {
-            const saved = localStorage.getItem('workstation_floor_plan');
-            return saved ? JSON.parse(saved) : {};
-        } catch (e) {
-            console.error("Failed to parse floor plan positions");
-            return {};
-        }
-    });
+    const [positions, setPositions] = useState<Record<string, { x: number; y: number; w?: number; h?: number }>>({});
+    const [isLoadingLayout, setIsLoadingLayout] = useState(true);
     
     const [zoom, setZoom] = useState(1);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [panPos, setPanPos] = useState({ x: 0, y: 0 });
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Autosave positions whenever they mutate
+    // Load positions from API once on mount
     useEffect(() => {
-        localStorage.setItem('workstation_floor_plan', JSON.stringify(positions));
-    }, [positions]);
+        const fetchLayout = async () => {
+            try {
+                const res = await client.get('/itt/floorplan');
+                setPositions(res.data || {});
+            } catch (err) {
+                console.error("Failed to parse floor plan positions from server", err);
+            } finally {
+                setIsLoadingLayout(false);
+            }
+        };
+        fetchLayout();
+    }, []);
+
+    // Autosave positions to server securely and debounced
+    const saveTimer = useRef<NodeJS.Timeout>();
+    useEffect(() => {
+        if (isLoadingLayout) return;
+
+        clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(async () => {
+            try {
+                await client.post('/itt/floorplan', positions);
+            } catch (err) {
+                console.error("Failed to sync floor plan to server", err);
+            }
+        }, 1000);
+        
+        return () => clearTimeout(saveTimer.current);
+    }, [positions, isLoadingLayout]);
 
     // Helper to find spacing
     const initialGridAlign = (index: number) => {
