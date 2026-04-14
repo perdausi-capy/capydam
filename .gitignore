@@ -1,10 +1,11 @@
-"node_modules" 
-".env" 
-"dist" 
-".DS_Store" 
+node_modules
+.env
+dist
+.DS_Store
 client/.env
 docker-compose.yml
 credentials.json
 token.json
 full_codebase_context.txt
 full_frontend_context.txt
+database/

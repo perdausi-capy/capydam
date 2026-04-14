@@ -27,7 +27,7 @@ export const recordUserLog = async (req: Request, res: Response) => {
       data: { userId, action, details, assetId, duration, metadata }
     });
 
-    // 🌟 SMART TRIGGER: Automatically increment Asset Counters!
+    // SMART TRIGGER: Automatically increment Asset Counters!
     if (assetId && action === 'DOWNLOAD') {
       await prisma.asset.update({ where: { id: assetId }, data: { downloadCount: { increment: 1 } } });
     } else if (assetId && action === 'VIEW_ASSET') {
@@ -41,10 +41,10 @@ export const recordUserLog = async (req: Request, res: Response) => {
   }
 };
 
-// ✅ 3. The Bento Box Dashboard Aggregator
+// ✅ 3. The Enterprise Command Center Aggregator
 export const getSystemAnalytics = async (req: Request, res: Response) => {
   try {
-    // 1. Storage & Assets (Fixed: Use mimeType instead of fileType)
+    // 1. Storage & Assets Breakdown
     const assets = await prisma.asset.findMany({ select: { size: true, mimeType: true } });
     const totalAssets = assets.length;
     const totalBytes = assets.reduce((sum, asset) => sum + (asset.size || 0), 0);
@@ -58,16 +58,16 @@ export const getSystemAnalytics = async (req: Request, res: Response) => {
     };
     breakdown.others = totalAssets - (breakdown.images + breakdown.videos + breakdown.audio + breakdown.docs);
 
-    // 2. Users Data
+    // 2. Platform Members Data
     const users = await prisma.user.findMany({ select: { role: true, id: true } });
     const userStats = {
       total: users.length,
-      admins: users.filter(u => u.role === 'ADMIN').length,
-      editors: users.filter(u => u.role === 'EDITOR').length,
-      viewers: users.filter(u => u.role === 'VIEWER').length,
+      admins: users.filter(u => u.role.toLowerCase().includes('admin')).length,
+      editors: users.filter(u => u.role.toLowerCase() === 'editor').length,
+      viewers: users.filter(u => u.role.toLowerCase() === 'viewer').length,
     };
 
-    // 3. Traffic & Visits
+    // 3. Platform Velocity & Traffic
     const totalVisits = await prisma.siteVisit.count();
 
     // 4. Live Audit Trail (Latest 50 actions)
@@ -80,75 +80,68 @@ export const getSystemAnalytics = async (req: Request, res: Response) => {
       }
     });
 
-    // 5. Leaderboard: Top Downloaded Assets
-    const popularAssets = await prisma.asset.findMany({
+    // 5. Leaderboard: Top Uploaders
+    const topUploaders = await prisma.user.findMany({
       take: 5,
-      orderBy: { downloadCount: 'desc' },
-      select: { id: true, originalName: true, downloadCount: true, viewCount: true, mimeType: true }
+      orderBy: { assets: { _count: 'desc' } },
+      select: { id: true, name: true, avatar: true, _count: { select: { assets: true } } }
     });
 
-// 6. Leaderboard: Top Uploaders
-const topUploaders = await prisma.user.findMany({
-  take: 5,
-  orderBy: { assets: { _count: 'desc' } },
-  select: { id: true, name: true, avatar: true, _count: { select: { assets: true } } }
-});
+    // 6. Recent Upload Activity
+    const recentUploads = await prisma.asset.findMany({
+      take: 10,
+      orderBy: { createdAt: 'desc' },
+      include: { uploadedBy: { select: { name: true } } } 
+    });
 
-// ✅ FIXED: Actually fetch the 10 most recent uploads
-// ✅ FIXED: Use the correct relation name (likely 'uploadedBy')
-const recentUploads = await prisma.asset.findMany({
-  take: 10,
-  orderBy: { createdAt: 'desc' },
-  // 👇 Change 'user' to whatever the relation is called in schema.prisma!
-  include: { uploadedBy: { select: { name: true } } } 
-});
+    const formattedRecentActivity = recentUploads.map((a: any) => ({
+        id: a.id,
+        originalName: a.originalName,
+        size: a.size,
+        createdAt: a.createdAt.toISOString(),
+        uploadedBy: { name: a.uploadedBy?.name || 'Unknown' } 
+    }));
 
-const formattedRecentActivity = recentUploads.map((a: any) => ({
-    id: a.id,
-    originalName: a.originalName,
-    size: a.size,
-    createdAt: a.createdAt.toISOString(),
-    // 👇 Update this to match the relation name too
-    uploadedBy: { name: a.uploadedBy?.name || 'Unknown' } 
-}));
+    // 7. SMART ENGINE: All Users with Exact Last Active Date & Activity Count
+    const rawUsers = await prisma.user.findMany({
+      select: {
+          id: true, name: true, email: true, avatar: true, role: true, createdAt: true,
+          userLogs: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
+          _count: { select: { assets: true } }
+      },
+      orderBy: { name: 'asc' }
+    });
 
-// ✅ NEW: Fetch all users WITH their last activity date
-const rawUsers = await prisma.user.findMany({
-  select: {
-      id: true, name: true, email: true, avatar: true, role: true,
-      userLogs: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } }
-  },
-  orderBy: { name: 'asc' }
-});
+    const allUsersList = rawUsers.map((u: any) => ({
+      id: u.id,
+      name: u.name || 'Unknown User',
+      email: u.email,
+      avatar: u.avatar,
+      role: u.role,
+      uploads: u._count.assets,
+      createdDaysAgo: Math.floor((new Date().getTime() - new Date(u.createdAt).getTime()) / (1000 * 3600 * 24)),
+      lastActive: u.userLogs[0]?.createdAt ? u.userLogs[0].createdAt.toISOString() : null
+    }));
 
-const allUsersList = rawUsers.map((u: any) => ({
-  id: u.id,
-  name: u.name,
-  email: u.email,
-  avatar: u.avatar,
-  role: u.role,
-  lastActive: u.userLogs[0]?.createdAt ? u.userLogs[0].createdAt.toISOString() : null
-}));
+    // Package exact match for the Frontend Interface
+    res.json({
+      storage: { totalBytes, totalAssets },
+      breakdown,
+      users: userStats,
+      visits: { total: totalVisits },
+      recentUserLogs,
+      topUploaders,
+      recentActivity: formattedRecentActivity, 
+      allUsers: allUsersList                   
+    });
 
-res.json({
-storage: { totalBytes, totalAssets },
-breakdown,
-users: userStats,
-visits: { total: totalVisits },
-recentUserLogs,
-popularAssets,
-topUploaders,
-recentActivity: formattedRecentActivity, 
-allUsers: allUsersList                   // Now includes lastActive!
-});
-
-} catch (error) {
-console.error("Analytics Error:", error);
-res.status(500).json({ message: 'Error fetching analytics' });
-}
+  } catch (error) {
+    console.error("Analytics Error:", error);
+    res.status(500).json({ message: 'Error fetching enterprise analytics' });
+  }
 };
 
-// ✅ NEW: Fetch ALL actions for a specific user
+// ✅ 4. Fetch ALL actions for a specific user
 export const getUserAuditLogs = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
