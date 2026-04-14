@@ -28,6 +28,13 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
+            # 🚨 THE POSTGRES PERMISSION FIX 🚨
+            # Git reset forcefully alters the permissions of the tracked database folder.
+            # We must hand ownership back to Postgres (User 999) before Prisma runs.
+            echo "🔐 Securing database file permissions..."
+            chown -R 999:999 /var/www/capydam/database/data
+            chmod -R 700 /var/www/capydam/database/data
+
             # ✅ 4. BACKEND: Strict Install & Migration
             echo "🛠️ Building Backend..."
             cd server
