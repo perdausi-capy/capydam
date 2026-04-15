@@ -252,6 +252,7 @@ const ITTWorkstations = () => {
     const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [initialHardware, setInitialHardware] = useState<Record<string, string>>({});
+    const [storageItems, setStorageItems] = useState<string[]>(['']);
     const [searchTerm, setSearchTerm] = useState('');
     const [specFilters, setSpecFilters] = useState({
         cpu: '',
@@ -259,7 +260,7 @@ const ITTWorkstations = () => {
         gpu: '',
         storage: ''
     });
-    const [viewMode, setViewMode] = useState<'list'|'floor'>('list');
+    const [viewMode, setViewMode] = useState<'list' | 'floor'>('list');
 
     // Extract unique values for dynamic dropdowns
     const uniqueSpecs = useMemo(() => {
@@ -428,11 +429,33 @@ const ITTWorkstations = () => {
         try {
             // Build the list of inventory items to release (swapped out)
             const releasedItemIds: string[] = [];
+            const deployedItemIdsSet = new Set<string>();
+
+            // Calculate newly deployed items by dynamically scanning the final submitted strings
+            const allHardwareStrings = [
+                formData.mobo, formData.cpu, formData.ram, formData.gpu, formData.psu, formData.monitor,
+                ...storageItems
+            ];
+
+            allHardwareStrings.forEach(str => {
+                if (str && typeof str === 'string') {
+                    const snMatches = Array.from(str.matchAll(/\(SN:\s*(.+?)\)/g));
+                    snMatches.forEach(m => {
+                        const sn = m[1].trim();
+                        // Only "Active" items need to be deployed (transitioned from Active -> Deployed)
+                        const invItem = stock.find(i => i.serialNumber === sn && i.status === 'Active');
+                        if (invItem) deployedItemIdsSet.add(invItem.id);
+                    });
+                }
+            });
+
             if (editingId) {
-                const hardwareKeys = ['mobo', 'cpu', 'ram', 'gpu', 'psu', 'storage', 'monitor'];
+                const hardwareKeys = ['mobo', 'cpu', 'ram', 'gpu', 'psu', 'monitor'];
+                
+                // Compare standard singular fields
                 hardwareKeys.forEach(key => {
-                    const oldVal = (initialHardware as any)[key];
-                    const newVal = (formData as any)[key];
+                    const oldVal = (initialHardware as any)[key] || '';
+                    const newVal = (formData as any)[key] || '';
                     if (oldVal !== newVal && oldVal) {
                         const snMatch = oldVal.match(/\(SN:\s*(.+?)\)/);
                         if (snMatch?.[1]) {
@@ -441,13 +464,27 @@ const ITTWorkstations = () => {
                         }
                     }
                 });
+
+                // Compare multiple-storage string
+                const oldStorage = initialHardware.storage || '';
+                const newStorage = storageItems.filter(Boolean).join(' | ');
+                
+                const oldSns = Array.from(oldStorage.matchAll(/\(SN:\s*(.+?)\)/g)).map((m: any) => m[1].trim());
+                const newSns = Array.from(newStorage.matchAll(/\(SN:\s*(.+?)\)/g)).map((m: any) => m[1].trim());
+                
+                const releasedSns = oldSns.filter(sn => !newSns.includes(sn));
+                releasedSns.forEach(sn => {
+                    const invItem = stock.find(i => i.serialNumber === sn);
+                    if (invItem) releasedItemIds.push(invItem.id);
+                });
             }
 
             // Build payload — backend handles deploy/release atomically in one transaction
             const payload = {
                 ...formData,
+                storage: storageItems.filter(Boolean).join(' | '),
                 assignedToId: formData.assignedToId || null,
-                deployedItemIds: Array.from(partsToDeploy),
+                deployedItemIds: Array.from(deployedItemIdsSet),
                 releasedItemIds,
             };
 
@@ -510,19 +547,20 @@ const ITTWorkstations = () => {
                 mobo: ws.mobo || '', cpu: ws.cpu || '', ram: ws.ram || '',
                 gpu: ws.gpu || '', psu: ws.psu || '', storage: ws.storage || '', monitor: ws.monitor || ''
             });
+            setStorageItems(ws.storage ? ws.storage.split(' | ') : ['']);
         } else {
             setEditingId(null);
             setFormData({ unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', status: 'active', assignedToId: '' });
             setInitialHardware({});
+            setStorageItems(['']);
         }
-        setPartsToDeploy(new Set());
         setIsModalOpen(true);
     };
 
     const closeModal = () => {
         setIsModalOpen(false);
         setEditingId(null);
-        setPartsToDeploy(new Set());
+        setStorageItems(['']);
     };
 
     const assignedUserIds = useMemo(() => {
@@ -589,6 +627,7 @@ const ITTWorkstations = () => {
                             <th className={COL_HEADER}>GPU</th>
                             <th className={COL_HEADER}>RAM</th>
                             <th className={COL_HEADER}>Storage</th>
+                            <th className={COL_HEADER}>PSU</th>
                             <th className={COL_HEADER}>Monitor</th>
                             <th className={COL_HEADER}>Status</th>
                             <th className={`${COL_HEADER} text-right`}>Actions</th>
@@ -630,21 +669,32 @@ const ITTWorkstations = () => {
 
 
                                 {/* Hardware columns */}
-                                <td className={ws.mobo ? CELL : CELL_MUTED}>{ws.mobo || '—'}</td>
+                                <td className={ws.mobo ? CELL : CELL_MUTED}>
+                                    <div className="max-w-[140px] line-clamp-2 text-xs leading-snug text-gray-700 dark:text-gray-300" title={ws.mobo || ''}>{ws.mobo || '—'}</div>
+                                </td>
 
                                 <td className={ws.cpu ? CELL : CELL_MUTED}>
                                     {ws.cpu ? (
-                                        <span className="inline-flex items-center gap-1 text-xs font-medium bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 px-2 py-0.5 rounded-md">
-                                            {ws.cpu}
-                                        </span>
+                                        <div className="inline-flex max-w-[140px] items-start text-[11px] font-medium bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 px-2 py-1.5 rounded-md" title={ws.cpu}>
+                                            <span className="line-clamp-2 leading-tight">{ws.cpu}</span>
+                                        </div>
                                     ) : '—'}
                                 </td>
 
-                                <td className={ws.gpu ? CELL : CELL_MUTED}>{ws.gpu || '—'}</td>
-                                <td className={ws.ram ? CELL : CELL_MUTED}>{ws.ram || '—'}</td>
-                                <td className={ws.storage ? CELL : CELL_MUTED}>{ws.storage || '—'}</td>
+                                <td className={ws.gpu ? CELL : CELL_MUTED}>
+                                    <div className="max-w-[140px] line-clamp-2 text-xs leading-snug text-gray-700 dark:text-gray-300" title={ws.gpu || ''}>{ws.gpu || '—'}</div>
+                                </td>
+                                <td className={ws.ram ? CELL : CELL_MUTED}>
+                                    <div className="max-w-[140px] line-clamp-2 text-xs leading-snug text-gray-700 dark:text-gray-300" title={ws.ram || ''}>{ws.ram || '—'}</div>
+                                </td>
+                                <td className={ws.storage ? CELL : CELL_MUTED}>
+                                    <div className="max-w-[140px] line-clamp-2 text-xs leading-snug text-gray-700 dark:text-gray-300" title={ws.storage || ''}>{ws.storage || '—'}</div>
+                                </td>
+                                <td className={ws.psu ? CELL : CELL_MUTED}>
+                                    <div className="max-w-[140px] line-clamp-2 text-xs leading-snug text-gray-700 dark:text-gray-300" title={ws.psu || ''}>{ws.psu || '—'}</div>
+                                </td>
                                 <td className={(ws as any).monitor ? CELL : CELL_MUTED}>
-                                    {(ws as any).monitor || 'No Monitor'}
+                                    <div className="max-w-[140px] line-clamp-2 text-xs leading-snug text-gray-700 dark:text-gray-300" title={(ws as any).monitor || ''}>{(ws as any).monitor || 'No Monitor'}</div>
                                 </td>
 
                                 {/* Status */}
@@ -691,16 +741,16 @@ const ITTWorkstations = () => {
                         onClick={() => setViewMode('list')}
                         className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-[#1A1D21] text-blue-600 dark:text-blue-400 shadow-sm border border-gray-200 dark:border-white/5' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white border border-transparent'}`}
                     >
-                       <List size={16} /> List
+                        <List size={16} /> List
                     </button>
                     <button
                         onClick={() => setViewMode('floor')}
                         className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-all ${viewMode === 'floor' ? 'bg-white dark:bg-[#1A1D21] text-blue-600 dark:text-blue-400 shadow-sm border border-gray-200 dark:border-white/5' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white border border-transparent'}`}
                     >
-                       <Grid size={16} /> Floor Plan
+                        <Grid size={16} /> Floor Plan
                     </button>
                 </div>
-                
+
                 <div className="relative max-w-md w-full shrink">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     <input
@@ -718,75 +768,75 @@ const ITTWorkstations = () => {
 
             {viewMode === 'list' ? (
                 <>
-            {/* --- ADVANCED SPEC FILTERS --- */}
-            <div className="flex flex-wrap gap-3 bg-white/40 dark:bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm mb-6">
-                <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest mr-2">
-                    <Settings size={14} /> Filters:
-                </div>
+                    {/* --- ADVANCED SPEC FILTERS --- */}
+                    <div className="flex flex-wrap gap-3 bg-white/40 dark:bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm mb-6">
+                        <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest mr-2">
+                            <Settings size={14} /> Filters:
+                        </div>
 
-                {/* CPU Filter */}
-                <div className="flex-1 min-w-[140px]">
-                    <select
-                        value={specFilters.cpu}
-                        onChange={e => setSpecFilters({ ...specFilters, cpu: e.target.value })}
-                        className="select-glass"
-                    >
-                        <option value="">All CPUs</option>
-                        {uniqueSpecs.cpus.map(cpu => <option key={cpu} value={cpu}>{cpu}</option>)}
-                    </select>
-                </div>
+                        {/* CPU Filter */}
+                        <div className="flex-1 min-w-[140px]">
+                            <select
+                                value={specFilters.cpu}
+                                onChange={e => setSpecFilters({ ...specFilters, cpu: e.target.value })}
+                                className="select-glass"
+                            >
+                                <option value="">All CPUs</option>
+                                {uniqueSpecs.cpus.map(cpu => <option key={cpu} value={cpu}>{cpu}</option>)}
+                            </select>
+                        </div>
 
-                {/* RAM Filter */}
-                <div className="flex-1 min-w-[140px]">
-                    <select
-                        value={specFilters.ram}
-                        onChange={e => setSpecFilters({ ...specFilters, ram: e.target.value })}
-                        className="select-glass"
-                    >
-                        <option value="">All RAM</option>
-                        {uniqueSpecs.rams.map(ram => <option key={ram} value={ram}>{ram}</option>)}
-                    </select>
-                </div>
+                        {/* RAM Filter */}
+                        <div className="flex-1 min-w-[140px]">
+                            <select
+                                value={specFilters.ram}
+                                onChange={e => setSpecFilters({ ...specFilters, ram: e.target.value })}
+                                className="select-glass"
+                            >
+                                <option value="">All RAM</option>
+                                {uniqueSpecs.rams.map(ram => <option key={ram} value={ram}>{ram}</option>)}
+                            </select>
+                        </div>
 
-                {/* GPU Filter */}
-                <div className="flex-1 min-w-[140px]">
-                    <select
-                        value={specFilters.gpu}
-                        onChange={e => setSpecFilters({ ...specFilters, gpu: e.target.value })}
-                        className="select-glass"
-                    >
-                        <option value="">All GPUs</option>
-                        {uniqueSpecs.gpus.map(gpu => <option key={gpu} value={gpu}>{gpu}</option>)}
-                    </select>
-                </div>
+                        {/* GPU Filter */}
+                        <div className="flex-1 min-w-[140px]">
+                            <select
+                                value={specFilters.gpu}
+                                onChange={e => setSpecFilters({ ...specFilters, gpu: e.target.value })}
+                                className="select-glass"
+                            >
+                                <option value="">All GPUs</option>
+                                {uniqueSpecs.gpus.map(gpu => <option key={gpu} value={gpu}>{gpu}</option>)}
+                            </select>
+                        </div>
 
-                {/* Storage Filter */}
-                <div className="flex-1 min-w-[140px]">
-                    <select
-                        value={specFilters.storage}
-                        onChange={e => setSpecFilters({ ...specFilters, storage: e.target.value })}
-                        className="select-glass"
-                    >
-                        <option value="">All Storage</option>
-                        {uniqueSpecs.storages.map(st => <option key={st} value={st}>{st}</option>)}
-                    </select>
-                </div>
+                        {/* Storage Filter */}
+                        <div className="flex-1 min-w-[140px]">
+                            <select
+                                value={specFilters.storage}
+                                onChange={e => setSpecFilters({ ...specFilters, storage: e.target.value })}
+                                className="select-glass"
+                            >
+                                <option value="">All Storage</option>
+                                {uniqueSpecs.storages.map(st => <option key={st} value={st}>{st}</option>)}
+                            </select>
+                        </div>
 
-                {/* Reset Button */}
-                <button
-                    onClick={resetFilters}
-                    className="px-4 py-2 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all flex items-center gap-2 text-sm font-bold"
-                >
-                    <RefreshCw size={14} /> Reset
-                </button>
-            </div>
+                        {/* Reset Button */}
+                        <button
+                            onClick={resetFilters}
+                            className="px-4 py-2 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all flex items-center gap-2 text-sm font-bold"
+                        >
+                            <RefreshCw size={14} /> Reset
+                        </button>
+                    </div>
 
-            {renderWorkstationsTable}
+                    {renderWorkstationsTable}
                 </>
             ) : (
-                <WorkstationFloorPlan 
-                    workstations={workstations} 
-                    filteredWorkstations={filteredWorkstations} 
+                <WorkstationFloorPlan
+                    workstations={workstations}
+                    filteredWorkstations={filteredWorkstations}
                     onOpenDetail={openDetail}
                     unreadMap={unreadMap}
                 />
@@ -795,7 +845,7 @@ const ITTWorkstations = () => {
             {/* ── Form Modal ── */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/70 animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl w-full max-w-2xl overflow-visible border border-gray-200 dark:border-white/10">
+                    <div className="bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl w-full max-w-4xl overflow-visible border border-gray-200 dark:border-white/10">
                         <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center rounded-t-2xl overflow-hidden">
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white">{editingId ? 'Edit Workstation' : 'Add Workstation'}</h2>
                             <button onClick={closeModal} className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"><X size={20} /></button>
@@ -808,7 +858,6 @@ const ITTWorkstations = () => {
                                     { label: 'CPU', key: 'cpu', icon: <Cpu size={16} />, invType: 'CPU' },
                                     { label: 'RAM', key: 'ram', icon: <Database size={16} />, invType: 'RAM' },
                                     { label: 'GPU', key: 'gpu', icon: <View size={16} />, invType: 'GPU' },
-                                    { label: 'Storage', key: 'storage', icon: <HardDrive size={16} />, invType: 'STORAGE' },
                                     { label: 'PSU', key: 'psu', icon: <Zap size={16} />, invType: 'PSU' },
                                     { label: 'Monitor', key: 'monitor', icon: <MonitorIcon size={16} />, invType: 'MONITOR' },
                                 ].map(({ label, key, icon, required, invType }) => {
@@ -840,11 +889,9 @@ const ITTWorkstations = () => {
                                                             if (!e.target.value) return;
                                                             const item = availableStock.find(i => i.id === e.target.value);
                                                             if (item) {
-                                                                // Populate the text field with Name + Serial Number
                                                                 setFormData({ ...formData, [key]: `${item.itemName} (SN: ${item.serialNumber})` });
-                                                                // Track this ID to update it to "Deployed" on save
-                                                                setPartsToDeploy(prev => new Set(prev).add(item.id));
                                                             }
+                                                            e.target.value = ""; // Reset internal select value
                                                         }}
                                                     >
                                                         <option value="">Assign from local inventory...</option>
@@ -863,6 +910,92 @@ const ITTWorkstations = () => {
                                     )
                                 })}
 
+                                {/* Dynamic Storage Fields */}
+                                <div className="col-span-1 md:col-span-2 bg-gray-50/50 dark:bg-black/10 p-4 rounded-xl border border-gray-200/60 dark:border-white/5 space-y-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
+                                            <HardDrive size={16} className="text-gray-400" />
+                                            Storage Devices
+                                        </label>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setStorageItems([...storageItems, ''])}
+                                            className="text-xs font-bold text-blue-500 hover:text-blue-600 flex items-center gap-1 bg-blue-50/50 dark:bg-blue-500/10 px-2 py-1 rounded-md"
+                                        >
+                                            <Plus size={12} /> Add Drive
+                                        </button>
+                                    </div>
+
+                                    {storageItems.map((val, idx) => {
+                                        const selectedStorageSns = storageItems.map(v => v.match(/\(SN:\s*(.+?)\)/)?.[1]?.trim()).filter(Boolean);
+                                        const availableStock = stock.filter(s => s.type === 'STORAGE' && s.status === 'Active' && !selectedStorageSns.includes(s.serialNumber));
+                                        
+                                        return (
+                                            <div key={idx} className="flex flex-col gap-2 relative">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="relative flex-1">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-[10px]">
+                                                            {idx + 1}
+                                                        </span>
+                                                        <input
+                                                            type="text"
+                                                            value={val}
+                                                            onChange={(e) => {
+                                                                const newItems = [...storageItems];
+                                                                newItems[idx] = e.target.value;
+                                                                setStorageItems(newItems);
+                                                            }}
+                                                            placeholder="Enter storage details..."
+                                                            className="w-full bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg pl-8 pr-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white"
+                                                        />
+                                                    </div>
+                                                    {storageItems.length > 1 && (
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => {
+                                                                const newItems = storageItems.filter((_, i) => i !== idx);
+                                                                setStorageItems(newItems);
+                                                            }} 
+                                                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors shrink-0"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                {/* Stock Picker Dropdown */}
+                                                {availableStock.length > 0 && (
+                                                    <div className="relative ml-8">
+                                                        <Package className="absolute left-2.5 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none" size={12} />
+                                                        <select
+                                                            className="w-full bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-blue-700 dark:text-blue-400 text-[11px] rounded-md pl-7 pr-6 py-1.5 outline-none cursor-pointer appearance-none"
+                                                            onChange={(e) => {
+                                                                if (!e.target.value) return;
+                                                                const item = availableStock.find(i => i.id === e.target.value);
+                                                                if (item) {
+                                                                    const newItems = [...storageItems];
+                                                                    newItems[idx] = `${item.itemName} (SN: ${item.serialNumber})`;
+                                                                    setStorageItems(newItems);
+                                                                }
+                                                                e.target.value = ""; // Reset internal select value
+                                                            }}
+                                                        >
+                                                            <option value="">Assign from local inventory...</option>
+                                                            {availableStock.map(item => (
+                                                                <option key={item.id} value={item.id}>
+                                                                    {item.itemName} (SN: {item.serialNumber})
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                        <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none">
+                                                            <svg className="w-3 h-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
 
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
