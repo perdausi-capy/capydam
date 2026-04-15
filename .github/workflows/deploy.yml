@@ -16,43 +16,27 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            # 1. Stop on any error
             set -e
-
-            # 2. Navigate to project folder
             cd /var/www/capydam
 
-            # ✅ 3. FORCE RESET LOCAL STATE
-            # This discards the modified package-lock.json and any other local debris
             echo "🧹 Resetting local environment to match remote..."
             git fetch origin main
             git reset --hard origin/main
 
-            # 🚨 THE POSTGRES PERMISSION FIX 🚨
-            # Git reset forcefully alters the permissions of the tracked database folder.
-            # We must hand ownership back to Postgres (User 999) before Prisma runs.
-            echo "🔐 Securing database file permissions..."
-            chown -R 999:999 /var/www/capydam/database/data
-            chmod -R 700 /var/www/capydam/database/data
-
-            # ✅ 4. BACKEND: Strict Install & Migration
             echo "🛠️ Building Backend..."
             cd server
-            # 'npm ci' is safer than 'npm install' in production as it won't change the lockfile
             npm ci 
             npx prisma db push
             npx prisma generate
             npm run build
             cd ..
 
-            # ✅ 5. FRONTEND: Strict Install
             echo "🎨 Building Frontend..."
             cd client
             npm ci
             npm run build
             cd ..
 
-            # 6. Restart PM2 (Backend)
             echo "🔄 Restarting Server..."
             pm2 restart capydam-api || pm2 start server/dist/index.js --name capydam-api
             pm2 save
