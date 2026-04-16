@@ -519,13 +519,28 @@ export const updateAsset = async (req: Request, res: Response): Promise<void> =>
   try {
     const { id } = req.params;
     const { originalName, aiData } = req.body;
+    const userId = (req as any).user?.id; // ✅ Get the user making the edit
+
     const asset = await prisma.asset.update({
       where: { id },
       data: { originalName, aiData: typeof aiData === 'object' ? JSON.stringify(aiData) : aiData },
     });
+
+    // ✅ NEW: Log the Edit Action with the assetId so the frontend can track it
+    if (userId) {
+      await prisma.userLog.create({
+        data: {
+          userId: userId,
+          action: 'EDIT', // The frontend fuzzy matcher will catch this
+          details: `Updated asset details: ${originalName || asset.originalName}`,
+          assetId: asset.id 
+        }
+      });
+    }
+
     res.json(asset);
   } catch (error) {
-    console.error(error);
+    console.error("Asset Update Error:", error);
     res.status(500).json({ message: 'Error updating asset' });
   }
 };

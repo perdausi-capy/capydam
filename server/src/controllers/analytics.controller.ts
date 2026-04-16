@@ -123,6 +123,40 @@ export const getSystemAnalytics = async (req: Request, res: Response) => {
       lastActive: u.userLogs[0]?.createdAt ? u.userLogs[0].createdAt.toISOString() : null
     }));
 
+    // 8. PLATFORM VELOCITY (Real Data for the last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0); 
+
+    const velocityLogs = await prisma.userLog.findMany({
+      where: {
+        createdAt: { gte: sevenDaysAgo },
+        action: { in: ['UPLOAD', 'DOWNLOAD'] }
+      },
+      select: { action: true, createdAt: true }
+    });
+
+    // Create a blank map for the last 7 days so the chart always looks full
+    const velocityMap = new Map();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' }); // e.g., "Mon", "Tue"
+      velocityMap.set(dayName, { name: dayName, uploads: 0, downloads: 0 });
+    }
+
+    // Populate the map with real counts
+    velocityLogs.forEach(log => {
+      const dayName = new Date(log.createdAt).toLocaleDateString('en-US', { weekday: 'short' });
+      if (velocityMap.has(dayName)) {
+         const entry = velocityMap.get(dayName);
+         if (log.action === 'UPLOAD') entry.uploads += 1;
+         if (log.action === 'DOWNLOAD') entry.downloads += 1;
+      }
+    });
+
+    const velocityChart = Array.from(velocityMap.values());
+
     // Package exact match for the Frontend Interface
     res.json({
       storage: { totalBytes, totalAssets },
@@ -132,7 +166,8 @@ export const getSystemAnalytics = async (req: Request, res: Response) => {
       recentUserLogs,
       topUploaders,
       recentActivity: formattedRecentActivity, 
-      allUsers: allUsersList                   
+      allUsers: allUsersList,
+      velocityChart // <--- ✅ ADD THIS TO THE RESPONSE
     });
 
   } catch (error) {

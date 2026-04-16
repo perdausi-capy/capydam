@@ -72,6 +72,15 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '1d' });
 
+    // ✅ NEW: Write the LOGIN action to the Master Audit Trail
+    await prisma.userLog.create({
+      data: {
+        userId: user.id,
+        action: 'LOGIN',
+        details: 'User authenticated via Email/Password'
+      }
+    });
+
     // ✅ FIXED RESPONSE: Now includes 'avatar'
     res.json({
       message: 'Login successful',
@@ -120,23 +129,37 @@ export const rejectUser = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-// ✅ SSO Callback Handler (Updated for Prod)
-export const googleCallback = (req: Request, res: Response) => {
-  const user = req.user as any;
+// ✅ SSO Callback Handler (Converted to Async to handle DB logging)
+export const googleCallback = async (req: Request, res: Response) => {
+  try {
+    const user = req.user as any;
 
-  if (!user) {
-    // Redirect to the Dynamic Client URL
-    return res.redirect(`${CLIENT_URL}/login?error=Unauthorized`);
+    if (!user) {
+      // Redirect to the Dynamic Client URL
+      return res.redirect(`${CLIENT_URL}/login?error=Unauthorized`);
+    }
+
+    // ✅ NEW: Write the LOGIN action to the Master Audit Trail for SSO users
+    await prisma.userLog.create({
+      data: {
+        userId: user.id,
+        action: 'LOGIN',
+        details: 'User authenticated via Google SSO'
+      }
+    });
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // ✅ Redirect to Dynamic Client URL
+    res.redirect(`${CLIENT_URL}/login?token=${token}`);
+  } catch (error) {
+    console.error("SSO Login Error:", error);
+    res.redirect(`${CLIENT_URL}/login?error=ServerError`);
   }
-
-  const token = jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
-    JWT_SECRET,
-    { expiresIn: '7d' }
-  );
-
-  // ✅ Redirect to Dynamic Client URL
-  res.redirect(`${CLIENT_URL}/login?token=${token}`);
 };
 
 export const getMe = async (req: Request, res: Response) => {
