@@ -279,7 +279,7 @@ export const createReport = async (req: Request, res: Response) => {
     // Send Notification to ClickUp Chat View
     try {
       const formattedDate = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date());
-      const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+      const clientUrl = process.env.CLIENT_URL || 'https://dam.capy-dev.com';
       
       const clickupMessage = `Updated the Daily Log Report and the Maintenance Ledger with today’s entries. All recent service activities and operational notes are now current as of ${formattedDate}
 Link to CapyDam ITT Daily Reports: ${clientUrl}/apps/itt`;
@@ -288,7 +288,7 @@ Link to CapyDam ITT Daily Reports: ${clientUrl}/apps/itt`;
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'pk_107576099_TRPM5U4JR0NMH2CYAVQT9Z3V9RT5F836'
+          'Authorization': process.env.CLICKUP_API_KEY as string
         },
         body: JSON.stringify({
           comment_text: clickupMessage,

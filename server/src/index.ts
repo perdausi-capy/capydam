@@ -6,6 +6,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 
 dotenv.config();
+dotenv.config({ path: '.env.clickup' });
 
 // Import Routes
 import authRoutes from './routes/auth.routes';
