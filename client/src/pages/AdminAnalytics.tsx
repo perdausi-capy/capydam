@@ -364,9 +364,8 @@ const AdminAnalytics = () => {
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <h2 className="text-2xl font-bold tracking-[0.2em] uppercase text-[#4f88ff] drop-shadow-[0_0_15px_rgba(79,136,255,0.6)]">
-                     Active Personnel
+                     Active Capybara
                   </h2>
-                  <p className="font-mono text-sm text-[#4f88ff]/60 mt-1 tracking-widest uppercase">Global Telemetry Band</p>
                 </div>
                 <div className="flex items-center gap-3 bg-[#4f88ff]/10 px-5 py-2.5 rounded-full border border-[#4f88ff]/20 shadow-[0_0_20px_rgba(79,136,255,0.15)]">
                   <span className="relative flex h-3 w-3">
@@ -408,7 +407,7 @@ const AdminAnalytics = () => {
               {/* View Active Roster Button */}
               <div className="mt-auto relative z-30 pb-4 flex justify-center">
                 <button onClick={openActiveRoster} className="px-8 py-3 bg-[#4f88ff]/10 text-[#4f88ff] border border-[#4f88ff]/40 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-[#4f88ff]/20 hover:scale-105 transition-all shadow-[0_0_20px_rgba(79,136,255,0.2)] pointer-events-auto">
-                  View Active Roster
+                  View All
                 </button>
               </div>
 
@@ -416,8 +415,6 @@ const AdminAnalytics = () => {
 
             {/* --- DIVIDER LINE --- */}
             <div className="relative w-full h-[1px] shrink-0 bg-[#4f88ff]/20 border-b border-dashed border-[#4f88ff]/30 z-20">
-               <div className="absolute -top-3 left-8 font-mono text-[10px] text-[#4f88ff]/80 tracking-widest bg-[#07090e] px-2">0.000 Hz</div>
-               <div className="absolute -top-3 right-8 font-mono text-[10px] text-[#4f88ff]/80 tracking-widest bg-[#07090e] px-2">100.000 Hz</div>
             </div>
 
             {/* --- BOTTOM ZONE: LIVE COMMAND LINE TERMINAL --- */}
@@ -425,7 +422,7 @@ const AdminAnalytics = () => {
                <div className="shrink-0 flex items-center justify-between mb-4">
                  <h3 className="font-mono text-xs uppercase tracking-widest text-[#4f88ff] flex items-center gap-2">
                    <span className="w-2 h-2 bg-[#4f88ff] rounded-sm animate-pulse shadow-[0_0_8px_#4f88ff]"></span>
-                   sys.audit.live_feed
+                   Live Actions
                  </h3>
                </div>
                
@@ -456,7 +453,7 @@ const AdminAnalytics = () => {
         <motion.section variants={itemVariants}>
           <div className="flex items-center gap-4 mb-5">
               <div className="w-8 h-8 rounded-lg bg-[#ef5656]/10 text-[#ef5656] flex items-center justify-center text-lg">🚨</div>
-              <div><h2 className="text-lg font-semibold">Smart needs attention engine</h2><p className="text-sm text-[#8590a8]">Composite health score — real risks only</p></div>
+              <div><h2 className="text-lg font-semibold">Needs Attention</h2><p className="text-sm text-[#8590a8]">Users who rarely use DAM</p></div>
           </div>
           <div className="bg-[#0d1018] border border-white/5 rounded-2xl p-7">
             <div className="flex gap-3 mb-8 flex-wrap">
@@ -467,7 +464,7 @@ const AdminAnalytics = () => {
                  <span className="font-mono text-2xl font-semibold text-[#f5a623]">{flaggedUsers.filter(f => f.risk?.tier === 'WARNING').length}</span><span className="text-sm text-[#8590a8]">Warning</span>
                </div>
                <div className="ml-auto px-4 py-2 bg-[#2ecfa3]/10 border border-[#2ecfa3]/20 rounded-xl flex items-center text-sm text-[#2ecfa3]">
-                 ✓ {data.allUsers.length - flaggedUsers.length} users are perfectly healthy
+                 ✓ {data.allUsers.length - flaggedUsers.length} active users
                </div>
             </div>
             <div className="space-y-3">
