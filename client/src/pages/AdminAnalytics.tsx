@@ -143,10 +143,10 @@ const AdminAnalytics = () => {
   
   const activeUsers = data.allUsers.filter(u => u.lastActive && differenceInDays(new Date(), new Date(u.lastActive)) <= 1).slice(0, 10);
   
+  // ✅ UNCAPPED TERMINAL: Show ALL recent actions, even if the user isn't drawn on the map
   const liveAuditLogs = data.recentUserLogs.filter(log => {
-     const isFromActiveUser = activeUsers.some(au => au.email === log.user.email);
-     const isRecent = (new Date().getTime() - new Date(log.createdAt).getTime()) < (1000 * 60 * 60 * 8);
-     return isFromActiveUser && isRecent;
+    const isRecent = (new Date().getTime() - new Date(log.createdAt).getTime()) < (1000 * 60 * 60 * 8);
+    return isRecent;
   });
 
   const storagePct = data.storage.totalBytes > 0 ? Math.min(100, (data.storage.totalBytes / (500 * 1024 * 1024 * 1024)) * 100).toFixed(0) : 0; 
