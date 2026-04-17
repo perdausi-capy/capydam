@@ -229,25 +229,34 @@ export const getUserById = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// 8. Delete User (Transaction Safe - Nukes Everything)
+// 8. Delete User (Transaction Safe - Reassigns Assets & Logs Action)
 export const deleteUser = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
-    const currentUserId = (req as any).user?.id;
+    const { id } = req.params; // ID of the user being deleted
+    const currentUserId = (req as any).user?.id; // ID of the Admin doing the deleting
 
     if (id === currentUserId) {
       res.status(400).json({ message: 'You cannot delete your own admin account.' });
       return;
     }
 
-    // 1. Find assets owned by the user (to clean up their links)
-    const userAssets = await prisma.asset.findMany({
-      where: { userId: id },
-      select: { id: true }
-    });
-    const assetIds = userAssets.map(a => a.id);
+    if (!currentUserId) {
+      res.status(401).json({ message: 'Admin ID required for asset reassignment.' });
+      return;
+    }
 
-    // 2. GIANT TRANSACTION: Clean up EVERY table linked to User
+    // 1. Fetch the user's details BEFORE deleting them so we can log exactly who was removed
+    const targetUser = await prisma.user.findUnique({
+      where: { id },
+      select: { name: true, email: true }
+    });
+
+    if (!targetUser) {
+      res.status(404).json({ message: 'User not found.' });
+      return;
+    }
+
+    // 2. GIANT TRANSACTION: Clean up tables, REASSIGN assets, AND LOG the action
     await prisma.$transaction([
       // A. Quest & Gamification
       prisma.dailyResponse.deleteMany({ where: { userId: id } }),
@@ -261,32 +270,37 @@ export const deleteUser = async (req: Request, res: Response): Promise<void> => 
       // C. Support
       prisma.feedback.deleteMany({ where: { userId: id } }),
 
-      // D. Asset Management (Complex)
-      // Remove asset links in collections
-      prisma.assetOnCollection.deleteMany({
-        where: { assetId: { in: assetIds } }
-      }),
-      // Remove collections owned by user
+      // D. Asset & Collection Management (Reassign)
       prisma.assetOnCollection.deleteMany({
         where: { collection: { userId: id } }
       }),
       prisma.collection.deleteMany({
         where: { userId: id }
       }),
-      // Remove click tracking
       prisma.assetClick.deleteMany({ where: { userId: id } }),
-      // Remove assets owned by user
-      prisma.asset.deleteMany({
-        where: { userId: id }
+      
+      // Transfer assets to the Admin
+      prisma.asset.updateMany({
+        where: { userId: id },
+        data: { userId: currentUserId }
       }),
 
-      // E. Finally, delete the user
+      // ✅ E. THE AUDIT LOG: Record exactly what the Admin did
+      prisma.userLog.create({
+        data: {
+          userId: currentUserId, // Logged under the ADMIN's profile
+          action: 'DELETE_USER',
+          details: `Deleted user account: ${targetUser.name || 'Unknown'} (${targetUser.email}). All owned assets were reassigned to Admin.`
+        }
+      }),
+
+      // F. Finally, safely delete the user
       prisma.user.delete({
         where: { id }
       })
     ]);
 
-    res.json({ message: 'User and all associated data deleted successfully' });
+    res.json({ message: 'User deleted, assets reassigned, and action logged successfully.' });
   } catch (error) {
     console.error("Delete User Error:", error);
     res.status(500).json({ message: 'Error deleting user. Ensure all dependencies are cleared.', error });
