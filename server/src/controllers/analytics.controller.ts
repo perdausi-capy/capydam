@@ -68,9 +68,11 @@ export const getSystemAnalytics = async (req: Request, res: Response) => {
     };
 
     // 3. Platform Velocity & Traffic
-    const totalVisits = await prisma.siteVisit.count();
+    const totalVisits = await prisma.userLog.count({
+        where: { action: { in: ['LOGIN', 'SITE_VISIT'] } }
+    });
 
-    // 4. Live Audit Trail (Latest 50 actions)
+    // 4. Live Audit Trail
     const recentUserLogs = await prisma.userLog.findMany({
       take: 50,
       orderBy: { createdAt: 'desc' },
@@ -80,7 +82,7 @@ export const getSystemAnalytics = async (req: Request, res: Response) => {
       }
     });
 
-    // 5. Leaderboard: Top Uploaders
+    // 5. Leaderboard
     const topUploaders = await prisma.user.findMany({
       take: 5,
       orderBy: { assets: { _count: 'desc' } },
@@ -102,7 +104,7 @@ export const getSystemAnalytics = async (req: Request, res: Response) => {
         uploadedBy: { name: a.uploadedBy?.name || 'Unknown' } 
     }));
 
-    // 7. SMART ENGINE: All Users with Exact Last Active Date & Activity Count
+    // 7. SMART ENGINE
     const rawUsers = await prisma.user.findMany({
       select: {
           id: true, name: true, email: true, avatar: true, role: true, createdAt: true,
@@ -123,41 +125,59 @@ export const getSystemAnalytics = async (req: Request, res: Response) => {
       lastActive: u.userLogs[0]?.createdAt ? u.userLogs[0].createdAt.toISOString() : null
     }));
 
-    // 8. PLATFORM VELOCITY (Real Data for the last 7 days)
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-    sevenDaysAgo.setHours(0, 0, 0, 0); 
+    // 8. 🚀 UPGRADED PLATFORM VELOCITY (Weekly, Monthly, Yearly)
+    const now = new Date();
+    
+    const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(now.getDate() - 6); sevenDaysAgo.setHours(0,0,0,0);
+    const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(now.getDate() - 29); thirtyDaysAgo.setHours(0,0,0,0);
+    const oneYearAgo = new Date(); oneYearAgo.setMonth(now.getMonth() - 11); oneYearAgo.setDate(1); oneYearAgo.setHours(0,0,0,0);
 
+    // Fetch a single bulk log for the last year to save database load
     const velocityLogs = await prisma.userLog.findMany({
       where: {
-        createdAt: { gte: sevenDaysAgo },
+        createdAt: { gte: oneYearAgo },
         action: { in: ['UPLOAD', 'DOWNLOAD'] }
       },
       select: { action: true, createdAt: true }
     });
 
-    // Create a blank map for the last 7 days so the chart always looks full
-    const velocityMap = new Map();
+    // Generate Blank Maps for perfectly scaled charts
+    const weeklyMap = new Map();
     for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' }); // e.g., "Mon", "Tue"
-      velocityMap.set(dayName, { name: dayName, uploads: 0, downloads: 0 });
+      const d = new Date(); d.setDate(d.getDate() - i);
+      weeklyMap.set(d.toLocaleDateString('en-US', { weekday: 'short' }), { name: d.toLocaleDateString('en-US', { weekday: 'short' }), uploads: 0, downloads: 0 });
     }
 
-    // Populate the map with real counts
+    const monthlyMap = new Map();
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      monthlyMap.set(label, { name: label, uploads: 0, downloads: 0 });
+    }
+
+    const yearlyMap = new Map();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(); d.setMonth(d.getMonth() - i);
+      const label = d.toLocaleDateString('en-US', { month: 'short' });
+      yearlyMap.set(label, { name: label, uploads: 0, downloads: 0 });
+    }
+
+    // Populate the maps in a single fast loop
     velocityLogs.forEach(log => {
-      const dayName = new Date(log.createdAt).toLocaleDateString('en-US', { weekday: 'short' });
-      if (velocityMap.has(dayName)) {
-         const entry = velocityMap.get(dayName);
-         if (log.action === 'UPLOAD') entry.uploads += 1;
-         if (log.action === 'DOWNLOAD') entry.downloads += 1;
+      const d = new Date(log.createdAt);
+      
+      if (d >= sevenDaysAgo) {
+        const wLabel = d.toLocaleDateString('en-US', { weekday: 'short' });
+        if (weeklyMap.has(wLabel)) { log.action === 'UPLOAD' ? weeklyMap.get(wLabel).uploads++ : weeklyMap.get(wLabel).downloads++; }
       }
+      if (d >= thirtyDaysAgo) {
+        const mLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        if (monthlyMap.has(mLabel)) { log.action === 'UPLOAD' ? monthlyMap.get(mLabel).uploads++ : monthlyMap.get(mLabel).downloads++; }
+      }
+      const yLabel = d.toLocaleDateString('en-US', { month: 'short' });
+      if (yearlyMap.has(yLabel)) { log.action === 'UPLOAD' ? yearlyMap.get(yLabel).uploads++ : yearlyMap.get(yLabel).downloads++; }
     });
 
-    const velocityChart = Array.from(velocityMap.values());
-
-    // Package exact match for the Frontend Interface
     res.json({
       storage: { totalBytes, totalAssets },
       breakdown,
@@ -167,7 +187,11 @@ export const getSystemAnalytics = async (req: Request, res: Response) => {
       topUploaders,
       recentActivity: formattedRecentActivity, 
       allUsers: allUsersList,
-      velocityChart // <--- ✅ ADD THIS TO THE RESPONSE
+      velocityChart: {
+        weekly: Array.from(weeklyMap.values()),
+        monthly: Array.from(monthlyMap.values()),
+        yearly: Array.from(yearlyMap.values())
+      }
     });
 
   } catch (error) {
