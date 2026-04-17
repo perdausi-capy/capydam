@@ -141,12 +141,21 @@ const AdminAnalytics = () => {
 
   const flaggedUsers = data.allUsers.map(u => ({ u, risk: computeRisk(u) })).filter(x => x.risk !== null).sort((a, b) => b.risk!.score - a.risk!.score);
   
-  const activeUsers = data.allUsers.filter(u => u.lastActive && differenceInDays(new Date(), new Date(u.lastActive)) <= 1).slice(0, 10);
-  
-  // ✅ UNCAPPED TERMINAL: Show ALL recent actions, even if the user isn't drawn on the map
+  // ✅ SMART ACTIVE RADAR: Only shows users who are genuinely active right now (Ignores Baseline)
+  const activeUsers = data.allUsers.filter(u => {
+    // Find if this user has any REAL organic logs in the recent activity feed
+    const hasRealActivity = data.recentUserLogs.some(log => 
+      log.user.email === u.email && 
+      log.details !== 'System Analytics Initialization (Baseline)'
+    );
+    return hasRealActivity;
+  }).slice(0, 10);
+
+  // ✅ UNCAPPED TERMINAL: Show ALL recent actions, but HIDE the fake baseline script logs
   const liveAuditLogs = data.recentUserLogs.filter(log => {
     const isRecent = (new Date().getTime() - new Date(log.createdAt).getTime()) < (1000 * 60 * 60 * 8);
-    return isRecent;
+    const isNotBaseline = log.details !== 'System Analytics Initialization (Baseline)';
+    return isRecent && isNotBaseline;
   });
 
   const storagePct = data.storage.totalBytes > 0 ? Math.min(100, (data.storage.totalBytes / (500 * 1024 * 1024 * 1024)) * 100).toFixed(0) : 0; 
