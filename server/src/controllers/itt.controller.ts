@@ -75,12 +75,20 @@ export const updateWorkstation = async (req: Request, res: Response) => {
     const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, monitors, status, assignedToId, notes, deployedItemIds, releasedItemIds } = req.body;
 
     const workstation = await prisma.$transaction(async (tx) => {
-      // 1. Release any items being swapped out (set back to Active, unlink)
+      // 1. Release any items being swapped out (unlink from workstation, restore status)
       if (releasedItemIds?.length) {
-        await tx.ittInventory.updateMany({
+        // Fetch their current status first so we don't overwrite 'Defective' parts
+        const itemsToRelease = await tx.ittInventory.findMany({
           where: { id: { in: releasedItemIds } },
-          data: { status: 'Active', workstationId: null },
+          select: { id: true, status: true },
         });
+        for (const item of itemsToRelease) {
+          await tx.ittInventory.update({
+            where: { id: item.id },
+            // If the part was Defective, keep it Defective. Otherwise return to Active.
+            data: { workstationId: null, status: item.status === 'Defective' ? 'Defective' : 'Active' },
+          });
+        }
       }
 
       // 2. Deploy and link newly selected items

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Monitor, User, Grid, CheckCircle, Wrench, XCircle, ZoomIn, ZoomOut, Maximize, Minimize } from 'lucide-react';
+import { Monitor, Grid, ZoomIn, ZoomOut, Maximize, Minimize } from 'lucide-react';
 import client from '../api/client';
 
 export interface UserInfo {
@@ -25,13 +25,7 @@ interface WorkstationFloorPlanProps {
     unreadMap: Record<string, number>;
 }
 
-const statusColors: Record<string, string> = {
-    active: 'bg-green-500 text-white',
-    maintenance: 'bg-amber-500 text-white',
-    retired: 'bg-red-500 text-white',
-    animation_ready: 'bg-purple-500 text-white',
-    dev_ready: 'bg-cyan-500 text-white',
-};
+
 
 const statusBorderColors: Record<string, string> = {
     active: 'border-green-500/50',
@@ -95,7 +89,7 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
     }, []);
 
     // Autosave positions to server securely and debounced
-    const saveTimer = useRef<NodeJS.Timeout>();
+    const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     useEffect(() => {
         if (isLoadingLayout) return;
 
@@ -175,7 +169,7 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
         document.addEventListener('pointerup', handlePointerUp);
     };
 
-    const handlePanEnd = (e: any, info: any) => {
+    const handlePanEnd = (_e: any, info: any) => {
         const dx = info.offset.x / zoom;
         const dy = info.offset.y / zoom;
 
@@ -296,7 +290,7 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                             dragMomentum={false}
                             initial={false}
                             animate={{ x: pos.x, y: pos.y, width: boxW, height: boxH }}
-                            onDragEnd={(e, info) => handleDragEnd(ws.id, info, pos)}
+                            onDragEnd={(_e, info) => handleDragEnd(ws.id, info, pos)}
                             whileDrag={{ scale: 1.05, zIndex: 100, cursor: 'grabbing', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)' }}
                             className={`absolute select-none cursor-grab rounded-xl border backdrop-blur-md shadow-lg p-2.5 flex flex-col overflow-hidden
                                 ${isFiltered ? 'opacity-100 z-10' : 'opacity-30 z-0 grayscale'}

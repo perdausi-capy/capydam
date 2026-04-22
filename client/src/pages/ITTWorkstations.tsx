@@ -258,7 +258,7 @@ const ITTWorkstations = () => {
     const [users, setUsers] = useState<UserInfo[]>([]);
     const [loading, setLoading] = useState(true);
     const [stock, setStock] = useState<InventoryItem[]>([]);
-    const [partsToDeploy, setPartsToDeploy] = useState<Set<string>>(new Set());
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isStatusOpen, setIsStatusOpen] = useState(false);
     const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
@@ -455,8 +455,8 @@ const ITTWorkstations = () => {
                     const snMatches = Array.from(str.matchAll(/\(SN:\s*(.+?)\)/g));
                     snMatches.forEach(m => {
                         const sn = m[1].trim();
-                        // Only "Active" items need to be deployed (transitioned from Active -> Deployed)
-                        const invItem = stock.find(i => i.serialNumber === sn && i.status === 'Active');
+                        // "Active" or "Available" items need to be deployed
+                        const invItem = stock.find(i => i.serialNumber === sn && (i.status === 'Active' || i.status === 'Available'));
                         if (invItem) deployedItemIdsSet.add(invItem.id);
                     });
                 }
@@ -509,8 +509,8 @@ const ITTWorkstations = () => {
                 toast.success('Workstation created');
             }
 
-            if (partsToDeploy.size > 0) {
-                toast.info(`${partsToDeploy.size} inventory item(s) deployed`);
+            if (deployedItemIdsSet.size > 0) {
+                toast.info(`${deployedItemIdsSet.size} inventory item(s) deployed`);
             }
             if (releasedItemIds.length > 0) {
                 toast.info(`${releasedItemIds.length} old part(s) returned to stock`);
@@ -924,7 +924,7 @@ const ITTWorkstations = () => {
                                         formData.lanCable, formData.cableAdaptor, formData.wifiAdaptor,
                                         ...storageItems
                                     ]
-                                        .filter((v, _, arr) => {
+                                        .filter((v, _idx, _arr) => {
                                             // Exclude the current field's own value so it can re-select itself when editing
                                             const currentVal = (formData as any)[key];
                                             return v !== currentVal;
