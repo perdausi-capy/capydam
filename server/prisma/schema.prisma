@@ -317,6 +317,12 @@ model Workstation {
   psu          String?
   storage      String?
   monitor      String?
+  webcam       String?
+  headset      String?
+  keyboard     String?
+  lanCable     String?
+  cableAdaptor String?
+  wifiAdaptor  String?
 
   // Refactored: One-to-Many Relation
   monitors     Monitor[] 

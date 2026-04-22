@@ -16,7 +16,7 @@ export const getWorkstations = async (req: Request, res: Response) => {
         monitors: true,
         parts: { select: { id: true, itemName: true, serialNumber: true, type: true, status: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { unitId: 'asc' },
     });
     res.json(workstations);
   } catch (error) {
@@ -27,7 +27,7 @@ export const getWorkstations = async (req: Request, res: Response) => {
 
 export const createWorkstation = async (req: Request, res: Response) => {
   try {
-    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, monitors, status, assignedToId, notes, deployedItemIds } = req.body;
+    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, monitors, status, assignedToId, notes, deployedItemIds } = req.body;
 
     // Check if unitId already exists
     const existing = await prisma.workstation.findUnique({ where: { unitId } });
@@ -38,7 +38,7 @@ export const createWorkstation = async (req: Request, res: Response) => {
     const workstation = await prisma.$transaction(async (tx) => {
       const ws = await tx.workstation.create({
         data: {
-          unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, notes,
+          unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, status, notes,
           assignedToId: assignedToId || null,
           monitors: {
             create: (monitors || []).map((m: any) => ({ model: m.model, specs: m.specs }))
@@ -72,7 +72,7 @@ export const createWorkstation = async (req: Request, res: Response) => {
 export const updateWorkstation = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, monitors, status, assignedToId, notes, deployedItemIds, releasedItemIds } = req.body;
+    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, monitors, status, assignedToId, notes, deployedItemIds, releasedItemIds } = req.body;
 
     const workstation = await prisma.$transaction(async (tx) => {
       // 1. Release any items being swapped out (set back to Active, unlink)
@@ -95,7 +95,7 @@ export const updateWorkstation = async (req: Request, res: Response) => {
       return tx.workstation.update({
         where: { id },
         data: {
-          unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, notes,
+          unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, status, notes,
           assignedToId: assignedToId || null,
           monitors: {
             deleteMany: {},

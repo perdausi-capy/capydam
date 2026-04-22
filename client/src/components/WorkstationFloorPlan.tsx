@@ -21,7 +21,7 @@ export interface Workstation {
 interface WorkstationFloorPlanProps {
     workstations: Workstation[];
     filteredWorkstations: Workstation[];
-    onOpenDetail: (ws: Workstation) => void;
+    onOpenDetail: (ws: any) => void;
     unreadMap: Record<string, number>;
 }
 
@@ -29,12 +29,40 @@ const statusColors: Record<string, string> = {
     active: 'bg-green-500 text-white',
     maintenance: 'bg-amber-500 text-white',
     retired: 'bg-red-500 text-white',
+    animation_ready: 'bg-purple-500 text-white',
+    dev_ready: 'bg-cyan-500 text-white',
 };
 
 const statusBorderColors: Record<string, string> = {
     active: 'border-green-500/50',
     maintenance: 'border-amber-500/50',
     retired: 'border-red-500/50',
+    animation_ready: 'border-purple-500/50',
+    dev_ready: 'border-cyan-500/50',
+};
+
+const statusBgColors: Record<string, string> = {
+    active: 'bg-green-500/10',
+    maintenance: 'bg-amber-500/10',
+    retired: 'bg-red-500/10',
+    animation_ready: 'bg-purple-500/10',
+    dev_ready: 'bg-cyan-500/10',
+};
+
+const statusDotColors: Record<string, string> = {
+    active: 'bg-green-500',
+    maintenance: 'bg-amber-500',
+    retired: 'bg-red-500',
+    animation_ready: 'bg-purple-500',
+    dev_ready: 'bg-cyan-500',
+};
+
+const statusLabels: Record<string, string> = {
+    active: 'Active',
+    maintenance: 'Maintenance',
+    retired: 'Retired',
+    animation_ready: 'Animation Ready',
+    dev_ready: 'Dev Ready',
 };
 
 export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({ 
@@ -189,6 +217,16 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                         {workstations.length} Units
                     </span>
                 </div>
+
+                {/* Legend */}
+                <div className="hidden sm:flex items-center gap-3 flex-wrap">
+                    {Object.entries(statusLabels).map(([key, label]) => (
+                        <div key={key} className="flex items-center gap-1.5">
+                            <div className={`w-2.5 h-2.5 rounded-full ${statusDotColors[key]}`} />
+                            <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{label}</span>
+                        </div>
+                    ))}
+                </div>
                 
                 <div className="flex items-center gap-4">
                     {/* Zoom Bar */}
@@ -260,9 +298,10 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                             animate={{ x: pos.x, y: pos.y, width: boxW, height: boxH }}
                             onDragEnd={(e, info) => handleDragEnd(ws.id, info, pos)}
                             whileDrag={{ scale: 1.05, zIndex: 100, cursor: 'grabbing', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)' }}
-                            className={`absolute select-none cursor-grab rounded-xl border border-white/10 backdrop-blur-md shadow-lg p-2.5 flex flex-col overflow-hidden
+                            className={`absolute select-none cursor-grab rounded-xl border backdrop-blur-md shadow-lg p-2.5 flex flex-col overflow-hidden
                                 ${isFiltered ? 'opacity-100 z-10' : 'opacity-30 z-0 grayscale'}
-                                ${ws.status === 'active' ? 'bg-blue-500/10' : ws.status === 'maintenance' ? 'bg-amber-500/10' : 'bg-red-500/10'}
+                                ${statusBorderColors[ws.status] || 'border-white/10'}
+                                ${statusBgColors[ws.status] || 'bg-white/5'}
                             `}
                         >
                             <div className="absolute -top-1 -right-1 flex gap-1 z-10">
@@ -271,7 +310,7 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                                         {unreadCount}
                                     </span>
                                 )}
-                                <div className={`w-2 h-2 rounded-full ring-2 ring-[#121418] mt-1 mr-1 ${ws.status === 'active' ? 'bg-green-500' : ws.status === 'maintenance' ? 'bg-amber-500' : 'bg-red-500'}`} />
+                                <div className={`w-2 h-2 rounded-full ring-2 ring-[#121418] mt-1 mr-1 ${statusDotColors[ws.status] || 'bg-gray-500'}`} />
                             </div>
 
                             <div 
