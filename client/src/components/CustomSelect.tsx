@@ -37,11 +37,11 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options, p
 
     return (
         <div className={`relative ${className}`} ref={containerRef}>
-            {/* Hidden native input for HTML5 form validation */}
-            {required && (
+            {/* Hidden native input for HTML5 form validation — skipped when disabled (matches native HTML behaviour) */}
+            {required && !disabled && (
                 <input
                     type="text"
-                    required={required}
+                    required
                     value={value}
                     onChange={() => {}}
                     className="absolute opacity-0 pointer-events-none w-0 h-0 bottom-0 left-1/2"
