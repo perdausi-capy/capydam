@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import CustomSelect from '../components/CustomSelect';
 import client from '../api/client';
 import { toast } from 'react-toastify';
 import { 
     Layers, Cpu, Database, View, HardDrive, 
     Monitor as MonitorIcon, Zap, Plus, Search, Package,
-    Edit2, Trash2, Calendar, FileText, Hash, X, Tag, AlertCircle
+    Edit2, Trash2, Calendar, FileText, Hash, X, Tag, AlertCircle,
+    Camera, Headphones, Keyboard, Cable, Plug, Wifi
 } from 'lucide-react';
 
 // --- TYPES ---
@@ -31,6 +33,12 @@ const inventoryCategories = [
     { id: 'STORAGE', label: 'Storage Drives', icon: HardDrive },
     { id: 'MONITOR', label: 'Monitors', icon: MonitorIcon },
     { id: 'PSU', label: 'Power Supplies', icon: Zap },
+    { id: 'WEBCAM', label: 'Webcams', icon: Camera },
+    { id: 'HEADSET', label: 'Headsets', icon: Headphones },
+    { id: 'KEYBOARD', label: 'Keyboards', icon: Keyboard },
+    { id: 'LAN_CABLE', label: 'LAN Cables', icon: Cable },
+    { id: 'CABLE_ADAPTOR', label: 'Cable Adaptors', icon: Plug },
+    { id: 'WIFI_ADAPTOR', label: 'Wifi Adaptors', icon: Wifi },
 ];
 
 const ITTInventory = () => {
@@ -186,7 +194,7 @@ const ITTInventory = () => {
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: 10 }}
-                                className="absolute top-full left-0 w-full mt-2 py-1.5 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50"
+                                className="absolute top-full left-0 w-full mt-2 py-1.5 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl z-50 max-h-72 overflow-y-auto custom-scrollbar"
                             >
                                 {inventoryCategories.map((cat) => (
                                     <button
@@ -367,14 +375,15 @@ const ITTInventory = () => {
 
                                     <div className="col-span-2 sm:col-span-1">
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Component Type <span className="text-red-500">*</span></label>
-                                        <select 
+                                        <CustomSelect 
                                             required
                                             value={formData.type} 
-                                            onChange={e => setFormData({ ...formData, type: e.target.value })} 
-                                            className="select-glass text-sm"
-                                        >
-                                            {inventoryCategories.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                                        </select>
+                                            onChange={val => setFormData({ ...formData, type: val })} 
+                                            options={inventoryCategories.map(c => {
+                                                const Icon = c.icon;
+                                                return { value: c.id, label: c.label, icon: <Icon size={14} className="text-blue-500" /> };
+                                            })}
+                                        />
                                     </div>
 
                                     <div className="col-span-2 sm:col-span-1">
@@ -392,11 +401,15 @@ const ITTInventory = () => {
 
                                     <div className="col-span-2 sm:col-span-1">
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
-                                        <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} className="select-glass text-sm">
-                                            <option value="Active">Active</option>
-                                            <option value="Defective">Defective</option>
-                                            <option value="Custom">Custom</option>
-                                        </select>
+                                        <CustomSelect 
+                                            value={formData.status} 
+                                            onChange={val => setFormData({ ...formData, status: val })} 
+                                            options={[
+                                                { value: "Active", label: "Active" },
+                                                { value: "Available", label: "Available" },
+                                                { value: "Defective", label: "Defective" }
+                                            ]}
+                                        />
                                     </div>
 
                                     <div className="col-span-2">

@@ -7,11 +7,13 @@ import {
     Search, Hash, Layers, Database, View, Zap, User,
     Eye, X, MessageSquare, Send, Clock, CheckCircle, RefreshCw,
     AlertCircle, FileText, Loader2, Check, ChevronUp, ChevronDown, ChevronRight,
-    Settings, Package, Wrench, XCircle, UserMinus
+    Settings, Package, Wrench, XCircle, UserMinus, List, Grid,
+    Camera, Headphones, Keyboard, Cable, Plug, Wifi
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmModal from '../components/ConfirmModal';
-
+import { WorkstationFloorPlan, type Workstation as FloorPlanWorkstation } from '../components/WorkstationFloorPlan';
+import CustomSelect from '../components/CustomSelect';
 interface InventoryItem {
     id: string;
     itemName: string;
@@ -43,9 +45,7 @@ interface PartItem {
     status: string;
 }
 
-interface Workstation {
-    id: string;
-    unitId: string;
+interface Workstation extends FloorPlanWorkstation {
     mobo: string;
     cpu: string;
     ram: string;
@@ -53,11 +53,15 @@ interface Workstation {
     psu: string;
     storage: string;
     monitor?: string;
+    webcam?: string;
+    headset?: string;
+    keyboard?: string;
+    lanCable?: string;
+    cableAdaptor?: string;
+    wifiAdaptor?: string;
     monitors: Monitor[];
     parts: PartItem[];
-    status: string;
     notes?: string;
-    assignedTo?: UserInfo;
 }
 
 interface Ticket {
@@ -158,7 +162,14 @@ const WorkstationSpecs = ({
                             <div key={part.id}>
                                 <h4 className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1.5 mb-0.5">
                                     {part.type === 'MOBO' ? <Layers size={14} /> :
-                                        part.type === 'PSU' ? <Zap size={14} /> : <Package size={14} />}
+                                        part.type === 'PSU' ? <Zap size={14} /> : 
+                                        part.type === 'WEBCAM' ? <Camera size={14} /> :
+                                        part.type === 'HEADSET' ? <Headphones size={14} /> :
+                                        part.type === 'KEYBOARD' ? <Keyboard size={14} /> :
+                                        part.type === 'LAN_CABLE' ? <Cable size={14} /> :
+                                        part.type === 'CABLE_ADAPTOR' ? <Plug size={14} /> :
+                                        part.type === 'WIFI_ADAPTOR' ? <Wifi size={14} /> :
+                                        <Package size={14} />}
                                     {part.type}
                                 </h4>
                                 <p className="text-gray-700 dark:text-gray-300 font-medium text-sm">{part.itemName}</p>
@@ -237,6 +248,8 @@ const statusConfig = {
     active: { label: 'Active', icon: <CheckCircle size={14} />, color: 'text-green-500' },
     maintenance: { label: 'Maintenance', icon: <Wrench size={14} />, color: 'text-amber-500' },
     retired: { label: 'Retired', icon: <XCircle size={14} />, color: 'text-red-500' },
+    animation_ready: { label: 'Animation Ready', icon: <CheckCircle size={14} />, color: 'text-purple-500' },
+    dev_ready: { label: 'Dev Ready', icon: <CheckCircle size={14} />, color: 'text-cyan-500' },
 };
 
 const ITTWorkstations = () => {
@@ -251,6 +264,7 @@ const ITTWorkstations = () => {
     const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [initialHardware, setInitialHardware] = useState<Record<string, string>>({});
+    const [storageItems, setStorageItems] = useState<string[]>(['']);
     const [searchTerm, setSearchTerm] = useState('');
     const [specFilters, setSpecFilters] = useState({
         cpu: '',
@@ -258,6 +272,7 @@ const ITTWorkstations = () => {
         gpu: '',
         storage: ''
     });
+    const [viewMode, setViewMode] = useState<'list' | 'floor'>('list');
 
     // Extract unique values for dynamic dropdowns
     const uniqueSpecs = useMemo(() => {
@@ -291,7 +306,7 @@ const ITTWorkstations = () => {
     const [isSavingNotes, setIsSavingNotes] = useState(false);
 
     const [formData, setFormData] = useState({
-        unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', status: 'active', assignedToId: ''
+        unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', webcam: '', headset: '', keyboard: '', lanCable: '', cableAdaptor: '', wifiAdaptor: '', status: 'active', assignedToId: ''
     });
 
     const selectedUser = users.find(u => u.id === formData.assignedToId);
@@ -426,11 +441,34 @@ const ITTWorkstations = () => {
         try {
             // Build the list of inventory items to release (swapped out)
             const releasedItemIds: string[] = [];
+            const deployedItemIdsSet = new Set<string>();
+
+            // Calculate newly deployed items by dynamically scanning the final submitted strings
+            const allHardwareStrings = [
+                formData.mobo, formData.cpu, formData.ram, formData.gpu, formData.psu, formData.monitor,
+                formData.webcam, formData.headset, formData.keyboard, formData.lanCable, formData.cableAdaptor, formData.wifiAdaptor,
+                ...storageItems
+            ];
+
+            allHardwareStrings.forEach(str => {
+                if (str && typeof str === 'string') {
+                    const snMatches = Array.from(str.matchAll(/\(SN:\s*(.+?)\)/g));
+                    snMatches.forEach(m => {
+                        const sn = m[1].trim();
+                        // Only "Active" items need to be deployed (transitioned from Active -> Deployed)
+                        const invItem = stock.find(i => i.serialNumber === sn && i.status === 'Active');
+                        if (invItem) deployedItemIdsSet.add(invItem.id);
+                    });
+                }
+            });
+
             if (editingId) {
-                const hardwareKeys = ['mobo', 'cpu', 'ram', 'gpu', 'psu', 'storage', 'monitor'];
+                const hardwareKeys = ['mobo', 'cpu', 'ram', 'gpu', 'psu', 'monitor', 'webcam', 'headset', 'keyboard', 'lanCable', 'cableAdaptor', 'wifiAdaptor'];
+                
+                // Compare standard singular fields
                 hardwareKeys.forEach(key => {
-                    const oldVal = (initialHardware as any)[key];
-                    const newVal = (formData as any)[key];
+                    const oldVal = (initialHardware as any)[key] || '';
+                    const newVal = (formData as any)[key] || '';
                     if (oldVal !== newVal && oldVal) {
                         const snMatch = oldVal.match(/\(SN:\s*(.+?)\)/);
                         if (snMatch?.[1]) {
@@ -439,13 +477,27 @@ const ITTWorkstations = () => {
                         }
                     }
                 });
+
+                // Compare multiple-storage string
+                const oldStorage = initialHardware.storage || '';
+                const newStorage = storageItems.filter(Boolean).join(' | ');
+                
+                const oldSns = Array.from(oldStorage.matchAll(/\(SN:\s*(.+?)\)/g)).map((m: any) => m[1].trim());
+                const newSns = Array.from(newStorage.matchAll(/\(SN:\s*(.+?)\)/g)).map((m: any) => m[1].trim());
+                
+                const releasedSns = oldSns.filter(sn => !newSns.includes(sn));
+                releasedSns.forEach(sn => {
+                    const invItem = stock.find(i => i.serialNumber === sn);
+                    if (invItem) releasedItemIds.push(invItem.id);
+                });
             }
 
             // Build payload — backend handles deploy/release atomically in one transaction
             const payload = {
                 ...formData,
+                storage: storageItems.filter(Boolean).join(' | '),
                 assignedToId: formData.assignedToId || null,
-                deployedItemIds: Array.from(partsToDeploy),
+                deployedItemIds: Array.from(deployedItemIdsSet),
                 releasedItemIds,
             };
 
@@ -501,26 +553,35 @@ const ITTWorkstations = () => {
                 psu: ws.psu || '',
                 storage: ws.storage || '',
                 monitor: ws.monitor || '',
+                webcam: ws.webcam || '',
+                headset: ws.headset || '',
+                keyboard: ws.keyboard || '',
+                lanCable: ws.lanCable || '',
+                cableAdaptor: ws.cableAdaptor || '',
+                wifiAdaptor: ws.wifiAdaptor || '',
                 status: ws.status || 'active',
                 assignedToId: ws.assignedTo?.id || ''
             });
             setInitialHardware({
                 mobo: ws.mobo || '', cpu: ws.cpu || '', ram: ws.ram || '',
-                gpu: ws.gpu || '', psu: ws.psu || '', storage: ws.storage || '', monitor: ws.monitor || ''
+                gpu: ws.gpu || '', psu: ws.psu || '', storage: ws.storage || '', monitor: ws.monitor || '',
+                webcam: ws.webcam || '', headset: ws.headset || '', keyboard: ws.keyboard || '',
+                lanCable: ws.lanCable || '', cableAdaptor: ws.cableAdaptor || '', wifiAdaptor: ws.wifiAdaptor || ''
             });
+            setStorageItems(ws.storage ? ws.storage.split(' | ') : ['']);
         } else {
             setEditingId(null);
-            setFormData({ unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', status: 'active', assignedToId: '' });
+            setFormData({ unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', webcam: '', headset: '', keyboard: '', lanCable: '', cableAdaptor: '', wifiAdaptor: '', status: 'active', assignedToId: '' });
             setInitialHardware({});
+            setStorageItems(['']);
         }
-        setPartsToDeploy(new Set());
         setIsModalOpen(true);
     };
 
     const closeModal = () => {
         setIsModalOpen(false);
         setEditingId(null);
-        setPartsToDeploy(new Set());
+        setStorageItems(['']);
     };
 
     const assignedUserIds = useMemo(() => {
@@ -559,6 +620,8 @@ const ITTWorkstations = () => {
         active: 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400',
         maintenance: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400',
         retired: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
+        animation_ready: 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400',
+        dev_ready: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400',
     };
 
     const renderWorkstationsTable = useMemo(() => {
@@ -587,6 +650,7 @@ const ITTWorkstations = () => {
                             <th className={COL_HEADER}>GPU</th>
                             <th className={COL_HEADER}>RAM</th>
                             <th className={COL_HEADER}>Storage</th>
+                            <th className={COL_HEADER}>PSU</th>
                             <th className={COL_HEADER}>Monitor</th>
                             <th className={COL_HEADER}>Status</th>
                             <th className={`${COL_HEADER} text-right`}>Actions</th>
@@ -623,26 +687,44 @@ const ITTWorkstations = () => {
 
                                 {/* Computer Number (unitId) */}
                                 <td className={CELL}>
-                                    <span className="font-semibold text-gray-900 dark:text-white">{ws.unitId}</span>
+                                    <div className="flex flex-col items-start gap-1.5">
+                                        <span className="font-semibold text-gray-900 dark:text-white">{ws.unitId}</span>
+                                        {ws.parts?.some(p => p.status === 'Defective') && (
+                                            <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 px-1.5 py-0.5 rounded-md border border-red-200 dark:border-red-500/30 w-max mt-0.5">
+                                                <AlertCircle size={10} /> Defective Part
+                                            </span>
+                                        )}
+                                    </div>
                                 </td>
 
 
                                 {/* Hardware columns */}
-                                <td className={ws.mobo ? CELL : CELL_MUTED}>{ws.mobo || '—'}</td>
+                                <td className={ws.mobo ? CELL : CELL_MUTED}>
+                                    <div className="max-w-[140px] line-clamp-2 text-xs leading-snug text-gray-700 dark:text-gray-300" title={ws.mobo || ''}>{ws.mobo || '—'}</div>
+                                </td>
 
                                 <td className={ws.cpu ? CELL : CELL_MUTED}>
                                     {ws.cpu ? (
-                                        <span className="inline-flex items-center gap-1 text-xs font-medium bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 px-2 py-0.5 rounded-md">
-                                            {ws.cpu}
-                                        </span>
+                                        <div className="inline-flex max-w-[140px] items-start text-[11px] font-medium bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 px-2 py-1.5 rounded-md" title={ws.cpu}>
+                                            <span className="line-clamp-2 leading-tight">{ws.cpu}</span>
+                                        </div>
                                     ) : '—'}
                                 </td>
 
-                                <td className={ws.gpu ? CELL : CELL_MUTED}>{ws.gpu || '—'}</td>
-                                <td className={ws.ram ? CELL : CELL_MUTED}>{ws.ram || '—'}</td>
-                                <td className={ws.storage ? CELL : CELL_MUTED}>{ws.storage || '—'}</td>
+                                <td className={ws.gpu ? CELL : CELL_MUTED}>
+                                    <div className="max-w-[140px] line-clamp-2 text-xs leading-snug text-gray-700 dark:text-gray-300" title={ws.gpu || ''}>{ws.gpu || '—'}</div>
+                                </td>
+                                <td className={ws.ram ? CELL : CELL_MUTED}>
+                                    <div className="max-w-[140px] line-clamp-2 text-xs leading-snug text-gray-700 dark:text-gray-300" title={ws.ram || ''}>{ws.ram || '—'}</div>
+                                </td>
+                                <td className={ws.storage ? CELL : CELL_MUTED}>
+                                    <div className="max-w-[140px] line-clamp-2 text-xs leading-snug text-gray-700 dark:text-gray-300" title={ws.storage || ''}>{ws.storage || '—'}</div>
+                                </td>
+                                <td className={ws.psu ? CELL : CELL_MUTED}>
+                                    <div className="max-w-[140px] line-clamp-2 text-xs leading-snug text-gray-700 dark:text-gray-300" title={ws.psu || ''}>{ws.psu || '—'}</div>
+                                </td>
                                 <td className={(ws as any).monitor ? CELL : CELL_MUTED}>
-                                    {(ws as any).monitor || 'No Monitor'}
+                                    <div className="max-w-[140px] line-clamp-2 text-xs leading-snug text-gray-700 dark:text-gray-300" title={(ws as any).monitor || ''}>{(ws as any).monitor || 'No Monitor'}</div>
                                 </td>
 
                                 {/* Status */}
@@ -684,7 +766,22 @@ const ITTWorkstations = () => {
         <div className="space-y-6">
             {/* Controls */}
             <div className="flex flex-col sm:flex-row justify-between gap-4">
-                <div className="relative max-w-md w-full">
+                <div className="flex items-center gap-2 bg-gray-100 dark:bg-white/5 p-1 rounded-xl w-full sm:w-auto overflow-hidden shrink-0 shadow-inner">
+                    <button
+                        onClick={() => setViewMode('list')}
+                        className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-[#1A1D21] text-blue-600 dark:text-blue-400 shadow-sm border border-gray-200 dark:border-white/5' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white border border-transparent'}`}
+                    >
+                        <List size={16} /> List
+                    </button>
+                    <button
+                        onClick={() => setViewMode('floor')}
+                        className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm font-bold rounded-lg transition-all ${viewMode === 'floor' ? 'bg-white dark:bg-[#1A1D21] text-blue-600 dark:text-blue-400 shadow-sm border border-gray-200 dark:border-white/5' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white border border-transparent'}`}
+                    >
+                        <Grid size={16} /> Floor Plan
+                    </button>
+                </div>
+
+                <div className="relative max-w-md w-full shrink">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     <input
                         type="text"
@@ -694,147 +791,292 @@ const ITTWorkstations = () => {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <button onClick={() => openModal()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors shadow-sm">
+                <button onClick={() => openModal()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors shadow-sm shrink-0">
                     <Plus size={18} /> Add Workstation
                 </button>
             </div>
 
-            {/* --- ADVANCED SPEC FILTERS --- */}
-            <div className="flex flex-wrap gap-3 bg-white/40 dark:bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm mb-6">
-                <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest mr-2">
-                    <Settings size={14} /> Filters:
-                </div>
+            {viewMode === 'list' ? (
+                <>
+                    {/* --- ADVANCED SPEC FILTERS --- */}
+                    <div className="flex flex-wrap gap-3 bg-white/40 dark:bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm mb-6">
+                        <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest mr-2">
+                            <Settings size={14} /> Filters:
+                        </div>
 
-                {/* CPU Filter */}
-                <div className="flex-1 min-w-[140px]">
-                    <select
-                        value={specFilters.cpu}
-                        onChange={e => setSpecFilters({ ...specFilters, cpu: e.target.value })}
-                        className="select-glass"
-                    >
-                        <option value="">All CPUs</option>
-                        {uniqueSpecs.cpus.map(cpu => <option key={cpu} value={cpu}>{cpu}</option>)}
-                    </select>
-                </div>
+                        {/* CPU Filter */}
+                        <div className="flex-1 min-w-[140px]">
+                            <CustomSelect
+                                value={specFilters.cpu}
+                                onChange={val => setSpecFilters({ ...specFilters, cpu: val })}
+                                options={[
+                                    { value: '', label: 'All CPUs' },
+                                    ...uniqueSpecs.cpus.map(cpu => ({ value: cpu, label: cpu }))
+                                ]}
+                            />
+                        </div>
 
-                {/* RAM Filter */}
-                <div className="flex-1 min-w-[140px]">
-                    <select
-                        value={specFilters.ram}
-                        onChange={e => setSpecFilters({ ...specFilters, ram: e.target.value })}
-                        className="select-glass"
-                    >
-                        <option value="">All RAM</option>
-                        {uniqueSpecs.rams.map(ram => <option key={ram} value={ram}>{ram}</option>)}
-                    </select>
-                </div>
+                        {/* RAM Filter */}
+                        <div className="flex-1 min-w-[140px]">
+                            <CustomSelect
+                                value={specFilters.ram}
+                                onChange={val => setSpecFilters({ ...specFilters, ram: val })}
+                                options={[
+                                    { value: '', label: 'All RAM' },
+                                    ...uniqueSpecs.rams.map(ram => ({ value: ram, label: ram }))
+                                ]}
+                            />
+                        </div>
 
-                {/* GPU Filter */}
-                <div className="flex-1 min-w-[140px]">
-                    <select
-                        value={specFilters.gpu}
-                        onChange={e => setSpecFilters({ ...specFilters, gpu: e.target.value })}
-                        className="select-glass"
-                    >
-                        <option value="">All GPUs</option>
-                        {uniqueSpecs.gpus.map(gpu => <option key={gpu} value={gpu}>{gpu}</option>)}
-                    </select>
-                </div>
+                        {/* GPU Filter */}
+                        <div className="flex-1 min-w-[140px]">
+                            <CustomSelect
+                                value={specFilters.gpu}
+                                onChange={val => setSpecFilters({ ...specFilters, gpu: val })}
+                                options={[
+                                    { value: '', label: 'All GPUs' },
+                                    ...uniqueSpecs.gpus.map(gpu => ({ value: gpu, label: gpu }))
+                                ]}
+                            />
+                        </div>
 
-                {/* Storage Filter */}
-                <div className="flex-1 min-w-[140px]">
-                    <select
-                        value={specFilters.storage}
-                        onChange={e => setSpecFilters({ ...specFilters, storage: e.target.value })}
-                        className="select-glass"
-                    >
-                        <option value="">All Storage</option>
-                        {uniqueSpecs.storages.map(st => <option key={st} value={st}>{st}</option>)}
-                    </select>
-                </div>
+                        {/* Storage Filter */}
+                        <div className="flex-1 min-w-[140px]">
+                            <CustomSelect
+                                value={specFilters.storage}
+                                onChange={val => setSpecFilters({ ...specFilters, storage: val })}
+                                options={[
+                                    { value: '', label: 'All Storage' },
+                                    ...uniqueSpecs.storages.map(st => ({ value: st, label: st }))
+                                ]}
+                            />
+                        </div>
 
-                {/* Reset Button */}
-                <button
-                    onClick={resetFilters}
-                    className="px-4 py-2 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all flex items-center gap-2 text-sm font-bold"
-                >
-                    <RefreshCw size={14} /> Reset
-                </button>
-            </div>
+                        {/* Reset Button */}
+                        <button
+                            onClick={resetFilters}
+                            className="px-4 py-2 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all flex items-center gap-2 text-sm font-bold"
+                        >
+                            <RefreshCw size={14} /> Reset
+                        </button>
+                    </div>
 
-            {renderWorkstationsTable}
+                    {renderWorkstationsTable}
+                </>
+            ) : (
+                <WorkstationFloorPlan
+                    workstations={workstations}
+                    filteredWorkstations={filteredWorkstations}
+                    onOpenDetail={(ws) => openDetail(ws as Workstation)}
+                    unreadMap={unreadMap}
+                />
+            )}
 
             {/* ── Form Modal ── */}
             {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/70 animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl w-full max-w-2xl overflow-visible border border-gray-200 dark:border-white/10">
-                        <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center rounded-t-2xl overflow-hidden">
+                <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-gray-900/70 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl w-full max-w-4xl border border-gray-200 dark:border-white/10 max-h-[90vh] overflow-y-auto custom-scrollbar">
+                        <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center rounded-t-2xl overflow-hidden sticky top-0 bg-white dark:bg-[#1A1D21] z-50">
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white">{editingId ? 'Edit Workstation' : 'Add Workstation'}</h2>
                             <button onClick={closeModal} className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"><X size={20} /></button>
                         </div>
                         <form onSubmit={handleSubmit} className="p-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                                {[
-                                    { label: 'Unit ID (Required)', key: 'unitId', icon: <Hash size={16} />, required: true },
+
+                                {/* ── Unit ID: only free-text field ── */}
+                                <div className="md:col-span-2">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                                        Unit ID <span className="text-red-500">*</span>
+                                    </label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Hash size={16} /></span>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={formData.unitId}
+                                            onChange={e => setFormData({ ...formData, unitId: e.target.value })}
+                                            placeholder="e.g. PC-001"
+                                            className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white font-mono"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* ── Hardware dropdowns — inventory-only ── */}
+                                {([
                                     { label: 'Motherboard', key: 'mobo', icon: <Layers size={16} />, invType: 'MOBO' },
                                     { label: 'CPU', key: 'cpu', icon: <Cpu size={16} />, invType: 'CPU' },
                                     { label: 'RAM', key: 'ram', icon: <Database size={16} />, invType: 'RAM' },
                                     { label: 'GPU', key: 'gpu', icon: <View size={16} />, invType: 'GPU' },
-                                    { label: 'Storage', key: 'storage', icon: <HardDrive size={16} />, invType: 'STORAGE' },
                                     { label: 'PSU', key: 'psu', icon: <Zap size={16} />, invType: 'PSU' },
                                     { label: 'Monitor', key: 'monitor', icon: <MonitorIcon size={16} />, invType: 'MONITOR' },
-                                ].map(({ label, key, icon, required, invType }) => {
+                                    { label: 'Webcam', key: 'webcam', icon: <Camera size={16} />, invType: 'WEBCAM' },
+                                    { label: 'Headset', key: 'headset', icon: <Headphones size={16} />, invType: 'HEADSET' },
+                                    { label: 'Keyboard', key: 'keyboard', icon: <Keyboard size={16} />, invType: 'KEYBOARD' },
+                                    { label: 'LAN Cable', key: 'lanCable', icon: <Cable size={16} />, invType: 'LAN_CABLE' },
+                                    { label: 'Cable Adaptor', key: 'cableAdaptor', icon: <Plug size={16} />, invType: 'CABLE_ADAPTOR' },
+                                    { label: 'Wifi Adaptor', key: 'wifiAdaptor', icon: <Wifi size={16} />, invType: 'WIFI_ADAPTOR' },
+                                ] as { label: string; key: string; icon: React.ReactNode; invType: string }[]).map(({ label, key, icon, invType }) => {
+                                    // Items already used in this form for other fields (to avoid double-assignment)
+                                    const usedSns = [
+                                        formData.mobo, formData.cpu, formData.ram,
+                                        formData.gpu, formData.psu, formData.monitor,
+                                        formData.webcam, formData.headset, formData.keyboard,
+                                        formData.lanCable, formData.cableAdaptor, formData.wifiAdaptor,
+                                        ...storageItems
+                                    ]
+                                        .filter((v, _, arr) => {
+                                            // Exclude the current field's own value so it can re-select itself when editing
+                                            const currentVal = (formData as any)[key];
+                                            return v !== currentVal;
+                                        })
+                                        .map(v => v?.match(/\(SN:\s*(.+?)\)/)?.[1]?.trim())
+                                        .filter(Boolean) as string[];
 
-                                    // Check if we have active stock for this specific hardware type
-                                    const availableStock = invType ? stock.filter(s => s.type === invType && s.status === 'Active') : [];
+                                    // Active or Available items of this type that aren't selected elsewhere in the form
+                                    const availableStock = stock.filter(
+                                        s => s.type === invType && (s.status === 'Active' || s.status === 'Available') && !usedSns.includes(s.serialNumber)
+                                    );
+
+                                    // Currently-selected item (if any) via matching formData[key] to a stock SN
+                                    const currentSn = (formData as any)[key]?.match(/\(SN:\s*(.+?)\)/)?.[1]?.trim();
+                                    const currentItem = stock.find(s => s.serialNumber === currentSn);
+
+                                    // For the dropdown value we use id; "" means nothing selected
+                                    const dropdownValue = currentItem?.id ?? '';
+
+                                    const isEmpty = availableStock.length === 0 && !currentItem;
 
                                     return (
                                         <div key={key}>
-                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">{label}</label>
-                                            <div className="relative">
-                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">{icon}</span>
-                                                <input
-                                                    type="text"
-                                                    required={required}
-                                                    value={(formData as any)[key]}
-                                                    onChange={e => setFormData({ ...formData, [key]: e.target.value })}
-                                                    className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg pl-10 pr-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white"
-                                                />
-                                            </div>
-
-                                            {/* Stock Picker Dropdown */}
-                                            {availableStock.length > 0 && (
-                                                <div className="relative mt-1.5">
-                                                    <Package className="absolute left-2.5 top-1/2 -translate-y-1/2 text-blue-500 pointer-events-none" size={12} />
-                                                    <select
-                                                        className="w-full bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-blue-700 dark:text-blue-400 text-[11px] rounded-md pl-7 pr-6 py-1.5 outline-none cursor-pointer appearance-none"
-                                                        onChange={(e) => {
-                                                            if (!e.target.value) return;
-                                                            const item = availableStock.find(i => i.id === e.target.value);
-                                                            if (item) {
-                                                                // Populate the text field with Name + Serial Number
-                                                                setFormData({ ...formData, [key]: `${item.itemName} (SN: ${item.serialNumber})` });
-                                                                // Track this ID to update it to "Deployed" on save
-                                                                setPartsToDeploy(prev => new Set(prev).add(item.id));
-                                                            }
-                                                        }}
-                                                    >
-                                                        <option value="">Assign from local inventory...</option>
-                                                        {availableStock.map(item => (
-                                                            <option key={item.id} value={item.id}>
-                                                                {item.itemName} (SN: {item.serialNumber})
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                    <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none">
-                                                        <svg className="w-3 h-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                                                    </div>
-                                                </div>
+                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1.5">
+                                                <span className="text-gray-400">{icon}</span>
+                                                {label} <span className="text-red-500">*</span>
+                                            </label>
+                                            <CustomSelect
+                                                required={key !== 'monitor' && key !== 'webcam' && key !== 'headset' && key !== 'keyboard' && key !== 'lanCable' && key !== 'cableAdaptor' && key !== 'wifiAdaptor'}
+                                                disabled={isEmpty}
+                                                value={dropdownValue}
+                                                onChange={(val) => {
+                                                    if (!val) {
+                                                        setFormData({ ...formData, [key]: '' });
+                                                        return;
+                                                    }
+                                                    const allOptions = [...availableStock];
+                                                    if (currentItem && !allOptions.find(i => i.id === currentItem.id)) {
+                                                        allOptions.push(currentItem);
+                                                    }
+                                                    const item = allOptions.find(i => i.id === val);
+                                                    if (item) {
+                                                        setFormData({ ...formData, [key]: `${item.itemName} (SN: ${item.serialNumber})` });
+                                                    }
+                                                }}
+                                                placeholder={isEmpty ? `No ${label} available in inventory` : `Select ${label}...`}
+                                                icon={<Package size={14} className="text-blue-500" />}
+                                                options={[
+                                                    ...(currentItem && !availableStock.find(i => i.id === currentItem.id) ? [{
+                                                        value: currentItem.id,
+                                                        label: `${currentItem.itemName} (SN: ${currentItem.serialNumber}) — current`
+                                                    }] : []),
+                                                    ...availableStock.map(item => ({
+                                                        value: item.id,
+                                                        label: `${item.itemName} (SN: ${item.serialNumber})`
+                                                    }))
+                                                ]}
+                                            />
+                                            {isEmpty && (
+                                                <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
+                                                    <AlertCircle size={10} /> Add {label} items to inventory first
+                                                </p>
                                             )}
                                         </div>
-                                    )
+                                    );
                                 })}
 
+                                {/* ── Storage Devices — inventory-only, multi-select ── */}
+                                <div className="col-span-1 md:col-span-2 bg-gray-50/50 dark:bg-black/10 p-4 rounded-xl border border-gray-200/60 dark:border-white/5 space-y-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
+                                            <HardDrive size={16} className="text-gray-400" />
+                                            Storage Devices <span className="text-red-500">*</span>
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setStorageItems([...storageItems, ''])}
+                                            className="text-xs font-bold text-blue-500 hover:text-blue-600 flex items-center gap-1 bg-blue-50/50 dark:bg-blue-500/10 px-2 py-1 rounded-md"
+                                        >
+                                            <Plus size={12} /> Add Drive
+                                        </button>
+                                    </div>
+
+                                    {storageItems.map((val, idx) => {
+                                        // SNs already chosen in other slots
+                                        const selectedStorageSns = storageItems
+                                            .map((v, i) => i !== idx ? v.match(/\(SN:\s*(.+?)\)/)?.[1]?.trim() : null)
+                                            .filter(Boolean) as string[];
+
+                                        const availableStorageStock = stock.filter(
+                                            s => s.type === 'STORAGE' && (s.status === 'Active' || s.status === 'Available') && !selectedStorageSns.includes(s.serialNumber)
+                                        );
+
+                                        const currentSn = val.match(/\(SN:\s*(.+?)\)/)?.[1]?.trim();
+                                        const currentStorageItem = stock.find(s => s.serialNumber === currentSn);
+                                        const storageDropdownValue = currentStorageItem?.id ?? '';
+                                        const storageIsEmpty = availableStorageStock.length === 0 && !currentStorageItem;
+
+                                        return (
+                                            <div key={idx} className="flex items-center gap-2">
+                                                <span className="text-gray-400 font-bold text-[10px] w-4 text-center shrink-0">{idx + 1}</span>
+                                                <div className="flex-1 min-w-[200px]">
+                                                    <CustomSelect
+                                                        required={idx === 0}
+                                                        disabled={storageIsEmpty}
+                                                        value={storageDropdownValue}
+                                                        onChange={(selectedId) => {
+                                                            const allOptions = [...availableStorageStock];
+                                                            if (currentStorageItem && !allOptions.find(i => i.id === currentStorageItem.id)) {
+                                                                allOptions.push(currentStorageItem);
+                                                            }
+                                                            const item = allOptions.find(i => i.id === selectedId);
+                                                            const newItems = [...storageItems];
+                                                            newItems[idx] = item ? `${item.itemName} (SN: ${item.serialNumber})` : '';
+                                                            setStorageItems(newItems);
+                                                        }}
+                                                        placeholder={storageIsEmpty ? 'No storage available in inventory' : 'Select storage device...'}
+                                                        icon={<Package size={14} className="text-blue-500" />}
+                                                        options={[
+                                                            ...(currentStorageItem && !availableStorageStock.find(i => i.id === currentStorageItem.id) ? [{
+                                                                value: currentStorageItem.id,
+                                                                label: `${currentStorageItem.itemName} (SN: ${currentStorageItem.serialNumber}) — current`
+                                                            }] : []),
+                                                            ...availableStorageStock.map(item => ({
+                                                                value: item.id,
+                                                                label: `${item.itemName} (SN: ${item.serialNumber})`
+                                                            }))
+                                                        ]}
+                                                    />
+                                                </div>
+                                                {storageItems.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const newItems = storageItems.filter((_, i) => i !== idx);
+                                                            setStorageItems(newItems);
+                                                        }}
+                                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors shrink-0"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+
+                                    {stock.filter(s => s.type === 'STORAGE' && s.status === 'Active').length === 0 && (
+                                        <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
+                                            <AlertCircle size={10} /> Add Storage items to inventory first
+                                        </p>
+                                    )}
+                                </div>
 
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
@@ -849,7 +1091,7 @@ const ITTWorkstations = () => {
                                                 <span className={statusConfig[formData.status as keyof typeof statusConfig]?.color}>
                                                     {statusConfig[formData.status as keyof typeof statusConfig]?.icon}
                                                 </span>
-                                                <span className="capitalize">{formData.status}</span>
+                                                <span className="capitalize">{statusConfig[formData.status as keyof typeof statusConfig]?.label ?? formData.status}</span>
                                             </div>
                                             <ChevronDown size={14} className={`transition-transform ${isStatusOpen ? 'rotate-180' : ''}`} />
                                         </button>
@@ -858,10 +1100,10 @@ const ITTWorkstations = () => {
                                         <AnimatePresence>
                                             {isStatusOpen && (
                                                 <motion.div
-                                                    initial={{ opacity: 0, y: -10 }}
+                                                    initial={{ opacity: 0, y: 10 }}
                                                     animate={{ opacity: 1, y: 0 }}
-                                                    exit={{ opacity: 0, y: -10 }}
-                                                    className="absolute top-full left-0 w-full mt-2 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-[60] backdrop-blur-xl"
+                                                    exit={{ opacity: 0, y: 10 }}
+                                                    className="absolute bottom-full left-0 w-full mb-2 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-[700] backdrop-blur-xl max-h-60 overflow-y-auto custom-scrollbar"
                                                 >
                                                     {Object.entries(statusConfig).map(([key, cfg]) => (
                                                         <button
@@ -910,10 +1152,10 @@ const ITTWorkstations = () => {
                                         <AnimatePresence>
                                             {isUserDropdownOpen && (
                                                 <motion.div
-                                                    initial={{ opacity: 0, y: -10 }}
+                                                    initial={{ opacity: 0, y: 10 }}
                                                     animate={{ opacity: 1, y: 0 }}
-                                                    exit={{ opacity: 0, y: -10 }}
-                                                    className="absolute top-full left-0 w-full mt-2 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl z-[100] backdrop-blur-xl max-h-60 overflow-y-auto custom-scrollbar"
+                                                    exit={{ opacity: 0, y: 10 }}
+                                                    className="absolute bottom-full left-0 w-full mb-2 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl z-[700] backdrop-blur-xl max-h-60 overflow-y-auto custom-scrollbar"
                                                 >
                                                     {/* Unassigned Option */}
                                                     <button
@@ -964,7 +1206,7 @@ const ITTWorkstations = () => {
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-white/5">
+                            <div className="flex justify-end gap-3 p-6 border-t border-gray-100 dark:border-white/5 sticky bottom-0 bg-white dark:bg-[#1A1D21] z-50 mt-4 -mx-6 -mb-6">
                                 <button type="button" onClick={closeModal} className="px-5 py-2.5 rounded-xl font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">Cancel</button>
                                 <button type="submit" className="px-5 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm">Save Workstation</button>
                             </div>
@@ -1000,11 +1242,18 @@ const ITTWorkstations = () => {
                                         <MonitorIcon size={26} />
                                     </div>
                                     <div>
-                                        <h2 className="text-2xl font-black text-white tracking-tight leading-none mb-1">{viewingWs.unitId}</h2>
-                                        <span className={`text-[10px] uppercase tracking-widest font-black px-3 py-0.5 rounded-full inline-flex items-center gap-1.5 ${statusColors[viewingWs.status] ?? 'bg-gray-500/20 text-gray-400'}`}>
-                                            <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-                                            {viewingWs.status}
-                                        </span>
+                                        <h2 className="text-2xl font-black text-white tracking-tight leading-none mb-1.5">{viewingWs.unitId}</h2>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`text-[10px] uppercase tracking-widest font-black px-3 py-0.5 rounded-full inline-flex items-center gap-1.5 ${statusColors[viewingWs.status] ?? 'bg-gray-500/20 text-gray-400'}`}>
+                                                <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+                                                {viewingWs.status}
+                                            </span>
+                                            {viewingWs.parts?.some(p => p.status === 'Defective') && (
+                                                <span className="text-[10px] uppercase tracking-widest font-black px-3 py-0.5 rounded-full inline-flex items-center gap-1.5 bg-red-500/20 text-red-400 border border-red-500/30">
+                                                    <AlertCircle size={10} /> Defective Part
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">

@@ -16,7 +16,7 @@ export const getWorkstations = async (req: Request, res: Response) => {
         monitors: true,
         parts: { select: { id: true, itemName: true, serialNumber: true, type: true, status: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { unitId: 'asc' },
     });
     res.json(workstations);
   } catch (error) {
@@ -27,7 +27,7 @@ export const getWorkstations = async (req: Request, res: Response) => {
 
 export const createWorkstation = async (req: Request, res: Response) => {
   try {
-    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, monitors, status, assignedToId, notes, deployedItemIds } = req.body;
+    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, monitors, status, assignedToId, notes, deployedItemIds } = req.body;
 
     // Check if unitId already exists
     const existing = await prisma.workstation.findUnique({ where: { unitId } });
@@ -38,7 +38,7 @@ export const createWorkstation = async (req: Request, res: Response) => {
     const workstation = await prisma.$transaction(async (tx) => {
       const ws = await tx.workstation.create({
         data: {
-          unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, notes,
+          unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, status, notes,
           assignedToId: assignedToId || null,
           monitors: {
             create: (monitors || []).map((m: any) => ({ model: m.model, specs: m.specs }))
@@ -72,7 +72,7 @@ export const createWorkstation = async (req: Request, res: Response) => {
 export const updateWorkstation = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, monitors, status, assignedToId, notes, deployedItemIds, releasedItemIds } = req.body;
+    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, monitors, status, assignedToId, notes, deployedItemIds, releasedItemIds } = req.body;
 
     const workstation = await prisma.$transaction(async (tx) => {
       // 1. Release any items being swapped out (set back to Active, unlink)
@@ -95,7 +95,7 @@ export const updateWorkstation = async (req: Request, res: Response) => {
       return tx.workstation.update({
         where: { id },
         data: {
-          unitId, mobo, cpu, ram, gpu, psu, storage, monitor, status, notes,
+          unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, status, notes,
           assignedToId: assignedToId || null,
           monitors: {
             deleteMany: {},
@@ -275,6 +275,31 @@ export const createReport = async (req: Request, res: Response) => {
         author: { select: { id: true, name: true, email: true, avatar: true } },
       },
     });
+
+    // Send Notification to ClickUp Chat View
+    try {
+      const formattedDate = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date());
+      const clientUrl = process.env.CLIENT_URL || 'https://dam.capy-dev.com';
+      
+      const clickupMessage = `Updated the Daily Log Report and the Maintenance Ledger with today’s entries. All recent service activities and operational notes are now current as of ${formattedDate}
+Link to CapyDam ITT Daily Reports: ${clientUrl}/apps/itt`;
+
+      await fetch(`https://api.clickup.com/api/v2/view/2kzkdb7b-8458/comment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': process.env.CLICKUP_API_KEY as string
+        },
+        body: JSON.stringify({
+          comment_text: clickupMessage,
+          notify_all: true
+        })
+      });
+    } catch (clickupError) {
+      console.error('Failed to send ClickUp notification:', clickupError);
+      // Suppress the error so the report still gets created successfully
+    }
+
     res.status(201).json(report);
   } catch (error) {
     console.error('Error creating report:', error);
@@ -519,5 +544,40 @@ export const deleteInventoryItem = async (req: Request, res: Response) => {
     }
     console.error('Inventory Delete Error:', error);
     res.status(500).json({ error: "Failed to delete inventory item." });
+  }
+};
+
+// ==========================================
+// FLOOR PLAN LAYOUT
+// ==========================================
+
+export const getFloorPlan = async (req: Request, res: Response) => {
+  try {
+    const config = await prisma.systemConfig.findUnique({
+      where: { key: 'workstation_floor_plan' }
+    });
+    if (config) {
+      res.json(JSON.parse(config.value));
+    } else {
+      res.json({});
+    }
+  } catch(error) {
+    console.error('Error fetching floor plan:', error);
+    res.status(500).json({ error: 'Failed to fetch floor plan' });
+  }
+};
+
+export const saveFloorPlan = async (req: Request, res: Response) => {
+  try {
+    const layout = req.body;
+    await prisma.systemConfig.upsert({
+      where: { key: 'workstation_floor_plan' },
+      update: { value: JSON.stringify(layout) },
+      create: { key: 'workstation_floor_plan', value: JSON.stringify(layout) }
+    });
+    res.json({ success: true });
+  } catch(error) {
+    console.error('Error saving floor plan:', error);
+    res.status(500).json({ error: 'Failed to save floor plan' });
   }
 };
