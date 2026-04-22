@@ -133,12 +133,12 @@ export const deleteWorkstation = async (req: Request, res: Response) => {
     await prisma.$transaction(async (tx) => {
       // Find the workstation to identify its components
       const ws = await tx.workstation.findUnique({ where: { id } });
-      
+
       if (ws) {
         // Find and free any inventory items assigned to this workstation
         await tx.ittInventory.updateMany({
-           where: { workstationId: id },
-           data: { status: 'Active', workstationId: null }
+          where: { workstationId: id },
+          data: { status: 'Active', workstationId: null }
         });
       }
 
@@ -288,7 +288,7 @@ export const createReport = async (req: Request, res: Response) => {
     try {
       const formattedDate = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date());
       const clientUrl = process.env.CLIENT_URL || 'https://dam.capy-dev.com';
-      
+
       const clickupMessage = `Updated the Daily Log Report and the Maintenance Ledger with today’s entries. All recent service activities and operational notes are now current as of ${formattedDate}
 Link to CapyDam ITT Daily Reports: ${clientUrl}/apps/itt`;
 
@@ -296,7 +296,7 @@ Link to CapyDam ITT Daily Reports: ${clientUrl}/apps/itt`;
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': process.env.CLICKUP_API_KEY as string
+          'Authorization': process.env.CLICKUP_API_KEY_ITT as string
         },
         body: JSON.stringify({
           comment_text: clickupMessage,
@@ -415,7 +415,7 @@ export const updateIttTicketStatus = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
-    
+
     const updated = await prisma.feedback.update({
       where: { id },
       data: { status }
@@ -435,7 +435,7 @@ export const updateIttTicketStatus = async (req: Request, res: Response) => {
 export const getInventory = async (req: Request, res: Response) => {
   try {
     const { type } = req.query;
-    
+
     const whereClause = type ? { type: String(type) } : {};
 
     const inventory = await prisma.ittInventory.findMany({
@@ -447,7 +447,7 @@ export const getInventory = async (req: Request, res: Response) => {
       },
       orderBy: { createdAt: 'desc' },
     });
-    
+
     res.json(inventory);
   } catch (error) {
     console.error('Error fetching inventory:', error);
@@ -461,10 +461,10 @@ export const createInventoryItem = async (req: Request, res: Response) => {
     const { itemName, serialNumber, type, purchaseDate, status, notes } = req.body;
 
     // Check for duplicate serial number
-    const existing = await prisma.ittInventory.findUnique({ 
-        where: { serialNumber } 
+    const existing = await prisma.ittInventory.findUnique({
+      where: { serialNumber }
     });
-    
+
     if (existing) {
       return res.status(400).json({ error: 'Serial Number already exists in inventory' });
     }
@@ -479,7 +479,7 @@ export const createInventoryItem = async (req: Request, res: Response) => {
         notes: notes || null
       },
     });
-    
+
     res.status(201).json(item);
   } catch (error) {
     console.error('Error creating inventory item:', error);
@@ -504,7 +504,7 @@ export const updateInventoryItem = async (req: Request, res: Response) => {
         notes
       },
     });
-    
+
     res.json(item);
   } catch (error) {
     console.error('Error updating inventory item:', error);
@@ -569,7 +569,7 @@ export const getFloorPlan = async (req: Request, res: Response) => {
     } else {
       res.json({});
     }
-  } catch(error) {
+  } catch (error) {
     console.error('Error fetching floor plan:', error);
     res.status(500).json({ error: 'Failed to fetch floor plan' });
   }
@@ -584,7 +584,7 @@ export const saveFloorPlan = async (req: Request, res: Response) => {
       create: { key: 'workstation_floor_plan', value: JSON.stringify(layout) }
     });
     res.json({ success: true });
-  } catch(error) {
+  } catch (error) {
     console.error('Error saving floor plan:', error);
     res.status(500).json({ error: 'Failed to save floor plan' });
   }
