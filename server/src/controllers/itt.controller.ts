@@ -289,7 +289,27 @@ export const createReport = async (req: Request, res: Response) => {
       const formattedDate = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date());
       const clientUrl = process.env.CLIENT_URL || 'https://dam.capy-dev.com';
 
-      const clickupMessage = `Updated the Daily Log Report and the Maintenance Ledger with today’s entries. All recent service activities and operational notes are now current as of ${formattedDate}
+      // Format bullet lists for the message
+      const formatList = (items: string[]) => Array.isArray(items) && items.length > 0 ? items.map(i => `• ${i}`).join('\n') : '• None';
+
+      // Parse next steps which comes in as a newline-separated string
+      const parsedNextSteps = nextSteps ? nextSteps.split('\n').filter(Boolean) : [];
+
+      const clickupMessage = `*Daily Shift Report - ${formattedDate}*
+Updated the Daily Log Report and the Maintenance Ledger with today’s entries.
+
+*Reactive Support:*
+${formatList(reactiveTickets)}
+
+*Proactive Maintenance:*
+${formatList(proactiveMaintenance)}
+
+*Focus & Notes:*
+${researchNotes ? researchNotes : 'None'}
+
+*Next Steps:*
+${formatList(parsedNextSteps)}
+
 Link to CapyDam ITT Daily Reports: ${clientUrl}/apps/itt`;
 
       await fetch(`https://api.clickup.com/api/v2/view/2kzkdb7b-8458/comment`, {
