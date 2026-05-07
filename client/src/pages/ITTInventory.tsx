@@ -4,10 +4,14 @@ import CustomSelect from '../components/CustomSelect';
 import client from '../api/client';
 import { toast } from 'react-toastify';
 import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
+} from 'recharts';
+import {
     Layers, Cpu, Database, View, HardDrive,
     Monitor as MonitorIcon, Zap, Plus, Search, Package,
     Edit2, Trash2, Calendar, FileText, Hash, X, Tag, AlertCircle,
-    Camera, Headphones, Keyboard, Cable, Plug, Wifi
+    Camera, Headphones, Keyboard, Cable, Plug, Wifi,
+    BarChart2
 } from 'lucide-react';
 
 // --- TYPES ---
@@ -156,6 +160,22 @@ const ITTInventory = () => {
         });
     }, [inventory, selectedCategory, searchTerm]);
 
+    // Category-level stats (all items in category, regardless of search)
+    const categoryStats = useMemo(() => {
+        const categoryItems = inventory.filter(item => item.type === selectedCategory);
+        const deployed = categoryItems.filter(i => i.workstation != null && i.status !== 'Defective').length;
+        const defective = categoryItems.filter(i => i.status === 'Defective').length;
+        const available = categoryItems.filter(i => i.workstation == null && i.status !== 'Defective').length;
+        const total = categoryItems.length;
+        return { deployed, available, defective, total };
+    }, [inventory, selectedCategory]);
+
+    const chartData = [
+        { name: 'Deployed', value: categoryStats.deployed, color: '#6366f1' },
+        { name: 'Available', value: categoryStats.available, color: '#22c55e' },
+        { name: 'Defective', value: categoryStats.defective, color: '#ef4444' },
+    ];
+
     const activeCat = inventoryCategories.find(c => c.id === selectedCategory);
     const ActiveIcon = activeCat?.icon || Package;
 
@@ -235,6 +255,85 @@ const ITTInventory = () => {
                     </button>
                 </div>
             </div>
+
+            {/* Category Stats + Chart */}
+            <motion.div
+                key={`stats-${selectedCategory}`}
+                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}
+                className="bg-white dark:bg-[#121418] border border-gray-200 dark:border-white/10 rounded-2xl shadow-sm overflow-hidden"
+            >
+                <div className="flex items-center justify-between px-6 pt-5 pb-3">
+                    <div className="flex items-center gap-2">
+                        <BarChart2 size={18} className="text-blue-500" />
+                        <span className="font-bold text-gray-800 dark:text-white text-sm">{activeCat?.label} — Inventory Overview</span>
+                    </div>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">{categoryStats.total} total units</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-px bg-gray-100 dark:bg-white/5 border-t border-b border-gray-100 dark:border-white/5">
+                    {/* Deployed */}
+                    <div className="flex flex-col items-center justify-center gap-1 bg-white dark:bg-[#121418] py-4 px-2">
+                        <span className="text-2xl font-black text-indigo-500">{categoryStats.deployed}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Deployed</span>
+                        <div className="h-1 w-12 rounded-full bg-indigo-100 dark:bg-indigo-900/30 overflow-hidden">
+                            <div
+                                className="h-full bg-indigo-500 rounded-full transition-all duration-700"
+                                style={{ width: categoryStats.total ? `${(categoryStats.deployed / categoryStats.total) * 100}%` : '0%' }}
+                            />
+                        </div>
+                    </div>
+                    {/* Available */}
+                    <div className="flex flex-col items-center justify-center gap-1 bg-white dark:bg-[#121418] py-4 px-2">
+                        <span className="text-2xl font-black text-green-500">{categoryStats.available}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Available</span>
+                        <div className="h-1 w-12 rounded-full bg-green-100 dark:bg-green-900/30 overflow-hidden">
+                            <div
+                                className="h-full bg-green-500 rounded-full transition-all duration-700"
+                                style={{ width: categoryStats.total ? `${(categoryStats.available / categoryStats.total) * 100}%` : '0%' }}
+                            />
+                        </div>
+                    </div>
+                    {/* Defective */}
+                    <div className="flex flex-col items-center justify-center gap-1 bg-white dark:bg-[#121418] py-4 px-2">
+                        <span className="text-2xl font-black text-red-500">{categoryStats.defective}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Defective</span>
+                        <div className="h-1 w-12 rounded-full bg-red-100 dark:bg-red-900/30 overflow-hidden">
+                            <div
+                                className="h-full bg-red-500 rounded-full transition-all duration-700"
+                                style={{ width: categoryStats.total ? `${(categoryStats.defective / categoryStats.total) * 100}%` : '0%' }}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Bar Chart */}
+                <div className="px-4 pt-3 pb-4" style={{ height: 140 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData} barSize={40} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" vertical={false} />
+                            <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 700, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                            <Tooltip
+                                cursor={{ fill: 'rgba(128,128,128,0.05)' }}
+                                contentStyle={{
+                                    background: '#1a1d21',
+                                    border: '1px solid rgba(255,255,255,0.08)',
+                                    borderRadius: '12px',
+                                    fontSize: '12px',
+                                    color: '#fff',
+                                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
+                                }}
+                                labelStyle={{ fontWeight: 700, marginBottom: 2 }}
+                            />
+                            <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                                {chartData.map((entry) => (
+                                    <Cell key={entry.name} fill={entry.color} fillOpacity={0.9} />
+                                ))}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            </motion.div>
 
             {/* Inventory Grid */}
             <AnimatePresence mode="wait">
