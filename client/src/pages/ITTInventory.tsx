@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import CustomSelect from '../components/CustomSelect';
 import client from '../api/client';
 import { toast } from 'react-toastify';
-import { 
-    Layers, Cpu, Database, View, HardDrive, 
+import {
+    Layers, Cpu, Database, View, HardDrive,
     Monitor as MonitorIcon, Zap, Plus, Search, Package,
     Edit2, Trash2, Calendar, FileText, Hash, X, Tag, AlertCircle,
     Camera, Headphones, Keyboard, Cable, Plug, Wifi
@@ -148,9 +148,9 @@ const ITTInventory = () => {
     const filteredInventory = useMemo(() => {
         return inventory.filter(item => {
             const matchesCategory = item.type === selectedCategory;
-            const matchesSearch = 
-                item.itemName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                item.serialNumber.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            const matchesSearch =
+                item.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                item.serialNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (item.notes && item.notes.toLowerCase().includes(searchTerm.toLowerCase()));
             return matchesCategory && matchesSearch;
         });
@@ -173,7 +173,7 @@ const ITTInventory = () => {
             {/* Header Controls */}
             <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white dark:bg-[#121418] p-4 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm">
                 <div className="relative w-full md:w-64">
-                    <button 
+                    <button
                         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                         className="flex items-center gap-3 w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121418] shadow-sm hover:border-blue-500/50 transition-all text-left"
                     >
@@ -190,7 +190,7 @@ const ITTInventory = () => {
 
                     <AnimatePresence>
                         {isDropdownOpen && (
-                            <motion.div 
+                            <motion.div
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: 10 }}
@@ -204,8 +204,8 @@ const ITTInventory = () => {
                                             setIsDropdownOpen(false);
                                         }}
                                         className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors
-                                            ${selectedCategory === cat.id 
-                                                ? 'bg-blue-600 text-white' 
+                                            ${selectedCategory === cat.id
+                                                ? 'bg-blue-600 text-white'
                                                 : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
                                             }`}
                                     >
@@ -222,9 +222,9 @@ const ITTInventory = () => {
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
                     <div className="relative w-full sm:w-64">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                        <input 
-                            type="text" 
-                            placeholder="Search models or serials..." 
+                        <input
+                            type="text"
+                            placeholder="Search models or serials..."
                             className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm dark:text-white transition-all"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -238,7 +238,7 @@ const ITTInventory = () => {
 
             {/* Inventory Grid */}
             <AnimatePresence mode="wait">
-                <motion.div 
+                <motion.div
                     key={selectedCategory}
                     initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}
                     className="bg-white dark:bg-[#121418] border border-gray-200 dark:border-white/10 rounded-2xl shadow-sm overflow-hidden min-h-[400px] flex flex-col"
@@ -340,33 +340,52 @@ const ITTInventory = () => {
 
                             <form onSubmit={handleSubmit} className="p-6 space-y-5">
                                 <div className="grid grid-cols-2 gap-4">
-                                    
+
                                     {/* ✅ NEW: Item Name */}
                                     <div className="col-span-2">
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Item Model / Name <span className="text-red-500">*</span></label>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                                            Item Model / Name {formData.type === 'RAM' && <span className="text-blue-500 normal-case font-normal">(Include Size)</span>} <span className="text-red-500">*</span>
+                                        </label>
                                         <div className="relative">
                                             <Tag className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                                            <input 
-                                                type="text" 
-                                                required 
+                                            <input
+                                                type="text"
+                                                required
                                                 autoFocus
-                                                value={formData.itemName} 
-                                                onChange={e => setFormData({ ...formData, itemName: e.target.value })} 
+                                                value={formData.itemName}
+                                                onChange={e => setFormData({ ...formData, itemName: e.target.value })}
                                                 className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white text-sm"
-                                                placeholder="e.g. Corsair Vengeance 32GB DDR5"
+                                                placeholder={
+                                                    formData.type === 'RAM' 
+                                                        ? "e.g. Corsair Vengeance 32GB DDR5" 
+                                                        : formData.type === 'CPU'
+                                                        ? "e.g. Intel Core i7-13700K"
+                                                        : formData.type === 'GPU'
+                                                        ? "e.g. NVIDIA RTX 4080"
+                                                        : formData.type === 'STORAGE'
+                                                        ? "e.g. Samsung 980 Pro 1TB NVMe"
+                                                        : formData.type === 'MONITOR'
+                                                        ? "e.g. Dell UltraSharp U2723QE 27\""
+                                                        : "e.g. Corsair RM850x 850W"
+                                                }
                                             />
                                         </div>
+                                        {formData.type === 'RAM' && (
+                                            <p className="text-[10px] text-blue-500 mt-1 flex items-center gap-1">
+                                                <AlertCircle size={10} /> Please include RAM size (e.g., 8GB, 16GB, 32GB) in the item name
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div className="col-span-2 sm:col-span-1">
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Serial Number <span className="text-red-500">*</span></label>
                                         <div className="relative">
                                             <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                                            <input 
-                                                type="text" 
-                                                required 
-                                                value={formData.serialNumber} 
-                                                onChange={e => setFormData({ ...formData, serialNumber: e.target.value })} 
+                                            <input
+                                                type="text"
+                                                required
+                                                value={formData.serialNumber}
+                                                onChange={e => setFormData({ ...formData, serialNumber: e.target.value })}
                                                 className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white text-sm"
                                                 placeholder="e.g. SN-987654"
                                             />
@@ -375,10 +394,10 @@ const ITTInventory = () => {
 
                                     <div className="col-span-2 sm:col-span-1">
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Component Type <span className="text-red-500">*</span></label>
-                                        <CustomSelect 
+                                        <CustomSelect
                                             required
-                                            value={formData.type} 
-                                            onChange={val => setFormData({ ...formData, type: val })} 
+                                            value={formData.type}
+                                            onChange={val => setFormData({ ...formData, type: val })}
                                             options={inventoryCategories.map(c => {
                                                 const Icon = c.icon;
                                                 return { value: c.id, label: c.label, icon: <Icon size={14} className="text-blue-500" /> };
@@ -390,10 +409,10 @@ const ITTInventory = () => {
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Purchase Date</label>
                                         <div className="relative">
                                             <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                                            <input 
-                                                type="date" 
-                                                value={formData.purchaseDate} 
-                                                onChange={e => setFormData({ ...formData, purchaseDate: e.target.value })} 
+                                            <input
+                                                type="date"
+                                                value={formData.purchaseDate}
+                                                onChange={e => setFormData({ ...formData, purchaseDate: e.target.value })}
                                                 className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white text-sm"
                                             />
                                         </div>
@@ -401,9 +420,9 @@ const ITTInventory = () => {
 
                                     <div className="col-span-2 sm:col-span-1">
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
-                                        <CustomSelect 
-                                            value={formData.status} 
-                                            onChange={val => setFormData({ ...formData, status: val })} 
+                                        <CustomSelect
+                                            value={formData.status}
+                                            onChange={val => setFormData({ ...formData, status: val })}
                                             options={[
                                                 { value: "Active", label: "Active" },
                                                 { value: "Available", label: "Available" },
@@ -416,11 +435,11 @@ const ITTInventory = () => {
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Notes / Specs</label>
                                         <div className="relative">
                                             <FileText className="absolute left-3 top-3 text-gray-400" size={16} />
-                                            <textarea 
-                                                rows={3} 
-                                                value={formData.notes} 
-                                                onChange={e => setFormData({ ...formData, notes: e.target.value })} 
-                                                className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white text-sm placeholder:text-gray-400 resize-none" 
+                                            <textarea
+                                                rows={3}
+                                                value={formData.notes}
+                                                onChange={e => setFormData({ ...formData, notes: e.target.value })}
+                                                className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl pl-10 pr-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 dark:text-white text-sm placeholder:text-gray-400 resize-none"
                                                 placeholder="e.g. Waiting for RMA..."
                                             />
                                         </div>

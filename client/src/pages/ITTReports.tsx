@@ -113,7 +113,16 @@ const ReportDetailModal = ({ report, onClose }: { report: Report | null; onClose
                         {report.nextSteps && (
                             <div>
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Next Steps</span>
-                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed bg-purple-50/50 dark:bg-purple-500/5 p-4 rounded-2xl">{report.nextSteps}</p>
+                                <div className="bg-purple-50/50 dark:bg-purple-500/5 p-4 rounded-2xl">
+                                    <ul className="space-y-2">
+                                        {report.nextSteps.split('\n').filter(Boolean).map((step, i) => (
+                                            <li key={i} className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed flex items-start gap-2">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1.5 shrink-0" />
+                                                <span>{step}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -138,7 +147,7 @@ const ITTReports = () => {
         reactiveTickets: [] as string[],
         proactiveMaintenance: [] as string[],
         researchNotes: '',
-        nextSteps: ''
+        nextSteps: [] as string[]
     });
 
     const fetchReports = async () => {
@@ -166,11 +175,15 @@ const ITTReports = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
+            const payload = {
+                ...formData,
+                nextSteps: formData.nextSteps.join('\n')
+            };
             if (editingId) {
-                await client.put(`/itt/reports/${editingId}`, formData);
+                await client.put(`/itt/reports/${editingId}`, payload);
                 toast.success('Report updated');
             } else {
-                await client.post('/itt/reports', formData);
+                await client.post('/itt/reports', payload);
                 toast.success('Report submitted');
             }
             setIsModalOpen(false);
@@ -203,13 +216,13 @@ const ITTReports = () => {
                 reactiveTickets: report.reactiveTickets,
                 proactiveMaintenance: report.proactiveMaintenance,
                 researchNotes: report.researchNotes || '',
-                nextSteps: report.nextSteps || ''
+                nextSteps: report.nextSteps ? report.nextSteps.split('\n').filter(Boolean) : []
             });
         } else {
             setEditingId(null);
             setFormData({
                 date: new Date().toISOString().split('T')[0],
-                hours: 8, reactiveTickets: [], proactiveMaintenance: [], researchNotes: '', nextSteps: ''
+                hours: 8, reactiveTickets: [], proactiveMaintenance: [], researchNotes: '', nextSteps: []
             });
         }
         setIsModalOpen(true);
@@ -335,7 +348,7 @@ const ITTReports = () => {
             {/* Form Modal */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/70 animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden border border-gray-200 dark:border-white/10">
+                    <div className="bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden border border-gray-200 dark:border-white/10 flex flex-col max-h-[90vh]">
                         <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center">
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                                 {editingId ? 'Edit Report' : 'Daily Shift Report'}
@@ -348,42 +361,47 @@ const ITTReports = () => {
                             </button>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
-                                    <input type="date" required value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none" />
+                        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+                            <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date</label>
+                                        <input type="date" required value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Hours Logged</label>
+                                        <input type="number" step="0.5" required value={formData.hours} onChange={e => setFormData({ ...formData, hours: parseFloat(e.target.value) })} className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none" />
+                                    </div>
                                 </div>
+
+                                <div className="grid grid-cols-2 gap-4 pt-2">
+                                    <DynamicBulletList
+                                        label="Reactive Tickets (Fixes)"
+                                        items={formData.reactiveTickets}
+                                        onChange={items => setFormData({ ...formData, reactiveTickets: items })}
+                                    />
+                                    <DynamicBulletList
+                                        label="Proactive Maintenance"
+                                        items={formData.proactiveMaintenance}
+                                        onChange={items => setFormData({ ...formData, proactiveMaintenance: items })}
+                                    />
+                                </div>
+
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Hours Logged</label>
-                                    <input type="number" step="0.5" required value={formData.hours} onChange={e => setFormData({ ...formData, hours: parseFloat(e.target.value) })} className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none" />
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Shift Notes / Research</label>
+                                    <textarea rows={3} value={formData.researchNotes} onChange={e => setFormData({ ...formData, researchNotes: e.target.value })} className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-gray-400" placeholder="Summarize focus areas..."></textarea>
+                                </div>
+
+                                <div>
+                                    <DynamicBulletList
+                                        label="Handoff / Next Steps"
+                                        items={formData.nextSteps}
+                                        onChange={items => setFormData({ ...formData, nextSteps: items })}
+                                    />
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4 pt-2">
-                                <DynamicBulletList
-                                    label="Reactive Tickets (Fixes)"
-                                    items={formData.reactiveTickets}
-                                    onChange={items => setFormData({ ...formData, reactiveTickets: items })}
-                                />
-                                <DynamicBulletList
-                                    label="Proactive Maintenance"
-                                    items={formData.proactiveMaintenance}
-                                    onChange={items => setFormData({ ...formData, proactiveMaintenance: items })}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Shift Notes / Research</label>
-                                <textarea rows={3} value={formData.researchNotes} onChange={e => setFormData({ ...formData, researchNotes: e.target.value })} className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-gray-400" placeholder="Summarize focus areas..."></textarea>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Handoff / Next Steps</label>
-                                <textarea rows={2} value={formData.nextSteps} onChange={e => setFormData({ ...formData, nextSteps: e.target.value })} className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-gray-400" placeholder="For the next shift..."></textarea>
-                            </div>
-
-                            <div className="flex justify-end pt-4 border-t border-gray-100 dark:border-white/5">
+                            <div className="p-6 border-t border-gray-100 dark:border-white/5 flex justify-end shrink-0 bg-gray-50/50 dark:bg-black/20">
                                 <button type="submit" className="px-5 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm">Submit Report</button>
                             </div>
                         </form>
