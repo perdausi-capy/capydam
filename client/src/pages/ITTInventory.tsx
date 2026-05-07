@@ -4,7 +4,7 @@ import CustomSelect from '../components/CustomSelect';
 import client from '../api/client';
 import { toast } from 'react-toastify';
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell
 } from 'recharts';
 import {
     Layers, Cpu, Database, View, HardDrive,
@@ -313,18 +313,7 @@ const ITTInventory = () => {
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" vertical={false} />
                             <XAxis dataKey="name" tick={{ fontSize: 11, fontWeight: 700, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
                             <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                            <Tooltip
-                                cursor={{ fill: 'rgba(128,128,128,0.05)' }}
-                                contentStyle={{
-                                    background: '#1a1d21',
-                                    border: '1px solid rgba(255,255,255,0.08)',
-                                    borderRadius: '12px',
-                                    fontSize: '12px',
-                                    color: '#fff',
-                                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
-                                }}
-                                labelStyle={{ fontWeight: 700, marginBottom: 2 }}
-                            />
+
                             <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                                 {chartData.map((entry) => (
                                     <Cell key={entry.name} fill={entry.color} fillOpacity={0.9} />
