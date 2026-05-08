@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Monitor, Grid, ZoomIn, ZoomOut, Maximize, Minimize } from 'lucide-react';
+import { Monitor, Grid, ZoomIn, ZoomOut, Maximize, Minimize, Lock, LockOpen } from 'lucide-react';
 import client from '../api/client';
 
 export interface UserInfo {
@@ -71,6 +71,7 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
     const [zoom, setZoom] = useState(1);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [panPos, setPanPos] = useState({ x: 0, y: 0 });
+    const [isLocked, setIsLocked] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Load positions from API once on mount
@@ -242,10 +243,16 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                     </div>
                     
                     <button 
-                        onClick={resetLayout}
-                        className="text-xs font-bold text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors uppercase tracking-widest bg-gray-200 dark:bg-white/5 px-3 py-1.5 rounded-lg"
+                        onClick={() => setIsLocked(prev => !prev)}
+                        title={isLocked ? 'Unlock Layout' : 'Lock Layout'}
+                        className={`flex items-center gap-1.5 text-xs font-bold transition-colors uppercase tracking-widest px-3 py-1.5 rounded-lg ${
+                            isLocked
+                                ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 border border-amber-500/30'
+                                : 'bg-gray-200 dark:bg-white/5 text-gray-500 hover:text-blue-500 dark:hover:text-blue-400'
+                        }`}
                     >
-                        Auto Layout
+                        {isLocked ? <Lock size={13} /> : <LockOpen size={13} />}
+                        {isLocked ? 'Locked' : 'Lock Layout'}
                     </button>
                     
                     <button
@@ -269,12 +276,12 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
             >
                 {/* Expanding wrapper to ensure scrolling works if dragged out of view */}
                 <motion.div 
-                    drag
+                    drag={!isLocked}
                     dragMomentum={false}
                     animate={{ x: panPos.x, y: panPos.y, scale: zoom }}
                     onDragEnd={handlePanEnd}
                     style={{ transformOrigin: "0 0" }}
-                    className="absolute w-[200vw] h-[200vh] cursor-grab active:cursor-grabbing"
+                    className={`absolute w-[200vw] h-[200vh] ${isLocked ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`}
                 >
                     {workstations.map((ws, i) => {
                     const pos = positions[ws.id] || initialGridAlign(i);
@@ -286,13 +293,14 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                     return (
                         <motion.div
                             key={ws.id}
-                            drag
+                            drag={!isLocked}
                             dragMomentum={false}
                             initial={false}
                             animate={{ x: pos.x, y: pos.y, width: boxW, height: boxH }}
                             onDragEnd={(_e, info) => handleDragEnd(ws.id, info, pos)}
-                            whileDrag={{ scale: 1.05, zIndex: 100, cursor: 'grabbing', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)' }}
-                            className={`absolute select-none cursor-grab rounded-xl border backdrop-blur-md shadow-lg p-2.5 flex flex-col overflow-hidden
+                            whileDrag={!isLocked ? { scale: 1.05, zIndex: 100, cursor: 'grabbing', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)' } : {}}
+                            className={`absolute select-none rounded-xl border backdrop-blur-md shadow-lg p-2.5 flex flex-col overflow-hidden
+                                ${isLocked ? 'cursor-default' : 'cursor-grab'}
                                 ${isFiltered ? 'opacity-100 z-10' : 'opacity-30 z-0 grayscale'}
                                 ${statusBorderColors[ws.status] || 'border-white/10'}
                                 ${statusBgColors[ws.status] || 'bg-white/5'}
@@ -343,14 +351,16 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                             </div>
 
                             {/* --- Custom Resize Handle --- */}
-                            <div 
-                                onPointerDownCapture={(e) => handleResizeStart(e, ws.id, boxW, boxH)}
-                                className="absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize z-20 flex items-end justify-end p-1.5 text-gray-500 hover:text-white"
-                            >
-                                <svg width="6" height="6" viewBox="0 0 6 6" fill="currentColor">
-                                    <path d="M6 6L6 0L0 6H6Z" />
-                                </svg>
-                            </div>
+                            {!isLocked && (
+                                <div 
+                                    onPointerDownCapture={(e) => handleResizeStart(e, ws.id, boxW, boxH)}
+                                    className="absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize z-20 flex items-end justify-end p-1.5 text-gray-500 hover:text-white"
+                                >
+                                    <svg width="6" height="6" viewBox="0 0 6 6" fill="currentColor">
+                                        <path d="M6 6L6 0L0 6H6Z" />
+                                    </svg>
+                                </div>
+                            )}
                         </motion.div>
                     );
                 })}
@@ -359,7 +369,7 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
 
             {/* Instruction tooltip */}
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none bg-black/60 backdrop-blur text-white/50 text-[10px] uppercase tracking-widest px-4 py-1.5 rounded-full border border-white/10">
-                Drag to move • Double-click to view details
+                {isLocked ? 'Layout locked • Double-click to view details' : 'Drag to move • Double-click to view details'}
             </div>
         </div>
     );
