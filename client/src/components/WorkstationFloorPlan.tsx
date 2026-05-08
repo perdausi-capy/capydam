@@ -59,15 +59,15 @@ const statusLabels: Record<string, string> = {
     dev_ready: 'Dev Ready',
 };
 
-export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({ 
-    workstations, 
-    filteredWorkstations, 
-    onOpenDetail, 
-    unreadMap 
+export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
+    workstations,
+    filteredWorkstations,
+    onOpenDetail,
+    unreadMap
 }) => {
     const [positions, setPositions] = useState<Record<string, { x: number; y: number; w?: number; h?: number }>>({});
     const [isLoadingLayout, setIsLoadingLayout] = useState(true);
-    
+
     const [zoom, setZoom] = useState(1);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [panPos, setPanPos] = useState({ x: 0, y: 0 });
@@ -102,7 +102,7 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                 console.error("Failed to sync floor plan to server", err);
             }
         }, 1000);
-        
+
         return () => clearTimeout(saveTimer.current);
     }, [positions, isLoadingLayout]);
 
@@ -114,7 +114,7 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
         return { x: col * 180 + 20, y: row * 120 + 20 };
     };
 
-    const handleDragEnd = (id: string, info: any, currentPos: {x: number, y: number}) => {
+    const handleDragEnd = (id: string, info: any, currentPos: { x: number, y: number }) => {
         let newX = currentPos.x + (info.offset.x / zoom);
         let newY = currentPos.y + (info.offset.y / zoom);
 
@@ -122,7 +122,7 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
         const SNAP_THRESHOLD = 20;
         let snappedX = false;
         let snappedY = false;
-        
+
         const targetPositions = workstations
             .filter(w => w.id !== id)
             .map((w, i) => positions[w.id] || initialGridAlign(i));
@@ -185,18 +185,10 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
             return next;
         });
 
-        setPanPos({ x: -info.offset.x * 0.0001, y: -info.offset.y * 0.0001 }); 
+        setPanPos({ x: -info.offset.x * 0.0001, y: -info.offset.y * 0.0001 });
         setTimeout(() => setPanPos({ x: 0, y: 0 }), 10);
     };
-    
-    // Quick reset layout
-    const resetLayout = () => {
-        const res: Record<string, { x: number; y: number; w?: number; h?: number }> = {};
-        workstations.forEach((ws, idx) => {
-            res[ws.id] = initialGridAlign(idx);
-        });
-        setPositions(res);
-    };
+
 
     const filteredIds = new Set(filteredWorkstations.map(ws => ws.id));
 
@@ -222,17 +214,17 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                         </div>
                     ))}
                 </div>
-                
+
                 <div className="flex items-center gap-4">
                     {/* Zoom Bar */}
                     <div className="flex items-center gap-2 bg-gray-200 dark:bg-white/5 px-2 py-1.5 rounded-lg flex-shrink-0">
                         <button onClick={() => setZoom(Math.max(0.2, zoom - 0.1))} className="text-gray-500 hover:text-blue-500 transition-colors">
                             <ZoomOut size={14} />
                         </button>
-                        <input 
-                            type="range" 
-                            min="0.2" max="2" step="0.1" 
-                            value={zoom} 
+                        <input
+                            type="range"
+                            min="0.2" max="2" step="0.1"
+                            value={zoom}
                             onChange={(e) => setZoom(parseFloat(e.target.value))}
                             className="w-20 accent-blue-500 h-1 bg-gray-300 dark:bg-white/10 rounded-lg appearance-none cursor-pointer"
                         />
@@ -241,20 +233,19 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                         </button>
                         <span className="text-[10px] font-bold text-gray-400 w-8 text-right">{Math.round(zoom * 100)}%</span>
                     </div>
-                    
-                    <button 
+
+                    <button
                         onClick={() => setIsLocked(prev => !prev)}
                         title={isLocked ? 'Unlock Layout' : 'Lock Layout'}
-                        className={`flex items-center gap-1.5 text-xs font-bold transition-colors uppercase tracking-widest px-3 py-1.5 rounded-lg ${
-                            isLocked
+                        className={`flex items-center gap-1.5 text-xs font-bold transition-colors uppercase tracking-widest px-3 py-1.5 rounded-lg ${isLocked
                                 ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 border border-amber-500/30'
                                 : 'bg-gray-200 dark:bg-white/5 text-gray-500 hover:text-blue-500 dark:hover:text-blue-400'
-                        }`}
+                            }`}
                     >
                         {isLocked ? <Lock size={13} /> : <LockOpen size={13} />}
                         {isLocked ? 'Locked' : 'Lock Layout'}
                     </button>
-                    
+
                     <button
                         onClick={() => setIsFullscreen(!isFullscreen)}
                         className="text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors ml-1 p-1.5 rounded-lg bg-gray-200 dark:bg-white/5"
@@ -266,7 +257,7 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
             </div>
 
             {/* Canvas */}
-            <div 
+            <div
                 ref={containerRef}
                 className="relative flex-1 overflow-auto bg-gray-50 dark:bg-[#121418] w-full h-full custom-scrollbar"
                 style={{
@@ -275,7 +266,7 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                 }}
             >
                 {/* Expanding wrapper to ensure scrolling works if dragged out of view */}
-                <motion.div 
+                <motion.div
                     drag={!isLocked}
                     dragMomentum={false}
                     animate={{ x: panPos.x, y: panPos.y, scale: zoom }}
@@ -284,86 +275,86 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                     className={`absolute w-[200vw] h-[200vh] ${isLocked ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`}
                 >
                     {workstations.map((ws, i) => {
-                    const pos = positions[ws.id] || initialGridAlign(i);
-                    const boxW = pos.w || 140;
-                    const boxH = pos.h || 150;
-                    const isFiltered = filteredIds.has(ws.id);
-                    const unreadCount = unreadMap[ws.assignedTo?.id || ''] || 0;
+                        const pos = positions[ws.id] || initialGridAlign(i);
+                        const boxW = pos.w || 140;
+                        const boxH = pos.h || 150;
+                        const isFiltered = filteredIds.has(ws.id);
+                        const unreadCount = unreadMap[ws.assignedTo?.id || ''] || 0;
 
-                    return (
-                        <motion.div
-                            key={ws.id}
-                            drag={!isLocked}
-                            dragMomentum={false}
-                            initial={false}
-                            animate={{ x: pos.x, y: pos.y, width: boxW, height: boxH }}
-                            onDragEnd={(_e, info) => handleDragEnd(ws.id, info, pos)}
-                            whileDrag={!isLocked ? { scale: 1.05, zIndex: 100, cursor: 'grabbing', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)' } : {}}
-                            className={`absolute select-none rounded-xl border backdrop-blur-md shadow-lg p-2.5 flex flex-col overflow-hidden
+                        return (
+                            <motion.div
+                                key={ws.id}
+                                drag={!isLocked}
+                                dragMomentum={false}
+                                initial={false}
+                                animate={{ x: pos.x, y: pos.y, width: boxW, height: boxH }}
+                                onDragEnd={(_e, info) => handleDragEnd(ws.id, info, pos)}
+                                whileDrag={!isLocked ? { scale: 1.05, zIndex: 100, cursor: 'grabbing', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)' } : {}}
+                                className={`absolute select-none rounded-xl border backdrop-blur-md shadow-lg p-2.5 flex flex-col overflow-hidden
                                 ${isLocked ? 'cursor-default' : 'cursor-grab'}
                                 ${isFiltered ? 'opacity-100 z-10' : 'opacity-30 z-0 grayscale'}
                                 ${statusBorderColors[ws.status] || 'border-white/10'}
                                 ${statusBgColors[ws.status] || 'bg-white/5'}
                             `}
-                        >
-                            <div className="absolute -top-1 -right-1 flex gap-1 z-10">
-                                {unreadCount > 0 && (
-                                    <span className="flex items-center justify-center min-w-[16px] h-[16px] px-1 bg-red-500 text-white text-[9px] font-bold rounded-full shadow-md animate-pulse ring-2 ring-[#121418]">
-                                        {unreadCount}
-                                    </span>
-                                )}
-                                <div className={`w-2 h-2 rounded-full ring-2 ring-[#121418] mt-1 mr-1 ${statusDotColors[ws.status] || 'bg-gray-500'}`} />
-                            </div>
-
-                            <div 
-                                className="flex flex-col items-center flex-1 h-full w-full"
-                                onDoubleClick={() => onOpenDetail(ws)}
                             >
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-white/10 dark:to-white/5 border border-white/10 flex items-center justify-center shadow-inner text-gray-700 dark:text-gray-300 shrink-0 mb-1.5">
-                                    <Monitor size={20} />
-                                </div>
-                                <div className="flex-1 flex items-center justify-center w-full">
-                                    <h4 className="text-white font-black text-[11px] leading-tight tracking-wide text-center uppercase line-clamp-3">
-                                        {ws.unitId}
-                                    </h4>
-                                </div>
-                                
-                                <div className="w-full bg-black/20 rounded-lg p-1.5 mt-auto border border-white/5 flex items-center justify-center gap-2 shrink-0">
-                                    {ws.assignedTo ? (
-                                        <>
-                                            <div className="w-4 h-4 rounded-full overflow-hidden bg-blue-500 shrink-0 flex items-center justify-center text-[8px] font-bold text-white">
-                                               {ws.assignedTo.avatar ? (
-                                                   <img src={ws.assignedTo.avatar} alt="avatar" className="w-full h-full object-cover" />
-                                               ) : (
-                                                   ws.assignedTo.name.charAt(0)
-                                               )}
-                                            </div>
-                                            <span className="text-[9px] text-gray-300 font-medium truncate">
-                                                {ws.assignedTo.name.split(' ')[0]}
-                                            </span>
-                                        </>
-                                    ) : (
-                                        <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">
-                                            Empty
+                                <div className="absolute -top-1 -right-1 flex gap-1 z-10">
+                                    {unreadCount > 0 && (
+                                        <span className="flex items-center justify-center min-w-[16px] h-[16px] px-1 bg-red-500 text-white text-[9px] font-bold rounded-full shadow-md animate-pulse ring-2 ring-[#121418]">
+                                            {unreadCount}
                                         </span>
                                     )}
+                                    <div className={`w-2 h-2 rounded-full ring-2 ring-[#121418] mt-1 mr-1 ${statusDotColors[ws.status] || 'bg-gray-500'}`} />
                                 </div>
-                            </div>
 
-                            {/* --- Custom Resize Handle --- */}
-                            {!isLocked && (
-                                <div 
-                                    onPointerDownCapture={(e) => handleResizeStart(e, ws.id, boxW, boxH)}
-                                    className="absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize z-20 flex items-end justify-end p-1.5 text-gray-500 hover:text-white"
+                                <div
+                                    className="flex flex-col items-center flex-1 h-full w-full"
+                                    onDoubleClick={() => onOpenDetail(ws)}
                                 >
-                                    <svg width="6" height="6" viewBox="0 0 6 6" fill="currentColor">
-                                        <path d="M6 6L6 0L0 6H6Z" />
-                                    </svg>
+                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-white/10 dark:to-white/5 border border-white/10 flex items-center justify-center shadow-inner text-gray-700 dark:text-gray-300 shrink-0 mb-1.5">
+                                        <Monitor size={20} />
+                                    </div>
+                                    <div className="flex-1 flex items-center justify-center w-full">
+                                        <h4 className="text-white font-black text-[11px] leading-tight tracking-wide text-center uppercase line-clamp-3">
+                                            {ws.unitId}
+                                        </h4>
+                                    </div>
+
+                                    <div className="w-full bg-black/20 rounded-lg p-1.5 mt-auto border border-white/5 flex items-center justify-center gap-2 shrink-0">
+                                        {ws.assignedTo ? (
+                                            <>
+                                                <div className="w-4 h-4 rounded-full overflow-hidden bg-blue-500 shrink-0 flex items-center justify-center text-[8px] font-bold text-white">
+                                                    {ws.assignedTo.avatar ? (
+                                                        <img src={ws.assignedTo.avatar} alt="avatar" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        ws.assignedTo.name.charAt(0)
+                                                    )}
+                                                </div>
+                                                <span className="text-[9px] text-gray-300 font-medium truncate">
+                                                    {ws.assignedTo.name.split(' ')[0]}
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">
+                                                Empty
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
-                            )}
-                        </motion.div>
-                    );
-                })}
+
+                                {/* --- Custom Resize Handle --- */}
+                                {!isLocked && (
+                                    <div
+                                        onPointerDownCapture={(e) => handleResizeStart(e, ws.id, boxW, boxH)}
+                                        className="absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize z-20 flex items-end justify-end p-1.5 text-gray-500 hover:text-white"
+                                    >
+                                        <svg width="6" height="6" viewBox="0 0 6 6" fill="currentColor">
+                                            <path d="M6 6L6 0L0 6H6Z" />
+                                        </svg>
+                                    </div>
+                                )}
+                            </motion.div>
+                        );
+                    })}
                 </motion.div>
             </div>
 
