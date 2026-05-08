@@ -295,22 +295,22 @@ export const createReport = async (req: Request, res: Response) => {
       // Parse next steps which comes in as a newline-separated string
       const parsedNextSteps = nextSteps ? nextSteps.split('\n').filter(Boolean) : [];
 
-      const clickupMessage = `*Daily Shift Report - ${formattedDate}*
+      const clickupMessage = `📋 Daily Shift Report — ${formattedDate}
 Updated the Daily Log Report and the Maintenance Ledger with today’s entries.
 
-*Reactive Support:*
+🛠️ Reactive Support:
 ${formatList(reactiveTickets)}
 
-*Proactive Maintenance:*
+🔧 Proactive Maintenance:
 ${formatList(proactiveMaintenance)}
 
-*Focus & Notes:*
+📝 Focus & Notes:
 ${researchNotes ? researchNotes : 'None'}
 
-*Next Steps:*
+🔜 Next Steps:
 ${formatList(parsedNextSteps)}
 
-Link to CapyDam ITT Daily Reports: ${clientUrl}/apps/itt`;
+🔗 Link to CapyDam ITT Daily Reports: ${clientUrl}/apps/itt`;
 
       await fetch(`https://api.clickup.com/api/v2/view/2kzkdb7b-8458/comment`, {
         method: 'POST',
