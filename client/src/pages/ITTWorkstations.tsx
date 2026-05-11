@@ -123,6 +123,20 @@ const WorkstationSpecs = ({
         icon: <MonitorIcon size={14} />
     }));
 
+    // Group primary parts by type
+    const groupedPrimaryParts: Record<string, PartItem[]> = {};
+    primaryParts.forEach(p => {
+        if (!groupedPrimaryParts[p.type]) groupedPrimaryParts[p.type] = [];
+        groupedPrimaryParts[p.type].push(p);
+    });
+
+    // Group extended parts by type
+    const groupedExtendedParts: Record<string, PartItem[]> = {};
+    extendedParts.forEach(p => {
+        if (!groupedExtendedParts[p.type]) groupedExtendedParts[p.type] = [];
+        groupedExtendedParts[p.type].push(p);
+    });
+
     return (
         <div className="w-72 shrink-0 border-r border-white/5 overflow-y-auto p-6 space-y-5 bg-black/10 custom-scrollbar">
             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -132,17 +146,23 @@ const WorkstationSpecs = ({
 
             {/* Primary Grid */}
             <div className="space-y-5">
-                {primaryParts.length > 0 ? primaryParts.map(part => (
-                    <div key={part.id}>
-                        <h4 className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 mb-0.5">
-                            {part.type === 'CPU' ? <Cpu size={14} /> :
-                                part.type === 'RAM' ? <Database size={14} /> :
-                                    part.type === 'STORAGE' ? <HardDrive size={14} /> :
-                                        part.type === 'GPU' ? <View size={14} /> : <Package size={14} />}
-                            {part.type}
+                {Object.keys(groupedPrimaryParts).length > 0 ? Object.entries(groupedPrimaryParts).map(([type, partsOfType]) => (
+                    <div key={type}>
+                        <h4 className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 mb-1">
+                            {type === 'CPU' ? <Cpu size={14} /> :
+                                type === 'RAM' ? <Database size={14} /> :
+                                    type === 'STORAGE' ? <HardDrive size={14} /> :
+                                        type === 'GPU' ? <View size={14} /> : <Package size={14} />}
+                            {type}
                         </h4>
-                        <p className="text-gray-900 dark:text-white font-medium text-sm">{part.itemName}</p>
-                        <p className="text-[9px] text-gray-500 font-mono">SN: {part.serialNumber}</p>
+                        <div className="space-y-2">
+                            {partsOfType.map(part => (
+                                <div key={part.id}>
+                                    <p className="text-gray-900 dark:text-white font-medium text-sm leading-tight">{part.itemName}</p>
+                                    <p className="text-[9px] text-gray-500 font-mono mt-0.5">SN: {part.serialNumber}</p>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )) : (
                     <p className="text-xs italic text-gray-400">No primary hardware assigned.</p>
@@ -158,21 +178,28 @@ const WorkstationSpecs = ({
                         exit={{ height: 0, opacity: 0 }}
                         className="space-y-5 overflow-hidden pt-5 border-t border-white/5"
                     >
-                        {extendedParts.map(part => (
-                            <div key={part.id}>
-                                <h4 className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1.5 mb-0.5">
-                                    {part.type === 'MOBO' ? <Layers size={14} /> :
-                                        part.type === 'PSU' ? <Zap size={14} /> : 
-                                        part.type === 'WEBCAM' ? <Camera size={14} /> :
-                                        part.type === 'HEADSET' ? <Headphones size={14} /> :
-                                        part.type === 'KEYBOARD' ? <Keyboard size={14} /> :
-                                        part.type === 'LAN_CABLE' ? <Cable size={14} /> :
-                                        part.type === 'CABLE_ADAPTOR' ? <Plug size={14} /> :
-                                        part.type === 'WIFI_ADAPTOR' ? <Wifi size={14} /> :
+                        {Object.entries(groupedExtendedParts).map(([type, partsOfType]) => (
+                            <div key={type}>
+                                <h4 className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1.5 mb-1">
+                                    {type === 'MOBO' ? <Layers size={14} /> :
+                                        type === 'PSU' ? <Zap size={14} /> : 
+                                        type === 'WEBCAM' ? <Camera size={14} /> :
+                                        type === 'HEADSET' ? <Headphones size={14} /> :
+                                        type === 'KEYBOARD' ? <Keyboard size={14} /> :
+                                        type === 'LAN_CABLE' ? <Cable size={14} /> :
+                                        type === 'CABLE_ADAPTOR' ? <Plug size={14} /> :
+                                        type === 'WIFI_ADAPTOR' ? <Wifi size={14} /> :
                                         <Package size={14} />}
-                                    {part.type}
+                                    {type}
                                 </h4>
-                                <p className="text-gray-700 dark:text-gray-300 font-medium text-sm">{part.itemName}</p>
+                                <div className="space-y-2">
+                                    {partsOfType.map(part => (
+                                        <div key={part.id}>
+                                            <p className="text-gray-700 dark:text-gray-300 font-medium text-sm leading-tight">{part.itemName}</p>
+                                            <p className="text-[9px] text-gray-500 font-mono mt-0.5">SN: {part.serialNumber}</p>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         ))}
                         {monitorSpecs.length > 0 ? (
@@ -265,6 +292,7 @@ const ITTWorkstations = () => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [initialHardware, setInitialHardware] = useState<Record<string, string>>({});
     const [storageItems, setStorageItems] = useState<string[]>(['']);
+    const [ramItems, setRamItems] = useState<string[]>(['']);
     const [searchTerm, setSearchTerm] = useState('');
     const [specFilters, setSpecFilters] = useState({
         cpu: '',
@@ -445,9 +473,9 @@ const ITTWorkstations = () => {
 
             // Calculate newly deployed items by dynamically scanning the final submitted strings
             const allHardwareStrings = [
-                formData.mobo, formData.cpu, formData.ram, formData.gpu, formData.psu, formData.monitor,
+                formData.mobo, formData.cpu, formData.gpu, formData.psu, formData.monitor,
                 formData.webcam, formData.headset, formData.keyboard, formData.lanCable, formData.cableAdaptor, formData.wifiAdaptor,
-                ...storageItems
+                ...storageItems, ...ramItems
             ];
 
             allHardwareStrings.forEach(str => {
@@ -463,7 +491,7 @@ const ITTWorkstations = () => {
             });
 
             if (editingId) {
-                const hardwareKeys = ['mobo', 'cpu', 'ram', 'gpu', 'psu', 'monitor', 'webcam', 'headset', 'keyboard', 'lanCable', 'cableAdaptor', 'wifiAdaptor'];
+                const hardwareKeys = ['mobo', 'cpu', 'gpu', 'psu', 'monitor', 'webcam', 'headset', 'keyboard', 'lanCable', 'cableAdaptor', 'wifiAdaptor'];
                 
                 // Compare standard singular fields
                 hardwareKeys.forEach(key => {
@@ -490,12 +518,26 @@ const ITTWorkstations = () => {
                     const invItem = stock.find(i => i.serialNumber === sn);
                     if (invItem) releasedItemIds.push(invItem.id);
                 });
+
+                // Compare multiple-ram string
+                const oldRam = initialHardware.ram || '';
+                const newRam = ramItems.filter(Boolean).join(' | ');
+                
+                const oldRamSns = Array.from(oldRam.matchAll(/\(SN:\s*(.+?)\)/g)).map((m: any) => m[1].trim());
+                const newRamSns = Array.from(newRam.matchAll(/\(SN:\s*(.+?)\)/g)).map((m: any) => m[1].trim());
+                
+                const releasedRamSns = oldRamSns.filter(sn => !newRamSns.includes(sn));
+                releasedRamSns.forEach(sn => {
+                    const invItem = stock.find(i => i.serialNumber === sn);
+                    if (invItem) releasedItemIds.push(invItem.id);
+                });
             }
 
             // Build payload — backend handles deploy/release atomically in one transaction
             const payload = {
                 ...formData,
                 storage: storageItems.filter(Boolean).join(' | '),
+                ram: ramItems.filter(Boolean).join(' | '),
                 assignedToId: formData.assignedToId || null,
                 deployedItemIds: Array.from(deployedItemIdsSet),
                 releasedItemIds,
@@ -569,11 +611,13 @@ const ITTWorkstations = () => {
                 lanCable: ws.lanCable || '', cableAdaptor: ws.cableAdaptor || '', wifiAdaptor: ws.wifiAdaptor || ''
             });
             setStorageItems(ws.storage ? ws.storage.split(' | ') : ['']);
+            setRamItems(ws.ram ? ws.ram.split(' | ') : ['']);
         } else {
             setEditingId(null);
             setFormData({ unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', webcam: '', headset: '', keyboard: '', lanCable: '', cableAdaptor: '', wifiAdaptor: '', status: 'active', assignedToId: '' });
             setInitialHardware({});
             setStorageItems(['']);
+            setRamItems(['']);
         }
         setIsModalOpen(true);
     };
@@ -582,6 +626,7 @@ const ITTWorkstations = () => {
         setIsModalOpen(false);
         setEditingId(null);
         setStorageItems(['']);
+        setRamItems(['']);
     };
 
     const assignedUserIds = useMemo(() => {
@@ -905,7 +950,6 @@ const ITTWorkstations = () => {
                                 {([
                                     { label: 'Motherboard', key: 'mobo', icon: <Layers size={16} />, invType: 'MOBO' },
                                     { label: 'CPU', key: 'cpu', icon: <Cpu size={16} />, invType: 'CPU' },
-                                    { label: 'RAM', key: 'ram', icon: <Database size={16} />, invType: 'RAM' },
                                     { label: 'GPU', key: 'gpu', icon: <View size={16} />, invType: 'GPU' },
                                     { label: 'PSU', key: 'psu', icon: <Zap size={16} />, invType: 'PSU' },
                                     { label: 'Monitor', key: 'monitor', icon: <MonitorIcon size={16} />, invType: 'MONITOR' },
@@ -918,11 +962,11 @@ const ITTWorkstations = () => {
                                 ] as { label: string; key: string; icon: React.ReactNode; invType: string }[]).map(({ label, key, icon, invType }) => {
                                     // Items already used in this form for other fields (to avoid double-assignment)
                                     const usedSns = [
-                                        formData.mobo, formData.cpu, formData.ram,
+                                        formData.mobo, formData.cpu,
                                         formData.gpu, formData.psu, formData.monitor,
                                         formData.webcam, formData.headset, formData.keyboard,
                                         formData.lanCable, formData.cableAdaptor, formData.wifiAdaptor,
-                                        ...storageItems
+                                        ...storageItems, ...ramItems
                                     ]
                                         .filter((v, _idx, _arr) => {
                                             // Exclude the current field's own value so it can re-select itself when editing
@@ -1074,6 +1118,92 @@ const ITTWorkstations = () => {
                                     {stock.filter(s => s.type === 'STORAGE' && s.status === 'Active').length === 0 && (
                                         <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
                                             <AlertCircle size={10} /> Add Storage items to inventory first
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* ── RAM Devices — inventory-only, multi-select ── */}
+                                <div className="col-span-1 md:col-span-2 bg-gray-50/50 dark:bg-black/10 p-4 rounded-xl border border-gray-200/60 dark:border-white/5 space-y-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
+                                            <Database size={16} className="text-gray-400" />
+                                            RAM Devices <span className="text-red-500">*</span>
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setRamItems([...ramItems, ''])}
+                                            className="text-xs font-bold text-blue-500 hover:text-blue-600 flex items-center gap-1 bg-blue-50/50 dark:bg-blue-500/10 px-2 py-1 rounded-md"
+                                        >
+                                            <Plus size={12} /> Add RAM
+                                        </button>
+                                    </div>
+
+                                    {ramItems.map((val, idx) => {
+                                        // SNs already chosen in other slots
+                                        const selectedRamSns = ramItems
+                                            .map((v, i) => i !== idx ? v.match(/\(SN:\s*(.+?)\)/)?.[1]?.trim() : null)
+                                            .filter(Boolean) as string[];
+
+                                        const availableRamStock = stock.filter(
+                                            s => s.type === 'RAM' && (s.status === 'Active' || s.status === 'Available') && !selectedRamSns.includes(s.serialNumber)
+                                        );
+
+                                        const currentSn = val.match(/\(SN:\s*(.+?)\)/)?.[1]?.trim();
+                                        const currentRamItem = stock.find(s => s.serialNumber === currentSn);
+                                        const ramDropdownValue = currentRamItem?.id ?? '';
+                                        const ramIsEmpty = availableRamStock.length === 0 && !currentRamItem;
+
+                                        return (
+                                            <div key={idx} className="flex items-center gap-2">
+                                                <span className="text-gray-400 font-bold text-[10px] w-4 text-center shrink-0">{idx + 1}</span>
+                                                <div className="flex-1 min-w-[200px]">
+                                                    <CustomSelect
+                                                        required={idx === 0}
+                                                        disabled={ramIsEmpty}
+                                                        value={ramDropdownValue}
+                                                        onChange={(selectedId) => {
+                                                            const allOptions = [...availableRamStock];
+                                                            if (currentRamItem && !allOptions.find(i => i.id === currentRamItem.id)) {
+                                                                allOptions.push(currentRamItem);
+                                                            }
+                                                            const item = allOptions.find(i => i.id === selectedId);
+                                                            const newItems = [...ramItems];
+                                                            newItems[idx] = item ? `${item.itemName} (SN: ${item.serialNumber})` : '';
+                                                            setRamItems(newItems);
+                                                        }}
+                                                        placeholder={ramIsEmpty ? 'No RAM available in inventory' : 'Select RAM stick...'}
+                                                        icon={<Package size={14} className="text-blue-500" />}
+                                                        options={[
+                                                            ...(currentRamItem && !availableRamStock.find(i => i.id === currentRamItem.id) ? [{
+                                                                value: currentRamItem.id,
+                                                                label: `${currentRamItem.itemName} (SN: ${currentRamItem.serialNumber}) — current`
+                                                            }] : []),
+                                                            ...availableRamStock.map(item => ({
+                                                                value: item.id,
+                                                                label: `${item.itemName} (SN: ${item.serialNumber})`
+                                                            }))
+                                                        ]}
+                                                    />
+                                                </div>
+                                                {ramItems.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const newItems = ramItems.filter((_, i) => i !== idx);
+                                                            setRamItems(newItems);
+                                                        }}
+                                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors shrink-0"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+
+                                    {stock.filter(s => s.type === 'RAM' && s.status === 'Active').length === 0 && (
+                                        <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
+                                            <AlertCircle size={10} /> Add RAM items to inventory first
                                         </p>
                                     )}
                                 </div>
