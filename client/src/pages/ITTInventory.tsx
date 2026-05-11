@@ -11,7 +11,7 @@ import {
     Monitor as MonitorIcon, Zap, Plus, Search, Package,
     Edit2, Trash2, Calendar, FileText, Hash, X, Tag, AlertCircle,
     Camera, Headphones, Keyboard, Cable, Plug, Wifi,
-    BarChart2
+    BarChart2, ListFilter
 } from 'lucide-react';
 
 // --- TYPES ---
@@ -51,6 +51,7 @@ const ITTInventory = () => {
     const [selectedCategory, setSelectedCategory] = useState(inventoryCategories[0].id);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [sortFilter, setSortFilter] = useState('name-asc');
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -150,7 +151,7 @@ const ITTInventory = () => {
     };
 
     const filteredInventory = useMemo(() => {
-        return inventory.filter(item => {
+        let filtered = inventory.filter(item => {
             const matchesCategory = item.type === selectedCategory;
             const matchesSearch =
                 item.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -158,7 +159,40 @@ const ITTInventory = () => {
                 (item.notes && item.notes.toLowerCase().includes(searchTerm.toLowerCase()));
             return matchesCategory && matchesSearch;
         });
-    }, [inventory, selectedCategory, searchTerm]);
+
+        filtered.sort((a, b) => {
+            switch (sortFilter) {
+                case 'name-asc':
+                    return a.itemName.localeCompare(b.itemName);
+                case 'name-desc':
+                    return b.itemName.localeCompare(a.itemName);
+                case 'serial-asc':
+                    return a.serialNumber.localeCompare(b.serialNumber);
+                case 'serial-desc':
+                    return b.serialNumber.localeCompare(a.serialNumber);
+                case 'status-active': {
+                    const order: Record<string, number> = { 'active': 1, 'available': 2, 'defective': 3 };
+                    return (order[a.status.toLowerCase()] || 4) - (order[b.status.toLowerCase()] || 4);
+                }
+                case 'status-available': {
+                    const order: Record<string, number> = { 'available': 1, 'active': 2, 'defective': 3 };
+                    return (order[a.status.toLowerCase()] || 4) - (order[b.status.toLowerCase()] || 4);
+                }
+                case 'status-defective': {
+                    const order: Record<string, number> = { 'defective': 1, 'available': 2, 'active': 3 };
+                    return (order[a.status.toLowerCase()] || 4) - (order[b.status.toLowerCase()] || 4);
+                }
+                case 'date-desc':
+                    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                case 'date-asc':
+                    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+                default:
+                    return 0;
+            }
+        });
+
+        return filtered;
+    }, [inventory, selectedCategory, searchTerm, sortFilter]);
 
     // Category-level stats (all items in category, regardless of search)
     const categoryStats = useMemo(() => {
@@ -248,6 +282,25 @@ const ITTInventory = () => {
                             className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm dark:text-white transition-all"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <div className="w-full sm:w-48 z-10">
+                        <CustomSelect
+                            value={sortFilter}
+                            onChange={(val) => setSortFilter(val)}
+                            options={[
+                                { value: 'name-asc', label: 'Name (A-Z)' },
+                                { value: 'name-desc', label: 'Name (Z-A)' },
+                                { value: 'serial-asc', label: 'Serial (A-Z)' },
+                                { value: 'serial-desc', label: 'Serial (Z-A)' },
+                                { value: 'status-active', label: 'Status (Active First)' },
+                                { value: 'status-available', label: 'Status (Available First)' },
+                                { value: 'status-defective', label: 'Status (Defective First)' },
+                                { value: 'date-desc', label: 'Newest Added' },
+                                { value: 'date-asc', label: 'Oldest Added' },
+                            ]}
+                            icon={<ListFilter size={16} />}
+                            className="!py-0"
                         />
                     </div>
                     <button onClick={() => openModal()} className="flex items-center justify-center gap-2 px-5 py-2 w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors shadow-sm whitespace-nowrap text-sm">
