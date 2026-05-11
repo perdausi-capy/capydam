@@ -215,7 +215,8 @@ const ITTInventory = () => {
 
     const getStatusColor = (status: string) => {
         switch (status.toLowerCase()) {
-            case 'active': return 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400';
+            case 'active': return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400';
+            case 'available': return 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400';
             case 'defective': return 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400';
             case 'custom': return 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400';
             default: return 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400';
