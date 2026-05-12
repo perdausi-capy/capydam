@@ -183,6 +183,7 @@ const WorkstationSpecs = ({
                                 <h4 className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1.5 mb-1">
                                     {type === 'MOBO' ? <Layers size={14} /> :
                                         type === 'PSU' ? <Zap size={14} /> : 
+                                        type === 'MONITOR' ? <MonitorIcon size={14} /> :
                                         type === 'WEBCAM' ? <Camera size={14} /> :
                                         type === 'HEADSET' ? <Headphones size={14} /> :
                                         type === 'KEYBOARD' ? <Keyboard size={14} /> :
@@ -202,14 +203,14 @@ const WorkstationSpecs = ({
                                 </div>
                             </div>
                         ))}
-                        {monitorSpecs.length > 0 ? (
-                            monitorSpecs.map(({ label, value, icon }, idx) => (
+                        {monitorSpecs.length > 0 && monitorSpecs.map(({ label, value, icon }, idx) => (
                                 <div key={idx}>
                                     <h4 className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1.5 mb-0.5">{icon}{label}</h4>
                                     <p className="text-gray-700 dark:text-gray-300 font-medium text-sm">{value}</p>
                                 </div>
                             ))
-                        ) : (
+                        }
+                        {monitorSpecs.length === 0 && (!groupedExtendedParts['MONITOR'] || groupedExtendedParts['MONITOR'].length === 0) && (
                             <div>
                                 <h4 className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1.5 mb-0.5"><MonitorIcon size={14} /> Monitor</h4>
                                 <p className="text-gray-700 dark:text-gray-300 font-medium text-sm">No Monitor Assigned</p>
@@ -293,6 +294,7 @@ const ITTWorkstations = () => {
     const [initialHardware, setInitialHardware] = useState<Record<string, string>>({});
     const [storageItems, setStorageItems] = useState<string[]>(['']);
     const [ramItems, setRamItems] = useState<string[]>(['']);
+    const [monitorItems, setMonitorItems] = useState<string[]>(['']);
     const [searchTerm, setSearchTerm] = useState('');
     const [specFilters, setSpecFilters] = useState({
         cpu: '',
@@ -473,9 +475,9 @@ const ITTWorkstations = () => {
 
             // Calculate newly deployed items by dynamically scanning the final submitted strings
             const allHardwareStrings = [
-                formData.mobo, formData.cpu, formData.gpu, formData.psu, formData.monitor,
+                formData.mobo, formData.cpu, formData.gpu, formData.psu,
                 formData.webcam, formData.headset, formData.keyboard, formData.lanCable, formData.cableAdaptor, formData.wifiAdaptor,
-                ...storageItems, ...ramItems
+                ...storageItems, ...ramItems, ...monitorItems
             ];
 
             allHardwareStrings.forEach(str => {
@@ -491,7 +493,7 @@ const ITTWorkstations = () => {
             });
 
             if (editingId) {
-                const hardwareKeys = ['mobo', 'cpu', 'gpu', 'psu', 'monitor', 'webcam', 'headset', 'keyboard', 'lanCable', 'cableAdaptor', 'wifiAdaptor'];
+                const hardwareKeys = ['mobo', 'cpu', 'gpu', 'psu', 'webcam', 'headset', 'keyboard', 'lanCable', 'cableAdaptor', 'wifiAdaptor'];
                 
                 // Compare standard singular fields
                 hardwareKeys.forEach(key => {
@@ -531,6 +533,19 @@ const ITTWorkstations = () => {
                     const invItem = stock.find(i => i.serialNumber === sn);
                     if (invItem) releasedItemIds.push(invItem.id);
                 });
+
+                // Compare multiple-monitor string
+                const oldMonitor = initialHardware.monitor || '';
+                const newMonitor = monitorItems.filter(Boolean).join(' | ');
+                
+                const oldMonitorSns = Array.from(oldMonitor.matchAll(/\(SN:\s*(.+?)\)/g)).map((m: any) => m[1].trim());
+                const newMonitorSns = Array.from(newMonitor.matchAll(/\(SN:\s*(.+?)\)/g)).map((m: any) => m[1].trim());
+                
+                const releasedMonitorSns = oldMonitorSns.filter(sn => !newMonitorSns.includes(sn));
+                releasedMonitorSns.forEach(sn => {
+                    const invItem = stock.find(i => i.serialNumber === sn);
+                    if (invItem) releasedItemIds.push(invItem.id);
+                });
             }
 
             // Build payload — backend handles deploy/release atomically in one transaction
@@ -538,6 +553,7 @@ const ITTWorkstations = () => {
                 ...formData,
                 storage: storageItems.filter(Boolean).join(' | '),
                 ram: ramItems.filter(Boolean).join(' | '),
+                monitor: monitorItems.filter(Boolean).join(' | '),
                 assignedToId: formData.assignedToId || null,
                 deployedItemIds: Array.from(deployedItemIdsSet),
                 releasedItemIds,
@@ -612,12 +628,14 @@ const ITTWorkstations = () => {
             });
             setStorageItems(ws.storage ? ws.storage.split(' | ') : ['']);
             setRamItems(ws.ram ? ws.ram.split(' | ') : ['']);
+            setMonitorItems(ws.monitor ? ws.monitor.split(' | ') : ['']);
         } else {
             setEditingId(null);
             setFormData({ unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', webcam: '', headset: '', keyboard: '', lanCable: '', cableAdaptor: '', wifiAdaptor: '', status: 'active', assignedToId: '' });
             setInitialHardware({});
             setStorageItems(['']);
             setRamItems(['']);
+            setMonitorItems(['']);
         }
         setIsModalOpen(true);
     };
@@ -627,6 +645,7 @@ const ITTWorkstations = () => {
         setEditingId(null);
         setStorageItems(['']);
         setRamItems(['']);
+        setMonitorItems(['']);
     };
 
     const assignedUserIds = useMemo(() => {
@@ -946,13 +965,11 @@ const ITTWorkstations = () => {
                                     </div>
                                 </div>
 
-                                {/* ── Hardware dropdowns — inventory-only ── */}
                                 {([
                                     { label: 'Motherboard', key: 'mobo', icon: <Layers size={16} />, invType: 'MOBO' },
                                     { label: 'CPU', key: 'cpu', icon: <Cpu size={16} />, invType: 'CPU' },
                                     { label: 'GPU', key: 'gpu', icon: <View size={16} />, invType: 'GPU' },
                                     { label: 'PSU', key: 'psu', icon: <Zap size={16} />, invType: 'PSU' },
-                                    { label: 'Monitor', key: 'monitor', icon: <MonitorIcon size={16} />, invType: 'MONITOR' },
                                     { label: 'Webcam', key: 'webcam', icon: <Camera size={16} />, invType: 'WEBCAM' },
                                     { label: 'Headset', key: 'headset', icon: <Headphones size={16} />, invType: 'HEADSET' },
                                     { label: 'Keyboard', key: 'keyboard', icon: <Keyboard size={16} />, invType: 'KEYBOARD' },
@@ -963,10 +980,10 @@ const ITTWorkstations = () => {
                                     // Items already used in this form for other fields (to avoid double-assignment)
                                     const usedSns = [
                                         formData.mobo, formData.cpu,
-                                        formData.gpu, formData.psu, formData.monitor,
+                                        formData.gpu, formData.psu,
                                         formData.webcam, formData.headset, formData.keyboard,
                                         formData.lanCable, formData.cableAdaptor, formData.wifiAdaptor,
-                                        ...storageItems, ...ramItems
+                                        ...storageItems, ...ramItems, ...monitorItems
                                     ]
                                         .filter((v, _idx, _arr) => {
                                             // Exclude the current field's own value so it can re-select itself when editing
@@ -1207,6 +1224,93 @@ const ITTWorkstations = () => {
                                     {stock.filter(s => s.type === 'RAM' && s.status === 'Active').length === 0 && (
                                         <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
                                             <AlertCircle size={10} /> Add RAM items to inventory first
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* ── Monitor Devices — inventory-only, multi-select ── */}
+                                <div className="col-span-1 md:col-span-2 bg-gray-50/50 dark:bg-black/10 p-4 rounded-xl border border-gray-200/60 dark:border-white/5 space-y-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
+                                            <MonitorIcon size={16} className="text-gray-400" />
+                                            Monitors
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setMonitorItems([...monitorItems, ''])}
+                                            className="text-xs font-bold text-blue-500 hover:text-blue-600 flex items-center gap-1 bg-blue-50/50 dark:bg-blue-500/10 px-2 py-1 rounded-md"
+                                        >
+                                            <Plus size={12} /> Add Monitor
+                                        </button>
+                                    </div>
+
+                                    {monitorItems.map((val, idx) => {
+                                        // SNs already chosen in other slots
+                                        const selectedMonitorSns = monitorItems
+                                            .map((v, i) => i !== idx ? v.match(/\(SN:\s*(.+?)\)/)?.[1]?.trim() : null)
+                                            .filter(Boolean) as string[];
+
+                                        const availableMonitorStock = stock.filter(
+                                            s => s.type === 'MONITOR' && (s.status === 'Active' || s.status === 'Available') && !selectedMonitorSns.includes(s.serialNumber)
+                                        );
+
+                                        const currentSn = val.match(/\(SN:\s*(.+?)\)/)?.[1]?.trim();
+                                        const currentMonitorItem = stock.find(s => s.serialNumber === currentSn);
+                                        const monitorDropdownValue = currentMonitorItem?.id ?? '';
+                                        const monitorIsEmpty = availableMonitorStock.length === 0 && !currentMonitorItem;
+
+                                        return (
+                                            <div key={idx} className="flex items-center gap-2">
+                                                <span className="text-gray-400 font-bold text-[10px] w-4 text-center shrink-0">{idx + 1}</span>
+                                                <div className="flex-1 min-w-[200px]">
+                                                    <CustomSelect
+                                                        required={false}
+                                                        disabled={monitorIsEmpty}
+                                                        value={monitorDropdownValue}
+                                                        onChange={(selectedId) => {
+                                                            const allOptions = [...availableMonitorStock];
+                                                            if (currentMonitorItem && !allOptions.find(i => i.id === currentMonitorItem.id)) {
+                                                                allOptions.push(currentMonitorItem);
+                                                            }
+                                                            const item = allOptions.find(i => i.id === selectedId);
+                                                            const newItems = [...monitorItems];
+                                                            newItems[idx] = item ? `${item.itemName} (SN: ${item.serialNumber})` : '';
+                                                            setMonitorItems(newItems);
+                                                        }}
+                                                        placeholder={monitorIsEmpty ? 'No monitors available in inventory' : 'Select monitor...'}
+                                                        icon={<Package size={14} className="text-blue-500" />}
+                                                        options={[
+                                                            { value: '', label: '-- None --' },
+                                                            ...(currentMonitorItem && !availableMonitorStock.find(i => i.id === currentMonitorItem.id) ? [{
+                                                                value: currentMonitorItem.id,
+                                                                label: `${currentMonitorItem.itemName} (SN: ${currentMonitorItem.serialNumber})`
+                                                            }] : []),
+                                                            ...availableMonitorStock.map(item => ({
+                                                                value: item.id,
+                                                                label: `${item.itemName} (SN: ${item.serialNumber})`
+                                                            }))
+                                                        ]}
+                                                    />
+                                                </div>
+                                                {monitorItems.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const newItems = monitorItems.filter((_, i) => i !== idx);
+                                                            setMonitorItems(newItems);
+                                                        }}
+                                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors shrink-0"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+
+                                    {stock.filter(s => s.type === 'MONITOR' && s.status === 'Active').length === 0 && (
+                                        <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
+                                            <AlertCircle size={10} /> Add Monitor items to inventory first
                                         </p>
                                     )}
                                 </div>
