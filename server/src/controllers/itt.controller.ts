@@ -12,7 +12,7 @@ export const getWorkstations = async (req: Request, res: Response) => {
   try {
     const workstations = await prisma.workstation.findMany({
       include: {
-        assignedTo: { select: { id: true, name: true, email: true, avatar: true } },
+        assignedUsers: { select: { id: true, name: true, email: true, avatar: true } },
         monitors: true,
         parts: { select: { id: true, itemName: true, serialNumber: true, type: true, status: true } },
       },
@@ -27,7 +27,7 @@ export const getWorkstations = async (req: Request, res: Response) => {
 
 export const createWorkstation = async (req: Request, res: Response) => {
   try {
-    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, monitors, status, assignedToId, notes, deployedItemIds } = req.body;
+    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, monitors, status, assignedUserIds, notes, deployedItemIds } = req.body;
 
     // Check if unitId already exists
     const existing = await prisma.workstation.findUnique({ where: { unitId } });
@@ -39,13 +39,15 @@ export const createWorkstation = async (req: Request, res: Response) => {
       const ws = await tx.workstation.create({
         data: {
           unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, status, notes,
-          assignedToId: assignedToId || null,
+          assignedUsers: {
+            connect: (assignedUserIds || []).map((id: string) => ({ id }))
+          },
           monitors: {
             create: (monitors || []).map((m: any) => ({ model: m.model, specs: m.specs }))
           }
         },
         include: {
-          assignedTo: { select: { id: true, name: true, email: true, avatar: true } },
+          assignedUsers: { select: { id: true, name: true, email: true, avatar: true } },
           monitors: true,
           parts: true,
         },
@@ -72,7 +74,7 @@ export const createWorkstation = async (req: Request, res: Response) => {
 export const updateWorkstation = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, monitors, status, assignedToId, notes, deployedItemIds, releasedItemIds } = req.body;
+    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, monitors, status, assignedUserIds, notes, deployedItemIds, releasedItemIds } = req.body;
 
     const workstation = await prisma.$transaction(async (tx) => {
       // 1. Release any items being swapped out (unlink from workstation, restore status)
@@ -104,14 +106,16 @@ export const updateWorkstation = async (req: Request, res: Response) => {
         where: { id },
         data: {
           unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, status, notes,
-          assignedToId: assignedToId || null,
+          assignedUsers: {
+            set: (assignedUserIds || []).map((id: string) => ({ id }))
+          },
           monitors: {
             deleteMany: {},
             create: (monitors || []).map((m: any) => ({ model: m.model, specs: m.specs }))
           }
         },
         include: {
-          assignedTo: { select: { id: true, name: true, email: true, avatar: true } },
+          assignedUsers: { select: { id: true, name: true, email: true, avatar: true } },
           monitors: true,
           parts: true,
         },

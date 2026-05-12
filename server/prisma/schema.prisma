@@ -330,8 +330,7 @@ model Workstation {
   notes        String?         @db.Text
   status       String          @default("active") // active, maintenance, retired
   
-  assignedToId String?
-  assignedTo   User?           @relation("AssignedWorkstation", fields: [assignedToId], references: [id])
+  assignedUsers User[]          @relation("AssignedWorkstation")
 
   ledgers      MaintenanceLedger[]
   parts        IttInventory[]
