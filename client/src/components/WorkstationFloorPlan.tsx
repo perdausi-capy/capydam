@@ -14,7 +14,7 @@ export interface Workstation {
     id: string;
     unitId: string;
     status: string;
-    assignedTo?: UserInfo;
+    assignedUsers?: UserInfo[];
     [key: string]: any;
 }
 
@@ -279,7 +279,7 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                         const boxW = pos.w || 140;
                         const boxH = pos.h || 150;
                         const isFiltered = filteredIds.has(ws.id);
-                        const unreadCount = unreadMap[ws.assignedTo?.id || ''] || 0;
+                        const unreadCount = ws.assignedUsers?.reduce((acc, user) => acc + (unreadMap[user.id] || 0), 0) || 0;
 
                         return (
                             <motion.div
@@ -320,17 +320,24 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                                     </div>
 
                                     <div className="w-full bg-black/20 rounded-lg p-1.5 mt-auto border border-white/5 flex items-center justify-center gap-2 shrink-0">
-                                        {ws.assignedTo ? (
+                                        {ws.assignedUsers && ws.assignedUsers.length > 0 ? (
                                             <>
-                                                <div className="w-4 h-4 rounded-full overflow-hidden bg-blue-500 shrink-0 flex items-center justify-center text-[8px] font-bold text-white">
-                                                    {ws.assignedTo.avatar ? (
-                                                        <img src={ws.assignedTo.avatar} alt="avatar" className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        ws.assignedTo.name.charAt(0)
-                                                    )}
+                                                <div className="flex -space-x-1 shrink-0">
+                                                    {ws.assignedUsers.slice(0, 2).map((user) => (
+                                                        <div key={user.id} className="w-4 h-4 rounded-full overflow-hidden bg-blue-500 flex items-center justify-center text-[8px] font-bold text-white ring-1 ring-black">
+                                                            {user.avatar ? (
+                                                                <img src={user.avatar} alt="avatar" className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                user.name.charAt(0)
+                                                            )}
+                                                        </div>
+                                                    ))}
                                                 </div>
                                                 <span className="text-[9px] text-gray-300 font-medium truncate">
-                                                    {ws.assignedTo.name.split(' ')[0]}
+                                                    {ws.assignedUsers.length === 1 
+                                                        ? ws.assignedUsers[0].name.split(' ')[0] 
+                                                        : `${ws.assignedUsers[0].name.split(' ')[0]} +${ws.assignedUsers.length - 1}`
+                                                    }
                                                 </span>
                                             </>
                                         ) : (

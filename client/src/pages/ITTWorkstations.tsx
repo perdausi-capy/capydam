@@ -254,15 +254,19 @@ const WorkstationSpecs = ({
 
             <div className="pt-4 border-t border-gray-100 dark:border-white/5">
                 <h4 className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 mb-2"><User size={14} /> Assigned To</h4>
-                {viewingWs.assignedTo ? (
-                    <div className="flex items-center gap-4 bg-white/5 p-3 rounded-2xl border border-white/5">
-                        <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black shadow-lg">
-                            {viewingWs.assignedTo.name.charAt(0)}
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-white font-bold text-sm truncate">{viewingWs.assignedTo.name}</p>
-                            <p className="text-gray-500 text-[10px] truncate">{viewingWs.assignedTo.email}</p>
-                        </div>
+                {viewingWs.assignedUsers && viewingWs.assignedUsers.length > 0 ? (
+                    <div className="flex flex-col gap-2">
+                        {viewingWs.assignedUsers.map(u => (
+                            <div key={u.id} className="flex items-center gap-3 bg-white/5 p-2.5 rounded-xl border border-white/5">
+                                <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black shadow-lg overflow-hidden shrink-0 text-xs">
+                                    {u.avatar ? <img src={u.avatar} alt="avatar" className="w-full h-full object-cover" /> : u.name.charAt(0)}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-white font-bold text-xs truncate">{u.name}</p>
+                                    <p className="text-gray-500 text-[10px] truncate">{u.email}</p>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 ) : (
                     <p className="text-green-500 dark:text-green-400 font-bold text-xs px-2">Available</p>
@@ -336,10 +340,10 @@ const ITTWorkstations = () => {
     const [isSavingNotes, setIsSavingNotes] = useState(false);
 
     const [formData, setFormData] = useState({
-        unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', webcam: '', headset: '', keyboard: '', lanCable: '', cableAdaptor: '', wifiAdaptor: '', status: 'active', assignedToId: ''
+        unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', webcam: '', headset: '', keyboard: '', lanCable: '', cableAdaptor: '', wifiAdaptor: '', status: 'active', assignedUserIds: [] as string[]
     });
 
-    const selectedUser = users.find(u => u.id === formData.assignedToId);
+    const selectedUsers = users.filter(u => formData.assignedUserIds.includes(u.id));
 
 
     const fetchData = async () => {
@@ -398,10 +402,13 @@ const ITTWorkstations = () => {
     const openDetail = (ws: Workstation) => {
         setViewingWs(ws);
         setReplyText('');
-        if (ws.assignedTo?.id) {
-            fetchTickets(ws.assignedTo.id);
-            // Clear the red badge for this user once they open the panel
-            setUnreadMap(prev => ({ ...prev, [ws.assignedTo!.id]: 0 }));
+        if (ws.assignedUsers && ws.assignedUsers.length > 0) {
+            // Fetch tickets for the first assigned user for now to display in panel
+            fetchTickets(ws.assignedUsers[0].id);
+            // Clear the red badge for these users once they open the panel
+            const newUnreadMap = { ...unreadMap };
+            ws.assignedUsers.forEach(u => newUnreadMap[u.id] = 0);
+            setUnreadMap(newUnreadMap);
         } else {
             setTickets([]);
             setActiveTicket(null);
@@ -415,7 +422,7 @@ const ITTWorkstations = () => {
         try {
             await client.put(`/itt/workstations/${viewingWs.id}`, {
                 ...viewingWs,
-                assignedToId: viewingWs.assignedTo?.id,
+                assignedUserIds: viewingWs.assignedUsers?.map(u => u.id) || [],
                 notes: localNotes
             });
             toast.success("Notes saved");
@@ -554,7 +561,7 @@ const ITTWorkstations = () => {
                 storage: storageItems.filter(Boolean).join(' | '),
                 ram: ramItems.filter(Boolean).join(' | '),
                 monitor: monitorItems.filter(Boolean).join(' | '),
-                assignedToId: formData.assignedToId || null,
+                assignedUserIds: formData.assignedUserIds,
                 deployedItemIds: Array.from(deployedItemIdsSet),
                 releasedItemIds,
             };
@@ -618,7 +625,7 @@ const ITTWorkstations = () => {
                 cableAdaptor: ws.cableAdaptor || '',
                 wifiAdaptor: ws.wifiAdaptor || '',
                 status: ws.status || 'active',
-                assignedToId: ws.assignedTo?.id || ''
+                assignedUserIds: ws.assignedUsers?.map((u: any) => u.id) || []
             });
             setInitialHardware({
                 mobo: ws.mobo || '', cpu: ws.cpu || '', ram: ws.ram || '',
@@ -631,7 +638,7 @@ const ITTWorkstations = () => {
             setMonitorItems(ws.monitor ? ws.monitor.split(' | ') : ['']);
         } else {
             setEditingId(null);
-            setFormData({ unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', webcam: '', headset: '', keyboard: '', lanCable: '', cableAdaptor: '', wifiAdaptor: '', status: 'active', assignedToId: '' });
+            setFormData({ unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', webcam: '', headset: '', keyboard: '', lanCable: '', cableAdaptor: '', wifiAdaptor: '', status: 'active', assignedUserIds: [] });
             setInitialHardware({});
             setStorageItems(['']);
             setRamItems(['']);
@@ -648,27 +655,27 @@ const ITTWorkstations = () => {
         setMonitorItems(['']);
     };
 
-    const assignedUserIds = useMemo(() => {
-        return new Set(
-            workstations
-                .map(ws => ws.assignedTo?.id)
-                .filter(Boolean)
-        );
+    const assignedUserIdsSet = useMemo(() => {
+        const set = new Set<string>();
+        workstations.forEach(ws => {
+            ws.assignedUsers?.forEach((u: any) => set.add(u.id));
+        });
+        return set;
     }, [workstations]);
 
     const availableUsers = useMemo(() => {
         return users.filter(u => {
-            const isCurrentlyAssignedToThisUnit = editingId && formData.assignedToId === u.id;
-            return !assignedUserIds.has(u.id) || isCurrentlyAssignedToThisUnit;
+            const isCurrentlyAssignedToThisUnit = editingId && formData.assignedUserIds.includes(u.id);
+            return !assignedUserIdsSet.has(u.id) || isCurrentlyAssignedToThisUnit;
         });
-    }, [users, assignedUserIds, editingId, formData.assignedToId]);
+    }, [users, assignedUserIdsSet, editingId, formData.assignedUserIds]);
 
     const filteredWorkstations = useMemo(() => {
         return workstations.filter(ws => {
             // 1. Text Search (Unit ID or Assignee)
             const matchesSearch =
                 ws.unitId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                ws.assignedTo?.name.toLowerCase().includes(searchTerm.toLowerCase());
+                (ws.assignedUsers && ws.assignedUsers.some((u: any) => u.name.toLowerCase().includes(searchTerm.toLowerCase())));
 
             // 2. Hardware Spec Matching
             const matchesCpu = !specFilters.cpu || ws.cpu === specFilters.cpu;
@@ -729,19 +736,33 @@ const ITTWorkstations = () => {
                                 {/* Name (assigned user) */}
                                 <td className={CELL}>
                                     <div className="flex items-center gap-2">
-                                        {ws.assignedTo ? (
+                                        {ws.assignedUsers && ws.assignedUsers.length > 0 ? (
                                             <>
-                                                <div className="relative shrink-0">
-                                                    <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-xs">
-                                                        {ws.assignedTo.name.charAt(0)}
-                                                    </div>
-                                                    {(unreadMap[ws.assignedTo.id] ?? 0) > 0 && (
-                                                        <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[14px] h-[14px] px-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full shadow animate-pulse ring-1 ring-white dark:ring-[#121418]">
-                                                            {unreadMap[ws.assignedTo.id]}
-                                                        </span>
+                                                <div className="flex -space-x-2 shrink-0">
+                                                    {ws.assignedUsers.slice(0, 3).map((u: any, i: number) => {
+                                                        const unread = unreadMap[u.id] || 0;
+                                                        return (
+                                                            <div key={u.id} className={`relative z-[${3-i}]`}>
+                                                                <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-xs ring-2 ring-white dark:ring-[#121418] overflow-hidden">
+                                                                    {u.avatar ? <img src={u.avatar} alt="avatar" className="w-full h-full object-cover" /> : u.name.charAt(0)}
+                                                                </div>
+                                                                {unread > 0 && (
+                                                                    <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[14px] h-[14px] px-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full shadow animate-pulse ring-1 ring-white dark:ring-[#121418] z-10">
+                                                                        {unread}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    {ws.assignedUsers.length > 3 && (
+                                                        <div className="w-7 h-7 rounded-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-300 font-bold text-xs ring-2 ring-white dark:ring-[#121418] z-0">
+                                                            +{ws.assignedUsers.length - 3}
+                                                        </div>
                                                     )}
                                                 </div>
-                                                <span className="font-medium truncate max-w-[120px]">{ws.assignedTo.name}</span>
+                                                <span className="font-medium truncate max-w-[120px]">
+                                                    {ws.assignedUsers.length === 1 ? ws.assignedUsers[0].name : `${ws.assignedUsers.length} Users`}
+                                                </span>
                                             </>
                                         ) : (
                                             <span className="text-green-500 dark:text-green-400 font-bold text-xs">Available</span>
@@ -1362,25 +1383,32 @@ const ITTWorkstations = () => {
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Assigned User</label>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Assigned Users</label>
                                     <div className="relative">
                                         {/* The Glassmorphic Trigger Button */}
                                         <button
                                             type="button"
                                             onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
-                                            className="select-glass flex items-center justify-between w-full h-[42px]"
+                                            className="select-glass flex items-center justify-between w-full h-auto min-h-[42px] py-2"
                                         >
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-white/10 flex items-center justify-center overflow-hidden shrink-0 border border-gray-100 dark:border-white/10 text-gray-400">
-                                                    {selectedUser?.avatar ? (
-                                                        <img src={selectedUser.avatar} alt="" className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <User size={14} />
-                                                    )}
-                                                </div>
-                                                <span className="text-sm truncate">
-                                                    {selectedUser ? selectedUser.name : '-- Unassigned --'}
-                                                </span>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                {selectedUsers.length > 0 ? (
+                                                    selectedUsers.map(u => (
+                                                        <div key={u.id} className="flex items-center gap-1.5 bg-gray-100 dark:bg-white/10 px-2 py-1 rounded-md border border-gray-200 dark:border-white/5">
+                                                            <div className="w-4 h-4 rounded-full overflow-hidden bg-blue-500 flex items-center justify-center text-[8px] font-bold text-white">
+                                                                {u.avatar ? <img src={u.avatar} alt="" className="w-full h-full object-cover" /> : u.name.charAt(0)}
+                                                            </div>
+                                                            <span className="text-xs truncate max-w-[100px]">{u.name}</span>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-white/10 flex items-center justify-center shrink-0 border border-gray-100 dark:border-white/10 text-gray-400">
+                                                            <User size={14} />
+                                                        </div>
+                                                        <span className="text-sm">-- Unassigned --</span>
+                                                    </div>
+                                                )}
                                             </div>
                                             <ChevronDown size={14} className={`text-gray-400 transition-transform ${isUserDropdownOpen ? 'rotate-180' : ''}`} />
                                         </button>
@@ -1394,49 +1422,44 @@ const ITTWorkstations = () => {
                                                     exit={{ opacity: 0, y: 10 }}
                                                     className="absolute bottom-full left-0 w-full mb-2 bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl z-[700] backdrop-blur-xl max-h-60 overflow-y-auto custom-scrollbar"
                                                 >
-                                                    {/* Unassigned Option */}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setFormData({ ...formData, assignedToId: '' });
-                                                            setIsUserDropdownOpen(false);
-                                                        }}
-                                                        className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium hover:bg-gray-100 dark:hover:bg-white/5 transition-colors border-b border-gray-100 dark:border-white/5"
-                                                    >
-                                                        <div className="w-7 h-7 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-400">
-                                                            <UserMinus size={14} />
-                                                        </div>
-                                                        <span className="flex-1 text-left">-- Unassigned --</span>
-                                                        {!formData.assignedToId && <Check size={14} className="text-blue-500" />}
-                                                    </button>
-
                                                     {/* User List */}
-                                                    {availableUsers.map((u) => (
-                                                        <button
-                                                            key={u.id}
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setFormData({ ...formData, assignedToId: u.id });
-                                                                setIsUserDropdownOpen(false);
-                                                            }}
-                                                            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium hover:bg-gray-100 dark:hover:bg-white/5 transition-colors border-b border-gray-100 dark:border-white/5 last:border-0"
-                                                        >
-                                                            <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center overflow-hidden shrink-0 border border-gray-200 dark:border-white/10">
-                                                                {u.avatar ? (
-                                                                    <img src={u.avatar} alt="" className="w-full h-full object-cover" />
-                                                                ) : (
-                                                                    <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
-                                                                        {u.name?.charAt(0).toUpperCase()}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <div className="flex flex-col items-start min-w-0">
-                                                                <span className="text-gray-900 dark:text-white truncate w-full">{u.name}</span>
-                                                                <span className="text-[10px] text-gray-500 truncate w-full">{u.email}</span>
-                                                            </div>
-                                                            {formData.assignedToId === u.id && <Check size={14} className="text-blue-500" />}
-                                                        </button>
-                                                    ))}
+                                                    {availableUsers.map((u) => {
+                                                        const isSelected = formData.assignedUserIds.includes(u.id);
+                                                        return (
+                                                            <button
+                                                                key={u.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    let newIds = [...formData.assignedUserIds];
+                                                                    if (isSelected) {
+                                                                        newIds = newIds.filter(id => id !== u.id);
+                                                                    } else {
+                                                                        newIds.push(u.id);
+                                                                    }
+                                                                    setFormData({ ...formData, assignedUserIds: newIds });
+                                                                }}
+                                                                className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium hover:bg-gray-100 dark:hover:bg-white/5 transition-colors border-b border-gray-100 dark:border-white/5 last:border-0 ${isSelected ? 'bg-blue-50/50 dark:bg-blue-500/10' : ''}`}
+                                                            >
+                                                                <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center overflow-hidden shrink-0 border border-gray-200 dark:border-white/10">
+                                                                    {u.avatar ? (
+                                                                        <img src={u.avatar} alt="" className="w-full h-full object-cover" />
+                                                                    ) : (
+                                                                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                                                                            {u.name?.charAt(0).toUpperCase()}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex flex-col items-start min-w-0 flex-1">
+                                                                    <span className="text-gray-900 dark:text-white truncate w-full text-left">{u.name}</span>
+                                                                    <span className="text-[10px] text-gray-500 truncate w-full text-left">{u.email}</span>
+                                                                </div>
+                                                                {isSelected && <Check size={14} className="text-blue-500 shrink-0" />}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                    {availableUsers.length === 0 && (
+                                                        <div className="px-4 py-3 text-sm text-gray-500 text-center">No available users</div>
+                                                    )}
                                                 </motion.div>
                                             )}
                                         </AnimatePresence>
