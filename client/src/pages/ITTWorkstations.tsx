@@ -994,10 +994,10 @@ const ITTWorkstations = () => {
                                         <div key={key}>
                                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1 flex items-center gap-1.5">
                                                 <span className="text-gray-400">{icon}</span>
-                                                {label} <span className="text-red-500">*</span>
+                                                {label}
                                             </label>
                                             <CustomSelect
-                                                required={key !== 'monitor' && key !== 'webcam' && key !== 'headset' && key !== 'keyboard' && key !== 'lanCable' && key !== 'cableAdaptor' && key !== 'wifiAdaptor'}
+                                                required={false}
                                                 disabled={isEmpty}
                                                 value={dropdownValue}
                                                 onChange={(val) => {
@@ -1017,9 +1017,10 @@ const ITTWorkstations = () => {
                                                 placeholder={isEmpty ? `No ${label} available in inventory` : `Select ${label}...`}
                                                 icon={<Package size={14} className="text-blue-500" />}
                                                 options={[
+                                                    { value: '', label: '-- None --' },
                                                     ...(currentItem && !availableStock.find(i => i.id === currentItem.id) ? [{
                                                         value: currentItem.id,
-                                                        label: `${currentItem.itemName} (SN: ${currentItem.serialNumber}) — current`
+                                                        label: `${currentItem.itemName} (SN: ${currentItem.serialNumber})`
                                                     }] : []),
                                                     ...availableStock.map(item => ({
                                                         value: item.id,
@@ -1041,7 +1042,7 @@ const ITTWorkstations = () => {
                                     <div className="flex items-center justify-between mb-2">
                                         <label className="block text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
                                             <HardDrive size={16} className="text-gray-400" />
-                                            Storage Devices <span className="text-red-500">*</span>
+                                            Storage Devices
                                         </label>
                                         <button
                                             type="button"
@@ -1072,7 +1073,7 @@ const ITTWorkstations = () => {
                                                 <span className="text-gray-400 font-bold text-[10px] w-4 text-center shrink-0">{idx + 1}</span>
                                                 <div className="flex-1 min-w-[200px]">
                                                     <CustomSelect
-                                                        required={idx === 0}
+                                                        required={false}
                                                         disabled={storageIsEmpty}
                                                         value={storageDropdownValue}
                                                         onChange={(selectedId) => {
@@ -1088,9 +1089,10 @@ const ITTWorkstations = () => {
                                                         placeholder={storageIsEmpty ? 'No storage available in inventory' : 'Select storage device...'}
                                                         icon={<Package size={14} className="text-blue-500" />}
                                                         options={[
+                                                            { value: '', label: '-- None --' },
                                                             ...(currentStorageItem && !availableStorageStock.find(i => i.id === currentStorageItem.id) ? [{
                                                                 value: currentStorageItem.id,
-                                                                label: `${currentStorageItem.itemName} (SN: ${currentStorageItem.serialNumber}) — current`
+                                                                label: `${currentStorageItem.itemName} (SN: ${currentStorageItem.serialNumber})`
                                                             }] : []),
                                                             ...availableStorageStock.map(item => ({
                                                                 value: item.id,
@@ -1127,7 +1129,7 @@ const ITTWorkstations = () => {
                                     <div className="flex items-center justify-between mb-2">
                                         <label className="block text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
                                             <Database size={16} className="text-gray-400" />
-                                            RAM Devices <span className="text-red-500">*</span>
+                                            RAM Devices
                                         </label>
                                         <button
                                             type="button"
@@ -1158,7 +1160,7 @@ const ITTWorkstations = () => {
                                                 <span className="text-gray-400 font-bold text-[10px] w-4 text-center shrink-0">{idx + 1}</span>
                                                 <div className="flex-1 min-w-[200px]">
                                                     <CustomSelect
-                                                        required={idx === 0}
+                                                        required={false}
                                                         disabled={ramIsEmpty}
                                                         value={ramDropdownValue}
                                                         onChange={(selectedId) => {
@@ -1174,9 +1176,10 @@ const ITTWorkstations = () => {
                                                         placeholder={ramIsEmpty ? 'No RAM available in inventory' : 'Select RAM stick...'}
                                                         icon={<Package size={14} className="text-blue-500" />}
                                                         options={[
+                                                            { value: '', label: '-- None --' },
                                                             ...(currentRamItem && !availableRamStock.find(i => i.id === currentRamItem.id) ? [{
                                                                 value: currentRamItem.id,
-                                                                label: `${currentRamItem.itemName} (SN: ${currentRamItem.serialNumber}) — current`
+                                                                label: `${currentRamItem.itemName} (SN: ${currentRamItem.serialNumber})`
                                                             }] : []),
                                                             ...availableRamStock.map(item => ({
                                                                 value: item.id,
