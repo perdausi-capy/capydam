@@ -1,6 +1,6 @@
 
 import { useNavigate } from 'react-router-dom';
-import { Box, FileCode, Database, ArrowRight, Link as LinkIcon } from 'lucide-react';
+import { Box, FileCode, Database, ArrowRight, Link as LinkIcon, Wrench } from 'lucide-react';
 
 const apps = [
   {
@@ -30,6 +30,15 @@ const apps = [
     color: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',
     isExternal: false,       // ✅ Change to false
     openInNewTab: false      // ✅ Change to false
+  },
+  {
+    id: 'builder',
+    name: 'Builder',
+    description: 'Build and configure projects with an intuitive drag-and-drop interface and powerful tooling.',
+    icon: <Wrench size={32} className="text-purple-500" />,
+    route: '/builder',
+    color: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800',
+    isExternal: false
   },
 ];
 
