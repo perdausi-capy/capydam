@@ -1,0 +1,2077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Infographic Studio Builder V54 (True Animation Sync)</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <style>
+    :root {
+      --bg: #1e1e24; --panel: #2b2b36; --panel-dark: #1a1a20;
+      --text: #f5f5f5; --accent: #FF6A00; --accent-hover: #e65c00;
+      --canvas-bg: #121215; --ai-color: #bb86fc; --comp-color: #8a2be2;
+    }
+    body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    
+    #app-top { display: flex; flex: 1; overflow: hidden; }
+    #sidebar-left, #sidebar-right { width: 320px; background: var(--panel); padding: 15px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; z-index: 10; overflow-y: auto; }
+    #sidebar-left { border-right: 1px solid #444; }
+    #sidebar-right { border-left: 1px solid #444; }
+    #main-workspace { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; background: #000; position: relative; overflow: hidden; }
+    
+    .header { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 12px 25px; box-sizing: border-box; background: var(--panel); border-bottom: 1px solid #444; }
+    #canvas-wrapper { flex-grow: 1; display: flex; align-items: center; justify-content: center; width: 100%; position: relative; overflow: auto; }
+    #canvas { width: 960px; height: 540px; background: var(--canvas-bg); position: relative; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); flex-shrink: 0; transform-origin: center center; transition: transform 0.15s ease-out; }
+    
+    button { background: var(--accent); color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 13px; }
+    button:hover { background: var(--accent-hover); }
+    .tool-btn { background: #444; display: flex; justify-content: center; align-items: center; width: 100%; box-sizing: border-box; margin-bottom: 5px;}
+    .tool-btn:hover { background: #555; }
+    .del-btn { background: #dc3545; padding: 4px 8px; font-size: 11px; margin-top:0 !important; }
+    .del-btn:hover { background: #c82333; }
+    .edit-btn { background: #007bff; padding: 4px 8px; font-size: 11px; margin-top:0 !important; }
+    .edit-btn:hover { background: #0056b3; }
+    
+    label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; margin-bottom: 2px; margin-top: 8px; display: block; }
+    input[type="text"], input[type="number"], select, textarea, input[type="password"] { width: 100%; padding: 6px 8px; box-sizing: border-box; background: #1e1e24; color: white; border: 1px solid #555; border-radius: 4px; font-size: 13px; font-family: inherit; }
+    textarea { resize: vertical; min-height: 45px; }
+    input[type="number"]::placeholder, input[type="text"]::placeholder { color: #666; font-style: italic; }
+    input[type="color"] { width: 40px; height: 32px; padding: 0; border: none; background: transparent; cursor: pointer; border-radius: 4px; }
+    input[type="range"] { flex-grow: 1; cursor: pointer; margin-top: 5px; }
+    input[type="file"] { display: none; }
+    
+    .checkbox-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; background: #1e1e24; padding: 10px; border-radius: 4px; border: 1px solid #444;}
+    .checkbox-row { display: flex; align-items: center; gap: 6px; font-size: 11px; margin: 0; cursor: pointer;}
+    .checkbox-row input { width: auto; margin: 0; }
+
+    details { background: var(--panel-dark); border: 1px solid #444; border-radius: 6px; margin-bottom: 5px; }
+    summary { padding: 10px 12px; font-size: 13px; font-weight: bold; color: var(--accent); cursor: pointer; user-select: none; outline: none; }
+    summary::-webkit-details-marker { color: var(--text); }
+    .details-content { padding: 10px; border-top: 1px solid #444; }
+
+    .draggable { position: absolute; cursor: grab; user-select: none; transform-origin: center center; touch-action: none; display: flex; justify-content: center; align-items: center; }
+    .draggable:active { cursor: grabbing; }
+    .selected { outline: 2px dashed var(--accent); outline-offset: 4px; z-index: 9998 !important; }
+    .shape-inner { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; transform-origin: center center; position: relative; }
+    .img-overlay { position: absolute; inset: 0; pointer-events: none; }
+
+    .anim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    #sequence-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .sequence-step { background: #333; padding: 8px; border-radius: 4px; font-size: 11px; display: flex; justify-content: space-between; align-items: center; border-left: 3px solid var(--accent); transition: border-top 0.2s; }
+    .seq-actions { display: flex; gap: 4px; }
+    .format-btn { flex: 1; padding: 4px 0; background: #444; border: 1px solid #555; color: white; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .format-btn.active { background: var(--accent); border-color: var(--accent); }
+
+    /* TIMELINE UI */
+    #timeline-panel { height: 260px; background: var(--panel-dark); border-top: 1px solid #444; display: flex; flex-direction: column; flex-shrink: 0; }
+    .timeline-header { padding: 8px 15px; background: var(--panel); border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center; }
+    .timeline-body { flex: 1; display: flex; overflow-y: auto; overflow-x: hidden; position: relative; }
+    .timeline-labels { width: 220px; background: var(--panel); border-right: 1px solid #444; z-index: 5; position: sticky; left: 0; display: flex; flex-direction: column; }
+    .timeline-label { height: 36px; display: flex; align-items: center; padding: 0 10px; font-size: 12px; border-bottom: 1px solid #333; cursor: grab; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #ccc; border-top: 1px solid transparent; flex-shrink: 0;}
+    .timeline-label:active { cursor: grabbing; }
+    .timeline-label:hover { background: #3a3a45; }
+    .timeline-label.active { background: #283040; border-left: 4px solid var(--accent); color: white; font-weight: bold; }
+    
+    .timeline-tracks-container { flex: 1; position: relative; overflow-x: auto; background: #111; display: flex; flex-direction: column; cursor: col-resize; }
+    .timeline-ruler-bg { position: absolute; top: 0; left: 0; height: 100%; width: 4000px; background: repeating-linear-gradient(90deg, #111, #111 49px, #333 50px); pointer-events: none; }
+    .timeline-track { height: 36px; border-bottom: 1px solid #333; position: relative; width: 4000px; flex-shrink: 0;}
+    
+    .timeline-block { position: absolute; height: 20px; top: 8px; background: #444; border-radius: 4px; cursor: grab; display: flex; box-shadow: 0 2px 5px rgba(0,0,0,0.5); overflow: hidden; touch-action: none; transition: box-shadow 0.2s; }
+    .timeline-block:hover { box-shadow: 0 0 8px var(--accent); }
+    .timeline-block:active { cursor: grabbing; }
+    .timeline-block * { pointer-events: none; }
+    
+    .timeline-segment { height: 100%; border-right: 1px solid rgba(0,0,0,0.5); box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 9px; color: rgba(255,255,255,0.9); font-weight: bold; overflow: hidden; }
+    .timeline-segment.entry { background: #28a745; } 
+    .timeline-segment.seq { background: var(--accent); }
+    .timeline-ambient { position: absolute; height: 20px; top: 8px; background: repeating-linear-gradient(45deg, #222, #222 5px, #333 5px, #333 10px); border-radius: 4px; pointer-events: none; opacity: 0.7; }
+    .timeline-block.infinite { -webkit-mask-image: linear-gradient(90deg, #000 70%, transparent 100%); border-right: none !important; }
+
+    .playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff3366; z-index: 10; left: 0; pointer-events: none; box-shadow: 0 0 5px #ff3366; }
+    .playhead::before { content: ''; position: absolute; top: 0; left: -4px; width: 10px; height: 10px; background: #ff3366; border-radius: 50%; }
+
+    #debug-logger { position: fixed; bottom: 270px; right: 330px; width: 400px; height: 200px; background: rgba(10,10,15,0.95); color: #0f0; font-family: monospace; font-size: 11px; padding: 10px; overflow-y: auto; z-index: 9999; border: 1px solid #444; border-radius: 6px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); backdrop-filter: blur(5px); }
+    #debug-logger::-webkit-scrollbar { width: 6px; }
+    #debug-logger::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+    
+    .ai-panel { border: 1px solid var(--ai-color); box-shadow: 0 0 15px rgba(187, 134, 252, 0.2); }
+    .ai-panel summary { color: var(--ai-color); }
+    #ai-loader { display: none; color: var(--ai-color); font-size: 11px; text-align: center; margin-top: 5px; font-weight: bold; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% {opacity: 0.5;} 50% {opacity: 1;} 100% {opacity: 0.5;} }
+    
+    .zoom-btn { background: #444; color: white; border: none; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-weight: bold; }
+    .zoom-btn:hover { background: var(--accent); }
+  </style>
+</head>
+<body>
+
+  <div id="debug-logger" style="display:none;">
+      <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #444; padding-bottom: 5px; margin-bottom: 5px; position: sticky; top: -10px; background: rgba(10,10,15,0.95);">
+          <strong style="color: #64ffda;">⚙️ Engine Debug Logger</strong>
+          <div>
+              <button onclick="document.getElementById('log-output').innerHTML=''" style="background:transparent; border:none; color:#aaa; padding:0 5px; cursor:pointer;">Clear</button>
+              <button onclick="document.getElementById('debug-logger').style.display='none'" style="background:transparent; border:none; color:#aaa; padding:0; cursor:pointer;">[Hide]</button>
+          </div>
+      </div>
+      <div id="log-output"></div>
+  </div>
+
+  <script>
+      const logOutput = document.getElementById('log-output');
+      function addLog(msg, color) {
+          const d = document.createElement('div');
+          d.style.color = color; d.style.marginBottom = '4px'; d.style.wordBreak = 'break-all';
+          d.innerText = '> ' + msg;
+          logOutput.appendChild(d);
+          logOutput.scrollTop = logOutput.scrollHeight;
+      }
+      const originalLog = console.log; const originalWarn = console.warn; const originalError = console.error;
+      console.log = function(...args) { addLog(args.join(' '), '#aaa'); originalLog.apply(console, args); };
+      console.warn = function(...args) { addLog(args.join(' '), '#ffc107'); originalWarn.apply(console, args); };
+      console.error = function(...args) { addLog(args.join(' '), '#ff3366'); originalError.apply(console, args); };
+      window.onerror = function(msg, url, line, col, error) { console.error(`FATAL ERROR: ${msg} (Line ${line}:${col})`); return false; };
+  </script>
+
+  <div id="app-top">
+      <div id="sidebar-left">
+        
+        <details class="ai-panel">
+            <summary>✨ AI Scene Builder</summary>
+            <div class="details-content">
+                <label style="color: var(--ai-color);">Gemini API Key</label>
+                <input type="password" id="gemini-api-key" placeholder="Paste API Key here..." onchange="saveApiKey()">
+                
+                <label style="color: var(--ai-color); margin-top: 10px;">Prompt</label>
+                <textarea id="ai-prompt" placeholder="e.g. Create a Title Card for Space Exploration with 3 bullet points sliding in..." style="min-height: 80px;"></textarea>
+                
+                <button onclick="generateWithAI()" style="width: 100%; margin-top: 10px; background: var(--ai-color); color: #000;">✨ Generate</button>
+                <div id="ai-loader">🧠 Gemini is building your scene...</div>
+            </div>
+        </details>
+
+        <details open>
+            <summary>➕ Add Assets</summary>
+            <div class="details-content">
+                <div style="display: flex; gap: 5px;">
+                    <button class="tool-btn" onclick="addElement('text')">+ Text</button>
+                    <button class="tool-btn" onclick="addElement('box')">+ Shape</button>
+                </div>
+                <button class="tool-btn" onclick="addActionLine()" style="background: #283040; color: #64ffda; border: 1px solid #64ffda;">⚡ + Action Line</button>
+                <label for="img-upload" class="tool-btn" style="padding: 8px; border-radius: 6px; cursor: pointer; color: white;">+ Upload Image</label>
+                <input type="file" id="img-upload" accept="image/png, image/jpeg, image/svg+xml" onchange="handleImageUpload(event)">
+                
+                <label for="comp-upload" class="tool-btn" style="background: var(--comp-color); color: white; padding: 8px; border-radius: 6px; cursor: pointer; border: 1px solid #d8b4e2;">📦 + Import Pre-Comp (.HTML)</label>
+                <input type="file" id="comp-upload" accept=".html" onchange="window.handleCompImport(event)">
+            </div>
+        </details>
+        
+        <button onclick="document.getElementById('debug-logger').style.display='block'" class="tool-btn" style="margin-top:auto; background:#283040; border: 1px solid #444;">View Debug Logs</button>
+      </div>
+
+      <div id="main-workspace">
+        <div class="header">
+          <div style="display: flex; align-items: center; gap: 15px;">
+              <h3 style="margin:0;">Canvas (16:9)</h3>
+              
+              <div style="display: flex; gap: 5px; align-items: center; background: #1e1e24; padding: 4px 8px; border-radius: 6px; border: 1px solid #444;">
+                  <span style="font-size: 11px; color:#aaa; margin-right: 5px;">🔍 Zoom</span>
+                  <button class="zoom-btn" onclick="changeCanvasZoom(-0.25)">-</button>
+                  <span id="canvas-zoom-label" style="font-size: 11px; width: 40px; text-align: center;">100%</span>
+                  <button class="zoom-btn" onclick="changeCanvasZoom(0.25)">+</button>
+              </div>
+          </div>
+          
+          <div style="display: flex; gap: 10px;">
+              <button onclick="selectElement(null)" style="background: #6c757d; border: 1px solid #888;">🖼️ Canvas Settings</button>
+              <label for="project-upload" style="background: #17a2b8; color: white; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; margin: 0;">Load Project (.HTML)</label>
+              <input type="file" id="project-upload" accept=".html" onchange="window.handleProjectImport(event)">
+              <button onclick="exportCode()" style="background: #0B2B5E;">Export HTML</button>
+          </div>
+        </div>
+        <div id="canvas-wrapper">
+            <div id="canvas"></div>
+        </div>
+      </div>
+
+      <div id="sidebar-right">
+        <div id="canvas-props-panel" style="display: block;">
+            <h3 style="margin: 0 0 10px 0; color: #64ffda; padding: 0 10px;">Canvas Settings</h3>
+            <details open>
+                <summary>Background Style</summary>
+                <div class="details-content">
+                    <select id="canvas-bg-type" onchange="updateCanvasData()">
+                        <option value="solid">Solid Color</option>
+                        <option value="gradient">Linear Gradient</option>
+                        <option value="radial">Radial Gradient</option>
+                        <option value="grid">Blueprint Grid</option>
+                        <option value="dots">Dot Matrix</option>
+                        <option value="image">Custom Image</option>
+                    </select>
+
+                    <div style="display: flex; gap: 8px; margin-top: 10px;">
+                        <div style="flex: 1;">
+                            <label>Color 1</label>
+                            <div style="display: flex; gap: 5px; align-items: center;">
+                                <input type="color" id="canvas-color-1" value="#121215" onchange="updateCanvasData()">
+                                <input type="text" id="canvas-hex-1" value="#121215" oninput="syncCanvasColor('1')" style="width: 100%;">
+                            </div>
+                        </div>
+                        <div style="flex: 1;" id="canvas-color-2-wrapper" style="display:none;">
+                            <label>Color 2</label>
+                            <div style="display: flex; gap: 5px; align-items: center;">
+                                <input type="color" id="canvas-color-2" value="#2b2b36" onchange="updateCanvasData()">
+                                <input type="text" id="canvas-hex-2" value="#2b2b36" oninput="syncCanvasColor('2')" style="width: 100%;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="canvas-image-wrapper" style="display: none; margin-top: 15px;">
+                        <label for="canvas-img-upload" class="tool-btn" style="padding: 8px; border-radius: 6px; cursor: pointer; color: white;">+ Upload Canvas Bg</label>
+                        <input type="file" id="canvas-img-upload" accept="image/png, image/jpeg, image/svg+xml" onchange="handleCanvasImageUpload(event)">
+                        <button onclick="clearCanvasImage()" class="tool-btn" style="margin-top: 8px; background: #dc3545;">🗑 Clear Image</button>
+                    </div>
+                </div>
+            </details>
+        </div>
+
+        <div id="props-panel" style="display: none;">
+
+          <details open>
+              <summary>🎯 Alignment & Snapping</summary>
+              <div class="details-content">
+                  <label style="margin-top:0;">Align Object to Canvas</label>
+                  <div style="display: flex; gap: 5px; margin-bottom: 5px;">
+                      <button class="tool-btn" onclick="alignCanvas('left')">⇤ Left</button>
+                      <button class="tool-btn" onclick="alignCanvas('centerH')">⇥ Center ⇤</button>
+                      <button class="tool-btn" onclick="alignCanvas('right')">Right ⇥</button>
+                  </div>
+                  <div style="display: flex; gap: 5px;">
+                      <button class="tool-btn" onclick="alignCanvas('top')">⇡ Top</button>
+                      <button class="tool-btn" onclick="alignCanvas('centerV')">Middle</button>
+                      <button class="tool-btn" onclick="alignCanvas('bottom')">Bottom ⇣</button>
+                  </div>
+                  <p style="font-size: 10px; color: #aaa; margin: 10px 0 0 0;">💡 Pro Tip: Elements magnetically snap to the center and to other objects while you drag them.</p>
+              </div>
+          </details>
+          
+          <details>
+              <summary>🛠️ General Properties</summary>
+              <div class="details-content">
+                  <label>Layer Name</label>
+                  <input type="text" id="prop-layer-name" oninput="updateElementData()" style="margin-bottom: 10px;">
+
+                  <label style="color: #64ffda;">Link to Layer (Group)</label>
+                  <select id="prop-parent-link" onchange="updateElementData()" style="margin-bottom: 10px; border-color: #64ffda;">
+                    <option value="">None (Independent)</option>
+                  </select>
+
+                  <div id="shape-props" style="display:none;">
+                      <label>Shape Type</label>
+                      <select id="prop-shape-type" onchange="updateElementData()">
+                        <option value="rectangle">Rectangle</option>
+                        <option value="rounded">Rounded Rectangle</option>
+                        <option value="circle">Circle</option>
+                        <option value="triangle">Triangle</option>
+                        <option value="arrow">Arrow (Right)</option>
+                        <option value="plus">Plus / Cross</option>
+                        <option value="xmark">X Mark</option>
+                        <option value="minus">Minus Line</option>
+                        <option value="starburst">Action Starburst</option>
+                      </select>
+                  </div>
+
+                  <div id="text-props">
+                      <label>Text Content</label>
+                      <textarea id="prop-content" oninput="updateElementData()" placeholder="Type your text here..."></textarea>
+                      
+                      <div class="anim-grid" style="margin-top: 5px;">
+                          <div>
+                              <label>Font Family</label>
+                              <select id="prop-font-family" onchange="updateElementData()">
+                                  <option value="system-ui, sans-serif">System Default</option>
+                                  <option value="Arial, sans-serif">Arial</option>
+                                  <option value="'Helvetica Neue', Helvetica, sans-serif">Helvetica</option>
+                                  <option value="'Times New Roman', Times, serif">Times New Roman</option>
+                                  <option value="Georgia, serif">Georgia</option>
+                                  <option value="'Courier New', Courier, monospace">Courier New</option>
+                                  <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+                                  <option value="'Comic Sans MS', cursive, sans-serif">Comic Sans</option>
+                                  <option value="Impact, charcoal, sans-serif">Impact</option>
+                                  <option value="sans-serif">Generic Sans-Serif</option>
+                                  <option value="serif">Generic Serif</option>
+                                  <option value="monospace">Generic Monospace</option>
+                              </select>
+                          </div>
+                          <div>
+                              <label>Font Size (px)</label>
+                              <input type="number" id="prop-font-size" step="1" min="8" oninput="updateElementData()">
+                          </div>
+                      </div>
+
+                      <label>Formatting & Alignment</label>
+                      <div style="display: flex; gap: 5px; margin-bottom: 5px;">
+                          <button id="btn-format-bold" class="format-btn" onclick="toggleTextFormat('fontWeight', 'bold', 'normal')"><b>B</b></button>
+                          <button id="btn-format-italic" class="format-btn" onclick="toggleTextFormat('fontStyle', 'italic', 'normal')"><i>I</i></button>
+                          <button id="btn-format-underline" class="format-btn" onclick="toggleTextFormat('textDecoration', 'underline', 'none')"><u>U</u></button>
+                          <select id="prop-text-align" onchange="updateElementData()" style="flex: 2; height: 28px; padding: 0 4px;">
+                              <option value="left">Left Align</option>
+                              <option value="center">Center Align</option>
+                              <option value="right">Right Align</option>
+                          </select>
+                      </div>
+                  </div>
+                  
+                  <div id="color-props">
+                      <label>Base Color</label>
+                      <div style="display: flex; gap: 8px; align-items: center;">
+                          <input type="color" id="prop-color-picker" oninput="syncColor('picker')">
+                          <input type="text" id="prop-color" oninput="syncColor('text')" style="flex-grow: 1;">
+                      </div>
+                  </div>
+              </div>
+          </details>
+
+          <details>
+              <summary>✨ Visual CSS Effects</summary>
+              <div class="details-content">
+                  <div class="checkbox-group">
+                      <label class="checkbox-row"><input type="checkbox" id="effect-gradient" onchange="updateElementData()"> Gradient</label>
+                      <label class="checkbox-row"><input type="checkbox" id="effect-shadow" onchange="updateElementData()"> Soft Shadow</label>
+                      <label class="checkbox-row"><input type="checkbox" id="effect-glow" onchange="updateElementData()"> Neon Glow</label>
+                      <label class="checkbox-row"><input type="checkbox" id="effect-block3d" onchange="updateElementData()"> 3D Block</label>
+                      <label class="checkbox-row"><input type="checkbox" id="effect-glass" onchange="updateElementData()"> Glassmorphism</label>
+                      <label class="checkbox-row"><input type="checkbox" id="effect-hollow" onchange="updateElementData()"> Hollow/Stroke</label>
+                      <label class="checkbox-row"><input type="checkbox" id="effect-scanlines" onchange="updateElementData()"> CRT Lines</label>
+                      <label class="checkbox-row"><input type="checkbox" id="effect-outline" onchange="updateElementData()"> Solid Outline</label>
+                      <label class="checkbox-row"><input type="checkbox" id="effect-invert" onchange="updateElementData()"> Invert</label>
+                      <label class="checkbox-row"><input type="checkbox" id="effect-grayscale" onchange="updateElementData()"> Grayscale</label>
+                  </div>
+
+                  <div id="gradient-settings" style="display:none; margin-top: 8px; padding: 10px; background: #111; border-radius: 4px; border: 1px solid #FF6A00;">
+                      <label style="margin-top:0;">Gradient Angle: <span id="lbl-grad-angle">135</span>°</label>
+                      <input type="range" id="prop-grad-angle" min="0" max="360" step="1" oninput="updateElementData()">
+                      
+                      <label style="margin-top:10px;">Start Color (Hex, RGBA, etc)</label>
+                      <input type="text" id="prop-grad-c1" oninput="updateElementData()" placeholder="Leave blank for Base Color">
+                      
+                      <label>End Color</label>
+                      <input type="text" id="prop-grad-c2" oninput="updateElementData()" placeholder="e.g. transparent">
+                  </div>
+              </div>
+          </details>
+
+          <details>
+              <summary>📐 Size & Transform</summary>
+              <div class="details-content anim-grid">
+                  <div><label>Width (px)</label><input type="number" id="prop-width" step="1" oninput="updateElementData()"></div>
+                  <div><label>Height (px)</label><input type="number" id="prop-height" step="1" oninput="updateElementData()"></div>
+                  <div><label>Corner Radius (px)</label><input type="number" id="prop-radius" step="1" oninput="updateElementData()"></div>
+                  <div style="grid-column: 1 / -1;"><hr style="border-color:#444; margin:5px 0;"></div>
+                  <div><label>Scale X</label><input type="number" id="prop-scaleX" step="0.1" oninput="updateElementData()"></div>
+                  <div><label>Scale Y</label><input type="number" id="prop-scaleY" step="0.1" oninput="updateElementData()"></div>
+                  <div><label>Rotation</label><input type="number" id="prop-rotate" step="1" oninput="updateElementData()"></div>
+                  <div><label>Skew X</label><input type="number" id="prop-skewX" step="1" oninput="updateElementData()"></div>
+              </div>
+          </details>
+
+          <details open>
+              <summary>⏱️ Animation Settings</summary>
+              <div class="details-content">
+                  
+                  <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                      <div style="flex:1;">
+                          <label style="color: #28a745;">Start Time (Sec)</label>
+                          <input type="number" id="prop-delay" step="0.1" min="0" oninput="updateElementData()">
+                      </div>
+                      <div style="flex:1;">
+                          <label style="color: #ff3366;">Exit Time (Sec)</label>
+                          <input type="number" id="prop-exit-time" step="0.1" min="0" placeholder="Forever" oninput="updateElementData()">
+                      </div>
+                  </div>
+
+                  <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                      <div style="flex:1;">
+                          <label style="color: #28a745;">Entrance Animation</label>
+                          <select id="prop-anim-type" onchange="updateElementData()" style="border-color: #28a745;">
+                            <option value="none">None (Instant)</option>
+                            <option value="pop">Pop In (Bounce)</option>
+                            <option value="fade">Fade In</option>
+                            <option value="slideRight">Slide In (From Left)</option>
+                            <option value="slideUp">Slide Up (From Bottom)</option>
+                            <option value="zoomIn">Zoom In (Scale Up)</option>
+                            <option value="elasticDrop">Elastic Drop</option>
+                            <option value="wipeRight">Wipe Reveal</option>
+                            <option value="slam">Slam Down (Impact)</option>
+                            <option value="swirl">Swirl In</option>
+                            <option value="zipDash">Zip Dash</option>
+                          </select>
+                      </div>
+                      <div style="flex:1;">
+                          <label style="color: #ff3366;">Exit Animation</label>
+                          <select id="prop-exit-anim" onchange="updateElementData()" style="border-color: #ff3366;">
+                            <option value="none">None (Stays on screen)</option>
+                            <option value="hide">Instant Hide</option>
+                            <option value="fade">Fade Out</option>
+                            <option value="pop">Pop Out (Shrink)</option>
+                            <option value="slideLeft">Slide Left Offscreen</option>
+                            <option value="slideRight">Slide Right Offscreen</option>
+                          </select>
+                      </div>
+                  </div>
+
+                  <hr style="border-color: #444; width: 100%; margin: 15px 0;">
+
+                  <label class="checkbox-row" style="color: var(--accent); font-weight: bold; margin-bottom: 8px;">
+                      <input type="checkbox" id="prop-use-custom" onchange="toggleCustomAnim()"> Enable Sequence Keyframes (Plays after Entrance)
+                  </label>
+
+                  <div id="custom-anim-panel" style="display: none; background: #1a1a20; padding: 10px; border-radius: 6px; border: 1px solid #FF6A00; margin-top: 10px;">
+                      <h4 style="margin: 0 0 5px 0; color: var(--accent);">Keyframe Sequence</h4>
+                      <p style="font-size:9px; color:#aaa; margin:0 0 8px 0;">Drag and drop steps to reorder.</p>
+                      <div id="sequence-list" style="margin-bottom: 10px;"></div>
+
+                      <label style="color: #fff; margin-top:10px;" id="kf-build-title">Build Next Step</label>
+                      <div style="display: flex; gap: 5px; align-items: center; margin-bottom: 8px;">
+                          <select id="prop-kf-mode" style="border-color: var(--accent); flex-grow: 1;">
+                              <option value="to">Animate TO</option>
+                              <option value="from">Animate FROM</option>
+                          </select>
+                          <label class="checkbox-row" title="If checked, values are added/subtracted from current position">
+                              <input type="checkbox" id="prop-kf-relative"> Rel (+/-)
+                          </label>
+                      </div>
+                      
+                      <div class="anim-grid">
+                          <div><label>X Offset</label><input type="number" id="prop-kf-x" step="10" placeholder="e.g. 200"></div>
+                          <div><label>Y Offset</label><input type="number" id="prop-kf-y" step="10" placeholder="e.g. -100"></div>
+                          <div><label>Scale X</label><input type="number" id="prop-kf-sx" step="0.1" placeholder="e.g. 1.5"></div>
+                          <div><label>Scale Y</label><input type="number" id="prop-kf-sy" step="0.1" placeholder="e.g. 1.5"></div>
+                          <div><label>Rotation</label><input type="number" id="prop-kf-rot" step="1" placeholder="e.g. 90"></div>
+                          <div><label>Opacity</label><input type="number" id="prop-kf-op" step="0.1" min="0" max="1" placeholder="e.g. 0"></div>
+                          <div><label>Duration (s)</label><input type="number" id="prop-kf-dur" step="0.1" min="0.1" value="1.0"></div>
+                          <div>
+                              <label>Easing</label>
+                              <select id="prop-kf-ease">
+                                  <option value="power2.out">Smooth Out</option>
+                                  <option value="power2.in">Smooth In</option>
+                                  <option value="power2.inOut">Smooth In-Out</option>
+                                  <option value="back.out(1.7)">Overshoot (Back)</option>
+                                  <option value="elastic.out(1, 0.4)">Elastic Bounce</option>
+                                  <option value="bounce.out">Hard Bounce</option>
+                                  <option value="linear">Linear (Constant)</option>
+                              </select>
+                          </div>
+                      </div>
+                      <button id="btn-add-step" onclick="saveOrAddSequenceStep()" style="width:100%; margin-top:12px; background:#28a745;">+ Add Step to Sequence</button>
+                      <button id="btn-cancel-edit" onclick="cancelEditStep()" style="width:100%; margin-top:5px; background:#6c757d; display:none;">Cancel Edit</button>
+                  </div>
+
+                  <label style="color: #64ffda; margin-top: 15px;">Ambient Loop (Continuous)</label>
+                  <select id="prop-ambient-anim" onchange="updateElementData()">
+                    <option value="none">None (Static)</option>
+                    <option value="float">Floating (Hover up/down)</option>
+                    <option value="twinkle">Twinkling (Opacity pulse)</option>
+                    <option value="pulse">Pulse Glow (Glow in/out)</option>
+                    <option value="breathe">Breathing (Scale in/out)</option>
+                    <option value="spin">Spinning (Continuous 360)</option>
+                    <option value="wiggle">Wiggle (Fast alarm shake)</option>
+                    <option value="heartbeat">Heartbeat (Thump scale)</option>
+                    <option value="pendulum">Pendulum Swing</option>
+                    <option value="tada">Tada (Pop & Wiggle)</option>
+                    <option value="bounce">Bounce in Place</option>
+                    <option value="continuousShoot">Shoot Across</option>
+                  </select>
+              </div>
+          </details>
+          
+          <button style="background: #dc3545; margin-top: 15px; width: 100%;" onclick="deleteSelected()">🗑 Delete Asset</button>
+        </div>
+      </div>
+  </div> 
+
+  <div id="timeline-panel">
+      <div class="timeline-header">
+          <div style="display: flex; gap: 15px; align-items: center;">
+              <h4 style="margin: 0; color: #64ffda; font-size: 13px;">Hierarchy & Timeline</h4>
+              
+              <div style="display: flex; gap: 5px; align-items: center; background: #1e1e24; padding: 4px 8px; border-radius: 6px; border: 1px solid #444;">
+                  <span style="font-size: 11px; color:#aaa; margin-right: 5px;">🔍 Zoom</span>
+                  <button class="zoom-btn" onclick="changeTimelineZoom(-10)">-</button>
+                  <span id="timeline-zoom-label" style="font-size: 11px; width: 45px; text-align: center;">50px/s</span>
+                  <button class="zoom-btn" onclick="changeTimelineZoom(10)">+</button>
+              </div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+              <button id="btn-play" onclick="togglePlay()" style="background: #28a745; padding: 4px 12px; width: 80px;">▶ Play</button>
+              <button onclick="resetPreview(true)" class="tool-btn" style="margin:0; padding: 4px 12px;">⏹ Reset</button>
+          </div>
+      </div>
+      <div class="timeline-body">
+          <div class="timeline-labels">
+              <div style="height: 20px; border-bottom: 1px solid #444; background: var(--panel); box-sizing: border-box; display: flex; align-items: center; padding: 0 10px; font-size: 10px; color: #888; font-weight: bold; flex-shrink: 0;">Layers</div>
+              <div id="timeline-labels-list" style="display: flex; flex-direction: column;"></div>
+          </div>
+          <div class="timeline-tracks-container" id="tracks-container-ui">
+              <div class="timeline-ruler-bg"></div>
+              <div id="timeline-ruler" style="height: 20px; border-bottom: 1px solid #444; position: sticky; top: 0; background: rgba(17,17,17,0.9); z-index: 2; display: flex; font-size: 9px; color: #888; pointer-events: none; box-sizing: border-box; flex-shrink: 0;"></div>
+              <div id="timeline-track-lines" style="display: flex; flex-direction: column;"></div>
+              <div id="playhead" class="playhead"></div>
+          </div>
+      </div>
+  </div>
+
+  <script>
+    let elements = [];
+    let selectedId = null;
+    let editingSequenceIndex = -1; 
+    let masterTimeline = null; 
+    
+    let canvasZoom = 1;
+    let timelineZoom = 50; 
+    
+    let canvas = document.getElementById('canvas');
+    let linkDropdown = document.getElementById('prop-parent-link');
+    let canvasData = { type: 'solid', color1: '#121215', color2: '#2b2b36', bgImage: null };
+    const PIXELS_PER_SEC = 50; 
+    
+    const guideContainer = document.createElement('div');
+    guideContainer.id = 'guide-container';
+    guideContainer.style.position = 'absolute';
+    guideContainer.style.inset = '0';
+    guideContainer.style.pointerEvents = 'none';
+    guideContainer.style.zIndex = '99999';
+    canvas.appendChild(guideContainer);
+
+    window.changeCanvasZoom = function(amount) {
+        canvasZoom = Math.max(0.25, Math.min(3, canvasZoom + amount));
+        document.getElementById('canvas-zoom-label').innerText = Math.round(canvasZoom * 100) + '%';
+        document.getElementById('canvas').style.transform = `scale(${canvasZoom})`;
+    }
+
+    window.changeTimelineZoom = function(amount) {
+        timelineZoom = Math.max(10, Math.min(200, timelineZoom + amount));
+        document.getElementById('timeline-zoom-label').innerText = timelineZoom + 'px/s';
+        buildRuler();
+        renderTimeline();
+        if (masterTimeline) {
+            document.getElementById('playhead').style.left = (masterTimeline.time() * timelineZoom) + 'px';
+        }
+    }
+
+    function buildRuler() {
+        let rulerHtml = '';
+        let w = Math.max(4000, 120 * timelineZoom); 
+        for(let i=0; i<(w/timelineZoom); i++) { 
+            rulerHtml += `<div style="width: ${timelineZoom}px; border-left: 1px solid #555; padding-left: 2px; height: 20px; box-sizing: border-box;">${i}s</div>`; 
+        }
+        document.getElementById('timeline-ruler').innerHTML = rulerHtml;
+        document.getElementById('timeline-ruler').style.width = w + 'px';
+        document.querySelector('.timeline-ruler-bg').style.width = w + 'px';
+        document.querySelector('.timeline-ruler-bg').style.background = `repeating-linear-gradient(90deg, #111, #111 ${timelineZoom - 1}px, #333 ${timelineZoom}px)`;
+        
+        document.querySelectorAll('.timeline-track').forEach(t => t.style.width = w + 'px');
+    }
+
+    // --- AI INTEGRATION ENGINE ---
+    document.getElementById('gemini-api-key').value = localStorage.getItem('gemini_api_key') || '';
+    
+    window.saveApiKey = function() {
+        localStorage.setItem('gemini_api_key', document.getElementById('gemini-api-key').value);
+    }
+
+    window.generateWithAI = async function() {
+        const apiKey = document.getElementById('gemini-api-key').value;
+        const prompt = document.getElementById('ai-prompt').value;
+        const loader = document.getElementById('ai-loader');
+
+        if (!apiKey) return alert("Please enter your Gemini API Key.");
+        if (!prompt) return alert("Please enter a prompt to generate a scene.");
+
+        loader.style.display = 'block';
+
+        const systemInstruction = `You are a motion graphics automation engine. Your job is to convert user requests into a strict JSON array representing graphical elements for a 960x540 canvas.
+DO NOT wrap the response in markdown \`\`\`json blocks. ONLY output the raw JSON array.
+Use this base template for each element, and alter it according to the user's prompt (e.g. adjust text content, colors, shapes, delays, animations, x/y coords).
+Canvas is 960 width by 540 height. Center is (480, 270).
+
+Template Object:
+{
+  "type": "text", // "text" or "box"
+  "shapeType": "rounded", // if box: "rectangle", "rounded", "circle", "triangle", "arrow", "plus", "xmark", "minus", "starburst"
+  "layerName": "Name",
+  "content": "Text string if type is text",
+  "color": "#ffffff",
+  "effects": { "shadow": false, "glow": false, "glass": false, "gradient": false, "gradientC1": "", "gradientC2": "transparent", "gradientAngle": 135, "block3d": false, "hollow": false, "scanlines": false, "outline": false, "invert": false, "grayscale": false },
+  "fontFamily": "system-ui, sans-serif", "fontSize": 36, "fontWeight": "bold", "fontStyle": "normal", "textDecoration": "none", "textAlign": "center",
+  "width": 120, "height": 120, "borderRadius": 12, // use null for text width/height
+  "x": 200, "y": 200, "scaleX": 1, "scaleY": 1, "rotate": 0, "skewX": 0, 
+  "animType": "pop", // "none","pop","fade","slideRight","slideUp","zoomIn","elasticDrop","wipeRight","slam","swirl","zipDash"
+  "delay": 0, "exitTime": null, "exitAnim": "none", "ambientAnim": "none",
+  "sequence": [], "customKf": { "active": false } 
+}`;
+
+        try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    system_instruction: { parts: { text: systemInstruction } },
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { response_mime_type: "application/json" }
+                })
+            });
+
+            const data = await response.json();
+            if (data.error) throw new Error(data.error.message);
+
+            let rawJson = data.candidates[0].content.parts[0].text;
+            const jsonMatch = rawJson.match(/\[[\s\S]*\]/);
+            if(jsonMatch) rawJson = jsonMatch[0];
+            else rawJson = rawJson.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+            let aiElements = JSON.parse(rawJson);
+
+            aiElements.forEach(el => {
+                el.id = 'el_' + Date.now() + Math.floor(Math.random()*10000);
+                el.parentId = '';
+                el.ambientTween = null;
+                el.effects = el.effects || { shadow: false, glow: false, glass: false, gradient: false, gradientC1: '', gradientC2: 'transparent', gradientAngle: 135, block3d: false, hollow: false, scanlines: false, outline: false, invert: false, grayscale: false };
+                el.customKf = el.customKf || { active: false };
+                el.sequence = el.sequence || [];
+                
+                if(el.type === 'box') {
+                    el.width = el.width || 120; el.height = el.height || 120; el.borderRadius = el.borderRadius || 0;
+                } else if(el.type === 'text') {
+                    el.width = null; el.height = null; el.borderRadius = 0;
+                }
+                
+                elements.unshift(el); 
+            });
+
+            reRenderAll();
+            console.log("AI Scene Generated Successfully!");
+
+        } catch (err) {
+            console.error("AI Error: " + err);
+            alert("AI Generation failed. Ensure prompt is valid or check debug console.");
+        } finally {
+            loader.style.display = 'none';
+        }
+    }
+
+
+    // --- HELPER FUNCTIONS ---
+    function getGsapVal(val, isRel) {
+        if (val === null || val === undefined || isNaN(val)) return null;
+        if (!isRel) return val;
+        return val >= 0 ? "+=" + val : "-=" + Math.abs(val);
+    }
+    
+    function getExportVal(val, isRel) {
+        if (val === null || val === undefined || isNaN(val)) return null;
+        if (!isRel) return val;
+        return `"${val >= 0 ? '+=' : '-='}${Math.abs(val)}"`;
+    }
+
+    function getEntryDur(el) {
+        if (el.animType === 'none') return 0;
+        if (el.animType === 'pop') return 0.8;
+        if (['slideRight', 'slideUp', 'fade', 'zoomIn', 'wipeRight', 'swirl'].includes(el.animType)) return 1.0;
+        if (el.animType === 'slam') return 0.5;
+        if (el.animType === 'zipDash') return 0.6;
+        return 0;
+    }
+
+    function hexToRgba(hex, alpha) {
+        if (/^#[0-9A-F]{6}$/i.test(hex)) {
+            let r = parseInt(hex.slice(1,3), 16);
+            let g = parseInt(hex.slice(3,5), 16);
+            let b = parseInt(hex.slice(5,7), 16);
+            return `rgba(${r},${g},${b},${alpha})`;
+        }
+        return hex; 
+    }
+
+    function traverseElements(arr, callback) {
+        arr.forEach(el => {
+            callback(el);
+            if (el.type === 'comp' && el.compElements) traverseElements(el.compElements, callback);
+        });
+    }
+
+    function clearElementTweens(elArray) {
+        elArray.forEach(el => {
+            if (el.ambientTween) { el.ambientTween.kill(); el.ambientTween = null; }
+            const outer = document.getElementById(el.id); const inner = document.getElementById(el.id + '_inner');
+            if(outer && inner) {
+                if (typeof gsap !== 'undefined') {
+                    gsap.set(outer, {clearProps: "transform,opacity,visibility,scale,scaleX,scaleY,rotation,x,y"}); 
+                    gsap.set(inner, {clearProps: "transform,opacity,visibility,scale,scaleX,scaleY,rotation,x,y"}); 
+                }
+                outer.style.visibility = "visible"; 
+                outer.style.opacity = el.effects.ghost ? '0.5' : '1';
+                applyVisualStyles(el, outer, inner); 
+                applyWorkspaceAmbient(el, outer); 
+            }
+            if (el.type === 'comp' && el.compElements) {
+                clearElementTweens(el.compElements);
+            }
+        });
+    }
+
+    // --- PRE-COMP IMPORT ENGINE ---
+    window.handleCompImport = function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            try {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(event.target.result, "text/html");
+                const dataScript = doc.getElementById('studio-project-data');
+                if (dataScript) {
+                    const data = JSON.parse(dataScript.textContent);
+                    const compId = 'comp_' + Date.now();
+                    
+                    const safeElements = data.elements.map(cEl => {
+                        cEl.id = compId + '_' + cEl.id;
+                        if(cEl.parentId) cEl.parentId = compId + '_' + cEl.parentId;
+                        return cEl;
+                    });
+
+                    let maxTime = 1;
+                    safeElements.forEach(cel => {
+                        let entryD = getEntryDur(cel);
+                        let endT = cel.exitTime !== null ? cel.exitTime : (cel.delay + entryD + 1);
+                        if (endT > maxTime) maxTime = endT;
+                    });
+
+                    const compLayer = {
+                        id: compId, type: 'comp', shapeType: 'rectangle', parentId: '',
+                        layerName: '📦 ' + file.name.replace('.html', ''),
+                        content: '', src: null, color: 'transparent',
+                        effects: { shadow: false, glow: false, glass: false, gradient: false, outline: false, invert: false, grayscale: false },
+                        fontFamily: 'system-ui, sans-serif', fontSize: 36, fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center',
+                        width: 960, height: 540, borderRadius: 0,
+                        scaleX: 1, scaleY: 1, rotate: 0, skewX: 0, 
+                        x: 0, y: 0,
+                        animType: 'none', delay: 0, exitTime: maxTime, exitAnim: 'none', ambientAnim: 'none', ambientTween: null,
+                        sequence: [], customKf: { active: false },
+                        compCanvas: data.canvasData,
+                        compElements: safeElements
+                    };
+                    elements.unshift(compLayer);
+                    reRenderAll();
+                    console.log("Pre-Comp Imported Successfully!");
+                } else {
+                    alert("Invalid Studio Project HTML file. Could not find V48+ JSON block.");
+                }
+            } catch(err) { console.error(err); alert("Error importing Pre-Comp."); }
+        };
+        reader.readAsText(file);
+        e.target.value = ''; 
+    }
+
+    window.handleProjectImport = function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            try {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(event.target.result, "text/html");
+                const dataScript = doc.getElementById('studio-project-data');
+                
+                if (dataScript) {
+                    const data = JSON.parse(dataScript.textContent);
+                    elements = data.elements;
+                    canvasData = data.canvasData;
+                    selectedId = null;
+                    
+                    document.getElementById('canvas-bg-type').value = canvasData.type;
+                    document.getElementById('canvas-color-1').value = canvasData.color1;
+                    document.getElementById('canvas-color-2').value = canvasData.color2;
+                    document.getElementById('canvas-hex-1').value = canvasData.color1;
+                    document.getElementById('canvas-hex-2').value = canvasData.color2;
+                    
+                    let needsTwoColors = ['gradient', 'radial', 'grid', 'dots'].includes(canvasData.type);
+                    document.getElementById('canvas-color-2-wrapper').style.display = needsTwoColors ? 'block' : 'none';
+                    document.getElementById('canvas-image-wrapper').style.display = canvasData.type === 'image' ? 'block' : 'none';
+                    
+                    applyCanvasStyles();
+                    reRenderAll();
+                    console.log("Project loaded successfully!");
+                } else {
+                    alert("This HTML file does not contain valid Studio Project Data.");
+                }
+            } catch(err) {
+                console.error("Import Error: " + err);
+                alert("Error importing project. Check debug logs.");
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = ''; 
+    }
+
+    function updateCanvasData() {
+        canvasData.type = document.getElementById('canvas-bg-type').value;
+        canvasData.color1 = document.getElementById('canvas-color-1').value;
+        canvasData.color2 = document.getElementById('canvas-color-2').value;
+        document.getElementById('canvas-hex-1').value = canvasData.color1;
+        document.getElementById('canvas-hex-2').value = canvasData.color2;
+
+        let needsTwoColors = ['gradient', 'radial', 'grid', 'dots'].includes(canvasData.type);
+        document.getElementById('canvas-color-2-wrapper').style.display = needsTwoColors ? 'block' : 'none';
+        document.getElementById('canvas-image-wrapper').style.display = canvasData.type === 'image' ? 'block' : 'none';
+        applyCanvasStyles();
+    }
+
+    function syncCanvasColor(num) {
+        const hex = document.getElementById('canvas-hex-' + num).value;
+        if (/^#[0-9A-F]{6}$/i.test(hex)) {
+            document.getElementById('canvas-color-' + num).value = hex; updateCanvasData();
+        }
+    }
+
+    function handleCanvasImageUpload(e) {
+        const file = e.target.files[0]; if (!file) return;
+        const reader = new FileReader(); 
+        reader.onload = function(event) { canvasData.bgImage = event.target.result; applyCanvasStyles(); };
+        reader.readAsDataURL(file); e.target.value = '';
+    }
+
+    function clearCanvasImage() { canvasData.bgImage = null; applyCanvasStyles(); }
+
+    function applyCanvasStyles() {
+        let bgString = '';
+        if (canvasData.type === 'solid') bgString = canvasData.color1;
+        else if (canvasData.type === 'gradient') bgString = `linear-gradient(135deg, ${canvasData.color1}, ${canvasData.color2})`;
+        else if (canvasData.type === 'radial') bgString = `radial-gradient(circle, ${canvasData.color1}, ${canvasData.color2})`;
+        else if (canvasData.type === 'grid') {
+            bgString = `linear-gradient(${canvasData.color2} 1px, transparent 1px), linear-gradient(90deg, ${canvasData.color2} 1px, transparent 1px), ${canvasData.color1}`;
+            canvas.style.backgroundSize = '40px 40px';
+        } else if (canvasData.type === 'dots') {
+            bgString = `radial-gradient(${canvasData.color2} 2px, transparent 2px), ${canvasData.color1}`;
+            canvas.style.backgroundSize = '20px 20px';
+        } else if (canvasData.type === 'image') {
+            bgString = canvasData.bgImage ? `url(${canvasData.bgImage}) center/cover no-repeat, ${canvasData.color1}` : canvasData.color1;
+        }
+        canvas.style.background = bgString;
+        if (canvasData.type !== 'grid' && canvasData.type !== 'dots') canvas.style.backgroundSize = 'auto';
+    }
+    
+    function addElement(type, dataUrl = null) {
+      const id = 'el_' + Date.now();
+      const el = {
+        id: id, type: type, shapeType: 'rounded', parentId: '',
+        layerName: type === 'text' ? 'New Text' : (type === 'box' ? 'New Shape' : 'New Image'),
+        content: type === 'text' ? 'Text' : '', src: dataUrl, x: 380, y: 220, color: type === 'text' ? '#0B2B5E' : '#FF6A00',
+        effects: { shadow: false, glow: false, glass: false, gradient: false, gradientC1: '', gradientC2: 'transparent', gradientAngle: 135, block3d: false, hollow: false, scanlines: false, outline: false, invert: false, grayscale: false },
+        fontFamily: 'system-ui, sans-serif', fontSize: 36, fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center',
+        width: type === 'box' ? 120 : (type === 'image' ? 200 : null),
+        height: type === 'box' ? 120 : null,
+        borderRadius: type === 'box' ? 12 : 0,
+        scaleX: 1, scaleY: 1, rotate: 0, skewX: 0, 
+        animType: 'none', delay: 0, exitTime: null, exitAnim: 'none', ambientAnim: 'none', ambientTween: null,
+        sequence: [], customKf: { active: false } 
+      };
+      elements.unshift(el); reRenderAll(); selectElement(id);
+    }
+
+    function addActionLine() {
+      const id = 'el_' + Date.now();
+      const el = {
+        id: id, type: 'box', shapeType: 'speedlines', parentId: '',
+        layerName: '⚡ Action Line', content: '', src: null, x: 380, y: 220, color: '#64ffda',
+        effects: { shadow: false, glow: true, glass: false, gradient: false, gradientC1: '', gradientC2: 'transparent', gradientAngle: 135, block3d: false, hollow: false, scanlines: false, outline: false, invert: false, grayscale: false },
+        fontFamily: 'system-ui, sans-serif', fontSize: 36, fontWeight: 'bold', fontStyle: 'normal', textDecoration: 'none', textAlign: 'center',
+        width: 400, height: 100, borderRadius: 0,
+        scaleX: 1, scaleY: 1, rotate: 0, skewX: -30,
+        animType: 'zipDash', delay: 0, exitTime: null, exitAnim: 'none', ambientAnim: 'none', ambientTween: null, sequence: [], customKf: { active: false }
+      };
+      elements.unshift(el); reRenderAll(); selectElement(id);
+    }
+
+    function handleImageUpload(e) {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader(); reader.onload = function(event) { addElement('image', event.target.result); };
+      reader.readAsDataURL(file); e.target.value = '';
+    }
+
+    function populateLinkDropdown() {
+        let currentParent = linkDropdown.value;
+        linkDropdown.innerHTML = '<option value="">None (Independent)</option>';
+        elements.forEach(el => {
+            if (el.id !== selectedId) {
+                let opt = document.createElement('option');
+                opt.value = el.id; opt.innerText = el.layerName;
+                if (el.id === currentParent) opt.selected = true;
+                linkDropdown.appendChild(opt);
+            }
+        });
+    }
+
+    // --- RECURSIVE DOM RENDERING ---
+    function reRenderAll() {
+        Array.from(canvas.children).forEach(c => {
+            if(c.id !== 'guide-container') canvas.removeChild(c);
+        });
+        
+        for(let i = elements.length - 1; i >= 0; i--) {
+            renderDOMElement(elements[i], canvas);
+        }
+        
+        if(selectedId) { selectElement(selectedId); populateLinkDropdown(); }
+        renderTimeline(); 
+    }
+
+    function renderDOMElement(el, container) {
+      const outer = document.createElement('div');
+      outer.id = el.id; 
+      outer.className = 'draggable';
+      
+      if (container !== canvas) {
+          outer.style.pointerEvents = 'none';
+      }
+      
+      const inner = document.createElement('div');
+      inner.id = el.id + '_inner';
+      inner.className = 'shape-inner'; 
+      
+      if (el.type === 'image') {
+          const img = document.createElement('img'); 
+          img.src = el.src; 
+          img.style.objectFit = 'contain';
+          img.draggable = false; 
+          img.style.display = 'block';
+
+          const overlay = document.createElement('div');
+          overlay.className = 'img-overlay';
+          
+          inner.appendChild(img);
+          inner.appendChild(overlay);
+      } else if (el.type === 'comp') {
+          inner.style.width = '960px'; 
+          inner.style.height = '540px'; 
+          inner.style.position = 'relative'; 
+          inner.style.overflow = 'hidden';
+          
+          if(el.compCanvas) {
+              if (el.compCanvas.type === 'solid') inner.style.background = el.compCanvas.color1;
+              else if (el.compCanvas.type === 'gradient') inner.style.background = `linear-gradient(135deg, ${el.compCanvas.color1}, ${el.compCanvas.color2})`;
+              else if (el.compCanvas.type === 'radial') inner.style.background = `radial-gradient(circle, ${el.compCanvas.color1}, ${el.compCanvas.color2})`;
+              else if (el.compCanvas.type === 'grid') { inner.style.background = `linear-gradient(${el.compCanvas.color2} 1px, transparent 1px), linear-gradient(90deg, ${el.compCanvas.color2} 1px, transparent 1px), ${el.compCanvas.color1}`; inner.style.backgroundSize = '40px 40px'; }
+              else if (el.compCanvas.type === 'dots') { inner.style.background = `radial-gradient(${el.compCanvas.color2} 2px, transparent 2px), ${el.compCanvas.color1}`; inner.style.backgroundSize = '20px 20px'; }
+              else if (el.compCanvas.type === 'image' && el.compCanvas.bgImage) { inner.style.background = `url('${el.compCanvas.bgImage}') center/cover no-repeat, ${el.compCanvas.color1}`; }
+          }
+          if(el.compElements) {
+              for(let i = el.compElements.length - 1; i >= 0; i--) {
+                  renderDOMElement(el.compElements[i], inner);
+              }
+          }
+      } else { 
+          inner.innerHTML = el.content.replace(/\n/g, '<br>'); 
+      }
+      
+      outer.appendChild(inner); 
+      container.appendChild(outer); 
+      
+      applyVisualStyles(el, outer, inner);
+      applyWorkspaceAmbient(el, outer);
+
+      if (container === canvas) {
+          outer.onpointerdown = function(e) {
+            e.preventDefault(); e.stopPropagation(); 
+            
+            try { selectElement(el.id); } catch(err) { console.error("Select Error: " + err); }
+
+            let startCursorX = e.clientX; let startCursorY = e.clientY;
+            let startElementX = el.x; let startElementY = el.y;
+
+            let childrenStartPos = [];
+            elements.forEach(child => {
+                if (child.parentId === el.id) childrenStartPos.push({ childEl: child, startX: child.x, startY: child.y, domNode: document.getElementById(child.id) });
+            });
+
+            function onPointerMove(ev) {
+              let deltaX = (ev.clientX - startCursorX) / canvasZoom; 
+              let deltaY = (ev.clientY - startCursorY) / canvasZoom;
+              let newX = startElementX + deltaX; 
+              let newY = startElementY + deltaY;
+              
+              let w = outer.offsetWidth; let h = outer.offsetHeight;
+              let cX = newX + w/2; let cY = newY + h/2;
+              
+              let guides = []; const THRESH = 8; 
+
+              if (Math.abs(cX - 480) < THRESH) { newX = 480 - w/2; cX = 480; guides.push({type:'v', pos:480}); }
+              if (Math.abs(cY - 270) < THRESH) { newY = 270 - h/2; cY = 270; guides.push({type:'h', pos:270}); }
+
+              elements.forEach(other => {
+                  if (other.id === el.id || other.parentId === el.id) return;
+                  let otherOuter = document.getElementById(other.id);
+                  if (!otherOuter) return;
+                  
+                  let oW = otherOuter.offsetWidth; let oH = otherOuter.offsetHeight;
+                  let oCX = other.x + oW/2; let oCY = other.y + oH/2;
+
+                  if (Math.abs(cX - oCX) < THRESH) { newX = oCX - w/2; cX = oCX; guides.push({type:'v', pos:oCX}); }
+                  if (Math.abs(cY - oCY) < THRESH) { newY = oCY - h/2; cY = oCY; guides.push({type:'h', pos:oCY}); }
+                  if (Math.abs(newX - other.x) < THRESH) { newX = other.x; guides.push({type:'v', pos:other.x}); }
+                  if (Math.abs(newY - other.y) < THRESH) { newY = other.y; guides.push({type:'h', pos:other.y}); }
+                  if (Math.abs((newX+w) - (other.x+oW)) < THRESH) { newX = (other.x+oW) - w; guides.push({type:'v', pos:(other.x+oW)}); }
+                  if (Math.abs((newY+h) - (other.y+oH)) < THRESH) { newY = (other.y+oH) - h; guides.push({type:'h', pos:(other.y+oH)}); }
+              });
+
+              drawGuides(guides);
+
+              el.x = newX; el.y = newY;
+              outer.style.left = el.x + 'px'; outer.style.top = el.y + 'px';
+              
+              let effDeltaX = el.x - startElementX; let effDeltaY = el.y - startElementY;
+              childrenStartPos.forEach(c => {
+                  c.childEl.x = c.startX + effDeltaX; c.childEl.y = c.startY + effDeltaY;
+                  if(c.domNode) { c.domNode.style.left = c.childEl.x + 'px'; c.domNode.style.top = c.childEl.y + 'px'; }
+              });
+            }
+            
+            function onPointerUp() { 
+              clearGuides();
+              document.removeEventListener('pointermove', onPointerMove); 
+              document.removeEventListener('pointerup', onPointerUp); 
+            }
+            document.addEventListener('pointermove', onPointerMove); 
+            document.addEventListener('pointerup', onPointerUp);
+          };
+      }
+    }
+
+    window.alignCanvas = function(mode) {
+        if(!selectedId) return;
+        const el = elements.find(e => e.id === selectedId);
+        const outer = document.getElementById(selectedId);
+        if(!outer || !el) return;
+
+        const w = outer.offsetWidth;
+        const h = outer.offsetHeight;
+
+        if(mode === 'left') el.x = 0;
+        if(mode === 'centerH') el.x = (960 - w) / 2;
+        if(mode === 'right') el.x = 960 - w;
+        if(mode === 'top') el.y = 0;
+        if(mode === 'centerV') el.y = (540 - h) / 2;
+        if(mode === 'bottom') el.y = 540 - h;
+
+        updateElementData();
+        reRenderAll();
+    };
+
+    function drawGuides(guides) {
+        guideContainer.innerHTML = '';
+        guides.forEach(g => {
+            let line = document.createElement('div');
+            line.style.position = 'absolute';
+            line.style.background = '#00ffcc';
+            if (g.type === 'v') {
+                line.style.left = g.pos + 'px'; line.style.top = '0'; line.style.bottom = '0'; line.style.width = '1px';
+            } else {
+                line.style.top = g.pos + 'px'; line.style.left = '0'; line.style.right = '0'; line.style.height = '1px';
+            }
+            guideContainer.appendChild(line);
+        });
+    }
+    function clearGuides() { guideContainer.innerHTML = ''; }
+
+    let draggedLayerIdx = null;
+    window.layerDragStart = function(e, idx) { draggedLayerIdx = idx; e.currentTarget.style.opacity = '0.5'; e.dataTransfer.effectAllowed = 'move'; };
+    window.layerDragOver = function(e) { e.preventDefault(); e.currentTarget.style.borderTop = '2px solid var(--accent)'; };
+    window.layerDragLeave = function(e) { e.currentTarget.style.borderTop = '1px solid transparent'; };
+    window.layerDrop = function(e, idx) {
+        e.preventDefault(); e.currentTarget.style.borderTop = '1px solid transparent';
+        if (draggedLayerIdx === null || draggedLayerIdx === idx) return;
+        const moved = elements.splice(draggedLayerIdx, 1)[0];
+        elements.splice(idx, 0, moved);
+        reRenderAll();
+    };
+    window.layerDragEnd = function(e) { e.currentTarget.style.opacity = '1'; draggedLayerIdx = null; };
+
+    function toggleTextFormat(property, activeVal, inactiveVal) {
+        if (!selectedId) return;
+        const el = elements.find(e => e.id === selectedId);
+        el[property] = el[property] === activeVal ? inactiveVal : activeVal;
+        updateUIFormattingButtons(el); updateElementData();
+    }
+
+    function updateUIFormattingButtons(el) {
+        document.getElementById('btn-format-bold').classList.toggle('active', el.fontWeight === 'bold');
+        document.getElementById('btn-format-italic').classList.toggle('active', el.fontStyle === 'italic');
+        document.getElementById('btn-format-underline').classList.toggle('active', el.textDecoration === 'underline');
+    }
+
+    function applyVisualStyles(elData, outerEl, innerEl) {
+        if (!outerEl || !innerEl) return;
+        outerEl.style.filter = 'none'; 
+        outerEl.style.width = (elData.type === 'image' || elData.type === 'text') ? 'max-content' : 'auto'; 
+        outerEl.style.height = (elData.type === 'image' || elData.type === 'text') ? 'max-content' : 'auto';
+        outerEl.style.transformOrigin = elData.ambientAnim === 'pendulum' ? "top center" : "center center";
+        outerEl.style.left = elData.x + 'px'; outerEl.style.top = elData.y + 'px';
+        
+        if (elData.type !== 'comp') {
+            innerEl.style.background = 'transparent'; innerEl.style.backgroundColor = 'transparent';
+            innerEl.style.clipPath = 'none';
+            innerEl.style.borderRadius = '0'; 
+            innerEl.style.webkitBackgroundClip = 'initial'; innerEl.style.webkitTextFillColor = 'initial'; innerEl.style.border = 'none';
+            innerEl.style.width = elData.type === 'image' ? 'auto' : '100%'; 
+            innerEl.style.height = elData.type === 'image' ? 'auto' : '100%';
+            innerEl.style.backdropFilter = 'none';
+        }
+
+        let c1 = elData.effects.gradientC1 || elData.color;
+        let c2 = elData.effects.gradientC2 || 'transparent';
+        let angle = elData.effects.gradientAngle !== undefined ? elData.effects.gradientAngle : 135;
+
+        if (elData.type === 'text') {
+            innerEl.style.fontFamily = elData.fontFamily; innerEl.style.fontSize = elData.fontSize + 'px';
+            innerEl.style.fontWeight = elData.fontWeight; innerEl.style.fontStyle = elData.fontStyle;
+            innerEl.style.textDecoration = elData.textDecoration; innerEl.style.textAlign = elData.textAlign; innerEl.style.whiteSpace = 'pre-wrap'; 
+
+            if (elData.effects.hollow) {
+                innerEl.style.color = 'transparent'; innerEl.style.webkitTextStroke = `2px ${elData.color}`;
+            } else if (elData.effects.gradient) {
+                innerEl.style.background = `linear-gradient(${angle}deg, ${c1}, ${c2})`;
+                innerEl.style.webkitBackgroundClip = 'text'; innerEl.style.webkitTextFillColor = 'transparent'; innerEl.style.color = 'transparent';
+            } else { innerEl.style.color = elData.color; innerEl.style.webkitTextStroke = '0'; }
+        } 
+        else if (elData.type === 'image') {
+            let imgEl = innerEl.querySelector('img'); let overlay = innerEl.querySelector('.img-overlay');
+            if (imgEl && overlay) {
+                imgEl.style.opacity = 1; 
+                imgEl.style.width = elData.width ? elData.width + 'px' : '200px';
+                imgEl.style.height = elData.height ? elData.height + 'px' : 'auto';
+                imgEl.style.borderRadius = (elData.borderRadius || 0) + 'px';
+                
+                let overlayBg = [];
+                if (elData.effects.scanlines) { overlayBg.push(`repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.3) 2px, rgba(0,0,0,0.3) 4px)`); }
+                if (elData.effects.gradient) {
+                    overlayBg.push(`linear-gradient(${angle}deg, ${c1}, ${c2})`);
+                    overlay.style.webkitMaskImage = `url('${elData.src}')`; overlay.style.webkitMaskSize = 'contain';
+                    overlay.style.webkitMaskPosition = 'center'; overlay.style.webkitMaskRepeat = 'no-repeat';
+                } else { overlay.style.webkitMaskImage = 'none'; }
+                overlay.style.background = overlayBg.length > 0 ? overlayBg.join(', ') : 'transparent';
+            }
+            innerEl.style.borderRadius = (elData.borderRadius || 0) + 'px';
+            if (elData.effects.hollow) innerEl.style.border = `4px solid ${elData.color}`;
+            if (elData.effects.glass) innerEl.style.backdropFilter = 'blur(12px)';
+        } 
+        else if (elData.type === 'box') {
+            outerEl.style.width = (elData.width || 120) + 'px';
+            outerEl.style.height = (elData.height || 120) + 'px';
+            
+            if (elData.shapeType === 'speedlines') {
+                innerEl.style.background = `repeating-linear-gradient(90deg, transparent, transparent 10px, ${elData.color} 10px, ${elData.color} 20px)`;
+            } else if (elData.effects.hollow) {
+                innerEl.style.background = 'transparent'; innerEl.style.border = `4px solid ${elData.color}`;
+            } else if (elData.effects.gradient) {
+                innerEl.style.background = `linear-gradient(${angle}deg, ${c1}, ${c2})`;
+            } else { 
+                innerEl.style.background = elData.color; 
+                innerEl.style.backgroundColor = elData.color;
+            }
+            
+            if (elData.effects.scanlines) {
+                let base = innerEl.style.backgroundColor || elData.color;
+                innerEl.style.background = `repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.2) 2px, rgba(0,0,0,0.2) 4px), ${base}`;
+            }
+            
+            if (elData.effects.glass) {
+                innerEl.style.backdropFilter = 'blur(12px)'; 
+                if (!elData.effects.hollow) innerEl.style.border = '1px solid rgba(255,255,255,0.5)';
+                if (!elData.effects.gradient && !elData.effects.hollow) {
+                    innerEl.style.background = hexToRgba(elData.color, 0.2); 
+                }
+            }
+
+            innerEl.style.borderRadius = (elData.borderRadius || 0) + 'px';
+            if (elData.shapeType === 'circle') innerEl.style.borderRadius = '50%';
+            if (elData.shapeType === 'triangle') innerEl.style.clipPath = 'polygon(50% 0%, 0% 100%, 100% 100%)';
+            if (elData.shapeType === 'arrow') innerEl.style.clipPath = 'polygon(0% 20%, 60% 20%, 60% 0%, 100% 50%, 60% 100%, 60% 80%, 0% 80%)';
+            if (elData.shapeType === 'plus') innerEl.style.clipPath = 'polygon(33% 0, 66% 0, 66% 33%, 100% 33%, 100% 66%, 66% 66%, 66% 100%, 33% 100%, 33% 66%, 0 66%, 0 33%, 33% 33%)';
+            if (elData.shapeType === 'xmark') innerEl.style.clipPath = 'polygon(20% 0%, 0% 20%, 30% 50%, 0% 80%, 20% 100%, 50% 70%, 80% 100%, 100% 80%, 70% 50%, 100% 20%, 80% 0%, 50% 30%)';
+            if (elData.shapeType === 'minus') innerEl.style.clipPath = 'polygon(0% 40%, 100% 40%, 100% 60%, 0% 60%)';
+            if (elData.shapeType === 'starburst') innerEl.style.clipPath = 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)';
+        } else if (elData.type === 'comp') {
+            outerEl.style.width = '960px'; outerEl.style.height = '540px';
+            innerEl.style.borderRadius = (elData.borderRadius || 0) + 'px';
+            if (elData.effects.hollow) innerEl.style.border = `4px solid ${elData.color}`;
+            if (elData.effects.glass) {
+                innerEl.style.backdropFilter = 'blur(12px)';
+                if (!elData.effects.hollow) innerEl.style.border = '1px solid rgba(255,255,255,0.5)';
+                innerEl.style.backgroundColor = hexToRgba(elData.color, 0.2); 
+            }
+        }
+
+        gsap.set(outerEl, { scaleX: elData.scaleX, scaleY: elData.scaleY, rotation: elData.rotate, skewX: elData.skewX });
+
+        let filters = [];
+        if (elData.effects.shadow) filters.push('drop-shadow(0 15px 15px rgba(0,0,0,0.4))'); 
+        if (elData.effects.glow) filters.push(`drop-shadow(0 0 15px ${elData.color})`);
+        if (elData.effects.block3d) filters.push(`drop-shadow(1px 1px 0px #222) drop-shadow(2px 2px 0px #222) drop-shadow(3px 3px 0px #222) drop-shadow(4px 4px 0px #222) drop-shadow(5px 5px 0px #222)`);
+        if (elData.effects.outline) filters.push(`drop-shadow(2px 0px 0px #fff) drop-shadow(-2px 0px 0px #fff) drop-shadow(0px 2px 0px #fff) drop-shadow(0px -2px 0px #fff)`);
+        if (elData.effects.blur) filters.push('blur(4px)');
+        if (elData.effects.invert) filters.push('invert(1)');
+        if (elData.effects.grayscale) filters.push('grayscale(1)');
+        
+        outerEl.style.filter = filters.length > 0 ? filters.join(' ') : 'none';
+        outerEl.style.opacity = elData.effects.ghost ? '0.5' : '1';
+    }
+
+    function applyWorkspaceAmbient(el, outerEl) {
+        if (!outerEl) return;
+        if (el.ambientTween) { el.ambientTween.kill(); el.ambientTween = null; }
+        gsap.set(outerEl, { y: 0, x: 0 }); 
+    }
+
+    function applyAmbientRecursive(arr) {
+        arr.forEach(el => {
+            const outer = document.getElementById(el.id);
+            if(outer) {
+                applyWorkspaceAmbient(el, outer);
+                if (el.ambientAnim === 'float') el.ambientTween = gsap.to(outer, { y: "-=15", duration: 1.5, yoyo: true, repeat: -1, ease: "sine.inOut" });
+                else if (el.ambientAnim === 'twinkle') el.ambientTween = gsap.to(outer, { opacity: 0.1, duration: 0.6, yoyo: true, repeat: -1, ease: "power1.inOut" });
+                else if (el.ambientAnim === 'pulse') {
+                    let glowColor = el.color === 'transparent' ? '#ffffff' : el.color;
+                    let baseFilter = outer.style.filter !== 'none' ? outer.style.filter + " " : "";
+                    el.ambientTween = gsap.to(outer, { filter: baseFilter + `drop-shadow(0px 0px 35px ${glowColor})`, duration: 1, yoyo: true, repeat: -1, ease: "sine.inOut" });
+                } else if (el.ambientAnim === 'breathe') el.ambientTween = gsap.to(outer, { scaleX: el.scaleX * 1.08, scaleY: el.scaleY * 1.08, duration: 1.5, yoyo: true, repeat: -1, ease: "sine.inOut" });
+                else if (el.ambientAnim === 'spin') el.ambientTween = gsap.to(outer, { rotation: el.rotate + 360, duration: 4, repeat: -1, ease: "linear" });
+                else if (el.ambientAnim === 'wiggle') el.ambientTween = gsap.to(outer, { rotation: el.rotate + 6, duration: 0.08, yoyo: true, repeat: -1, ease: "linear" });
+                else if (el.ambientAnim === 'heartbeat') el.ambientTween = gsap.to(outer, { scaleX: el.scaleX * 1.15, scaleY: el.scaleY * 1.15, duration: 0.15, yoyo: true, repeat: -1, repeatDelay: 0.8, ease: "power1.inOut" });
+                else if (el.ambientAnim === 'pendulum') el.ambientTween = gsap.to(outer, { rotation: el.rotate + 15, duration: 1, yoyo: true, repeat: -1, ease: "sine.inOut" });
+                else if (el.ambientAnim === 'tada') el.ambientTween = gsap.to(outer, { keyframes: [{scaleX: el.scaleX*1.1, scaleY: el.scaleY*1.1, rotation: el.rotate-3}, {rotation: el.rotate+3}, {rotation: el.rotate-3}, {scaleX: el.scaleX, scaleY: el.scaleY, rotation: el.rotate}], duration: 1, repeat: -1, repeatDelay: 1 });
+                else if (el.ambientAnim === 'bounce') el.ambientTween = gsap.to(outer, { y: "-=30", duration: 0.5, yoyo: true, repeat: -1, ease: "power1.out" });
+                else if (el.ambientAnim === 'continuousShoot') el.ambientTween = gsap.fromTo(outer, { x: -1200 }, { x: 1200, duration: 0.8, repeat: -1, ease: "power2.inOut", repeatDelay: 0.2 });
+            }
+            if(el.type === 'comp' && el.compElements) applyAmbientRecursive(el.compElements);
+        });
+    }
+
+    function syncColor(source) {
+        const picker = document.getElementById('prop-color-picker'); const text = document.getElementById('prop-color');
+        if (source === 'picker') text.value = picker.value;
+        if (source === 'text' && /^#[0-9A-F]{6}$/i.test(text.value)) picker.value = text.value;
+        updateElementData();
+    }
+
+    // --- TIMELINE ENGINE ---
+    function renderTimeline() {
+        const labelsContainer = document.getElementById('timeline-labels-list');
+        const tracksContainer = document.getElementById('timeline-track-lines');
+        labelsContainer.innerHTML = ''; 
+        tracksContainer.innerHTML = '';
+
+        elements.forEach((el, index) => {
+            const lbl = document.createElement('div');
+            lbl.id = 'tl_lbl_' + el.id; 
+            lbl.className = `timeline-label ${el.id === selectedId ? 'active' : ''}`;
+            lbl.innerHTML = `<span style="pointer-events:none;">${el.parentId ? '↳ ' : ''}${el.layerName}</span>`;
+            lbl.onclick = () => { try{selectElement(el.id);}catch(e){console.error(e);} };
+            
+            lbl.draggable = true;
+            lbl.ondragstart = (e) => window.layerDragStart(e, index);
+            lbl.ondragover = (e) => window.layerDragOver(e);
+            lbl.ondragleave = (e) => window.layerDragLeave(e);
+            lbl.ondrop = (e) => window.layerDrop(e, index);
+            lbl.ondragend = (e) => window.layerDragEnd(e);
+
+            labelsContainer.appendChild(lbl);
+
+            const track = document.createElement('div');
+            track.className = 'timeline-track';
+            
+            const block = document.createElement('div');
+            block.className = 'timeline-block';
+            let startPx = el.delay * timelineZoom;
+            block.style.left = startPx + 'px';
+            
+            let totalWidth = 0;
+            let entryDur = getEntryDur(el);
+
+            if (entryDur > 0) {
+                const seg = document.createElement('div');
+                seg.className = 'timeline-segment entry';
+                seg.style.width = (entryDur * timelineZoom) + 'px';
+                seg.innerText = el.animType;
+                block.appendChild(seg);
+                totalWidth += entryDur * timelineZoom;
+            }
+
+            if (el.customKf.active && el.sequence.length > 0) {
+                el.sequence.forEach((step, idx) => {
+                    const seg = document.createElement('div');
+                    seg.className = 'timeline-segment seq';
+                    let w = step.duration * timelineZoom;
+                    seg.style.width = w + 'px';
+                    seg.innerText = 'S' + (idx+1);
+                    block.appendChild(seg);
+                    totalWidth += w;
+                });
+            }
+
+            if (el.exitTime !== null && el.exitTime > el.delay) {
+                let explicitWidth = (el.exitTime - el.delay) * timelineZoom;
+                block.style.width = explicitWidth + 'px';
+                block.style.borderRight = '2px solid #ff3366'; 
+            } else {
+                if (totalWidth === 0) totalWidth = Math.max(50, 100 * (timelineZoom/50)); 
+                block.style.width = totalWidth + 'px';
+                block.classList.add('infinite'); 
+            }
+
+            if (el.ambientAnim !== 'none') {
+                const amb = document.createElement('div');
+                amb.className = 'timeline-ambient';
+                amb.style.left = (startPx + totalWidth) + 'px';
+                amb.style.width = '200px'; 
+                track.appendChild(amb);
+            }
+
+            block.onpointerdown = function(e) {
+                e.preventDefault(); e.stopPropagation();
+                try { selectElement(el.id); } catch(err) { console.error(err); }
+
+                let startX = e.clientX;
+                let startLeft = parseFloat(block.style.left) || 0;
+
+                function onMove(ev) {
+                    let deltaX = ev.clientX - startX;
+                    let newLeft = Math.max(0, startLeft + deltaX);
+                    block.style.left = newLeft + 'px';
+                    let ambNode = track.querySelector('.timeline-ambient');
+                    if (ambNode) ambNode.style.left = (newLeft + totalWidth) + 'px';
+                }
+
+                function onUp(ev) {
+                    document.removeEventListener('pointermove', onMove);
+                    document.removeEventListener('pointerup', onUp);
+                    
+                    let finalLeft = parseFloat(block.style.left) || 0;
+                    let newDelay = Math.max(0, Math.round((finalLeft / timelineZoom) * 10) / 10);
+                    
+                    let shift = newDelay - el.delay;
+                    el.delay = newDelay;
+                    if (el.exitTime !== null) {
+                        el.exitTime = Math.max(el.delay + 0.1, el.exitTime + shift);
+                    }
+                    
+                    if (selectedId === el.id) {
+                        document.getElementById('prop-delay').value = el.delay;
+                        document.getElementById('prop-exit-time').value = el.exitTime !== null ? el.exitTime : '';
+                    }
+                    renderTimeline(); 
+                }
+
+                document.addEventListener('pointermove', onMove);
+                document.addEventListener('pointerup', onUp);
+            };
+
+            track.appendChild(block);
+            tracksContainer.appendChild(track);
+        });
+        
+        let w = Math.max(4000, 120 * timelineZoom);
+        document.querySelectorAll('.timeline-track').forEach(t => t.style.width = w + 'px');
+    }
+
+    // --- RECURSIVE PLAYBACK ENGINE ---
+    function setupPreviewTweens(elArray, tl, baseDelay = 0, startPaused = false) {
+        elArray.forEach(el => {
+            const target = `#${el.id}`; 
+            const outerEl = document.getElementById(el.id);
+            if(!outerEl) return;
+
+            let absDelay = baseDelay + el.delay;
+            let entryDur = getEntryDur(el); 
+            let seqStartTime = absDelay + entryDur; 
+
+            tl.set(target, { visibility: "visible" }, absDelay);
+            
+            if (el.animType !== 'none') {
+                if (el.animType === 'pop') { tl.from(target, {duration: 0.8, scale: 0, opacity: 0, ease: "back.out(1.7)"}, absDelay); }
+                else if (el.animType === 'slideRight') { tl.from(target, {duration: 1, x: "-=300", opacity: 0, ease: "power3.out"}, absDelay); }
+                else if (el.animType === 'slideUp') { tl.from(target, {duration: 1, y: "+=200", opacity: 0, ease: "power2.out"}, absDelay); }
+                else if (el.animType === 'fade') { tl.from(target, {duration: 1, opacity: 0, ease: "power1.inOut"}, absDelay); }
+                else if (el.animType === 'zoomIn') { tl.from(target, {duration: 1, scale: 0, opacity: 0, ease: "power2.out"}, absDelay); }
+                else if (el.animType === 'wipeRight') { tl.from(target + "_inner", {duration: 1, clipPath: "inset(0 100% 0 0)", ease: "power2.inOut"}, absDelay); }
+                else if (el.animType === 'slam') { tl.from(target, {duration: 0.5, scale: 5, opacity: 0, ease: "expo.in"}, absDelay); }
+                else if (el.animType === 'swirl') { tl.from(target, {duration: 1, rotation: 540, scale: 0, opacity: 0, ease: "power2.out"}, absDelay); }
+                else if (el.animType === 'zipDash') { tl.from(target, {duration: 0.6, x: "-=1200", scaleX: 15, opacity: 0, ease: "power4.out"}, absDelay); }
+            }
+
+            let finalEndTime = seqStartTime;
+            if (el.customKf.active && el.sequence && el.sequence.length > 0) {
+                el.sequence.forEach((step) => {
+                    let kfProps = { duration: step.duration, ease: step.ease };
+                    if (step.x !== null) kfProps.x = getGsapVal(step.x, step.isRelative);
+                    if (step.y !== null) kfProps.y = getGsapVal(step.y, step.isRelative);
+                    if (step.scaleX !== null) kfProps.scaleX = getGsapVal(step.scaleX, step.isRelative);
+                    if (step.scaleY !== null) kfProps.scaleY = getGsapVal(step.scaleY, step.isRelative);
+                    if (step.rotation !== null) kfProps.rotation = getGsapVal(step.rotation, step.isRelative);
+                    if (step.opacity !== null) kfProps.opacity = getGsapVal(step.opacity, step.isRelative);
+
+                    if (Object.keys(kfProps).length > 2) {
+                        if (step.mode === 'from') tl.from(target, kfProps, finalEndTime);
+                        else tl.to(target, kfProps, finalEndTime);
+                    }
+                    finalEndTime += step.duration;
+                });
+            }
+
+            // RESTORED: Ambient Animation Logic for Playback/Scrubbing
+            let ambientStart = finalEndTime;
+            if (el.ambientAnim !== 'none') {
+                let ambProps = { delay: ambientStart, repeat: -1, yoyo: true, ease: "sine.inOut" };
+                if (el.ambientAnim === 'float') { ambProps.y = "-=15"; ambProps.duration = 1.5; }
+                else if (el.ambientAnim === 'twinkle') { ambProps.opacity = 0.1; ambProps.duration = 0.6; }
+                else if (el.ambientAnim === 'pulse') { 
+                    let glowColor = el.color === 'transparent' ? '#ffffff' : el.color; 
+                    let baseFilter = outerEl.style.filter !== 'none' ? outerEl.style.filter + " " : ""; 
+                    ambProps.filter = baseFilter + `drop-shadow(0px 0px 35px ${glowColor})`; 
+                    ambProps.duration = 1; 
+                }
+                else if (el.ambientAnim === 'breathe') { ambProps.scaleX = el.scaleX * 1.08; ambProps.scaleY = el.scaleY * 1.08; ambProps.duration = 1.5; }
+                else if (el.ambientAnim === 'spin') { ambProps.rotation = el.rotate + 360; ambProps.duration = 4; ambProps.ease = "linear"; ambProps.yoyo = false; }
+                else if (el.ambientAnim === 'wiggle') { ambProps.rotation = el.rotate + 6; ambProps.duration = 0.08; ambProps.ease = "linear"; }
+                else if (el.ambientAnim === 'heartbeat') { ambProps.scaleX = el.scaleX * 1.15; ambProps.scaleY = el.scaleY * 1.15; ambProps.duration = 0.15; ambProps.repeatDelay = 0.8; ambProps.ease = "power1.inOut"; }
+                else if (el.ambientAnim === 'jello') { ambProps.scaleX = el.scaleX * 1.1; ambProps.scaleY = el.scaleY * 0.9; ambProps.duration = 0.2; }
+                else if (el.ambientAnim === 'pendulum') { ambProps.rotation = el.rotate + 15; ambProps.duration = 1; }
+                else if (el.ambientAnim === 'tada') { 
+                    ambProps.keyframes = [
+                        {scaleX: el.scaleX*1.1, scaleY: el.scaleY*1.1, rotation: el.rotate-3}, 
+                        {rotation: el.rotate+3}, 
+                        {rotation: el.rotate-3}, 
+                        {scaleX: el.scaleX, scaleY: el.scaleY, rotation: el.rotate}
+                    ]; 
+                    ambProps.duration = 1; ambProps.repeatDelay = 1; ambProps.yoyo = false; delete ambProps.ease; 
+                }
+                else if (el.ambientAnim === 'bounce') { ambProps.y = "-=30"; ambProps.duration = 0.5; ambProps.ease = "power1.out"; }
+                else if (el.ambientAnim === 'continuousShoot') { 
+                    el.ambientTween = gsap.fromTo(target, { x: -1200 }, { x: 1200, duration: 0.8, repeat: -1, ease: "power2.inOut", repeatDelay: 0.2, delay: ambientStart, paused: startPaused }); 
+                }
+                
+                if (el.ambientAnim !== 'continuousShoot') {
+                    if (startPaused) ambProps.paused = true;
+                    el.ambientTween = gsap.to(target, ambProps);
+                }
+            }
+
+            if (el.exitTime !== null && el.exitTime > el.delay && el.exitAnim !== 'none') {
+                let absExit = baseDelay + el.exitTime;
+                if (el.exitAnim === 'hide') { tl.set(target, {visibility: "hidden"}, absExit); }
+                else if (el.exitAnim === 'fade') { tl.to(target, {opacity: 0, duration: 0.5}, absExit); tl.set(target, {visibility: "hidden"}, absExit + 0.5); }
+                else if (el.exitAnim === 'pop') { tl.to(target, {scale: 0, opacity: 0, duration: 0.5, ease: "back.in(1.7)"}, absExit); tl.set(target, {visibility: "hidden"}, absExit + 0.5); }
+                else if (el.exitAnim === 'slideLeft') { tl.to(target, {x: "-=300", opacity: 0, duration: 0.8, ease: "power2.in"}, absExit); tl.set(target, {visibility: "hidden"}, absExit + 0.8); }
+                else if (el.exitAnim === 'slideRight') { tl.to(target, {x: "+=300", opacity: 0, duration: 0.8, ease: "power2.in"}, absExit); tl.set(target, {visibility: "hidden"}, absExit + 0.8); }
+            }
+
+            if (el.type === 'comp' && el.compElements) {
+                setupPreviewTweens(el.compElements, tl, absDelay, startPaused);
+            }
+        });
+    }
+
+    function buildTimeline(startPaused = false) {
+        selectElement(null); 
+        
+        if (masterTimeline) { masterTimeline.kill(); masterTimeline = null; }
+        
+        clearElementTweens(elements);
+
+        traverseElements(elements, el => {
+            const outer = document.getElementById(el.id);
+            if(outer) outer.style.visibility = "hidden";
+        });
+
+        masterTimeline = gsap.timeline({
+            paused: startPaused,
+            onUpdate: function() {
+                if(!isScrubbing) {
+                    document.getElementById('playhead').style.left = (this.time() * timelineZoom) + 'px';
+                }
+            },
+            onComplete: function() {
+                document.getElementById('btn-play').innerText = "▶ Play";
+            }
+        });
+
+        setupPreviewTweens(elements, masterTimeline, 0, startPaused);
+        if(!startPaused) masterTimeline.play();
+    }
+
+    // --- TIMELINE SCRUBBING ENGINE ---
+    let isScrubbing = false;
+    const tracksContainerUI = document.querySelector('.timeline-tracks-container');
+
+    tracksContainerUI.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.timeline-block')) return; 
+        isScrubbing = true;
+        updateScrub(e);
+    });
+
+    window.addEventListener('pointermove', (e) => {
+        if (!isScrubbing) return;
+        updateScrub(e);
+    });
+
+    window.addEventListener('pointerup', () => {
+        isScrubbing = false;
+    });
+
+    function updateScrub(e) {
+        const rect = tracksContainerUI.getBoundingClientRect();
+        let x = e.clientX - rect.left + tracksContainerUI.scrollLeft;
+        if (x < 0) x = 0;
+        
+        let t = x / timelineZoom;
+        
+        if (!masterTimeline) {
+            buildTimeline(true); 
+        }
+        
+        masterTimeline.pause();
+        traverseElements(elements, el => { if(el.ambientTween) el.ambientTween.pause(); });
+        document.getElementById('btn-play').innerText = "▶ Play";
+        
+        masterTimeline.time(t);
+        traverseElements(elements, el => { if (el.ambientTween) el.ambientTween.totalTime(t); });
+        
+        document.getElementById('playhead').style.left = (t * timelineZoom) + 'px';
+    }
+
+    function togglePlay() {
+        let btn = document.getElementById('btn-play');
+        if (!masterTimeline) {
+            buildTimeline(false);
+            btn.innerText = "⏸ Pause";
+            return;
+        }
+        if (!masterTimeline.paused() && masterTimeline.progress() > 0 && masterTimeline.progress() < 1) {
+            masterTimeline.pause();
+            traverseElements(elements, el => { if(el.ambientTween) el.ambientTween.pause(); });
+            btn.innerText = "▶ Play";
+        } else {
+            if (masterTimeline.progress() === 1) {
+                masterTimeline.restart();
+                traverseElements(elements, el => { if(el.ambientTween) el.ambientTween.restart(); });
+            } else {
+                masterTimeline.play();
+                traverseElements(elements, el => { if(el.ambientTween) el.ambientTween.play(); });
+            }
+            btn.innerText = "⏸ Pause";
+        }
+    }
+
+    function resetPreview(soft = false) {
+        if (masterTimeline) { masterTimeline.kill(); masterTimeline = null; }
+        document.getElementById('btn-play').innerText = "▶ Play";
+        document.getElementById('playhead').style.left = '0px';
+        
+        if (typeof gsap !== 'undefined') {
+            gsap.killTweensOf(".draggable"); gsap.killTweensOf(".shape-inner");
+        }
+        
+        clearElementTweens(elements);
+        applyAmbientRecursive(elements);
+    }
+
+    window.seqDragStart = function(e, idx) { draggedSeqIdx = idx; e.currentTarget.style.opacity = '0.5'; e.dataTransfer.effectAllowed = 'move'; };
+    window.seqDragOver = function(e) { e.preventDefault(); e.currentTarget.style.borderTop = '2px solid var(--accent)'; };
+    window.seqDragLeave = function(e) { e.currentTarget.style.borderTop = ''; };
+    window.seqDrop = function(e, idx) {
+        e.preventDefault(); e.currentTarget.style.borderTop = '';
+        if (draggedSeqIdx === null || draggedSeqIdx === idx || !selectedId) return;
+        const el = elements.find(e => e.id === selectedId);
+        cancelEditStep(); 
+        
+        const moved = el.sequence.splice(draggedSeqIdx, 1)[0];
+        el.sequence.splice(idx, 0, moved);
+        renderSequenceUI(el);
+        renderTimeline(); 
+    };
+    window.seqDragEnd = function(e) { e.currentTarget.style.opacity = '1'; draggedSeqIdx = null; };
+
+    function renderSequenceUI(el) {
+        const seqList = document.getElementById('sequence-list');
+        seqList.innerHTML = '';
+        document.querySelectorAll('.sequence-step').forEach(n => n.style.borderColor = "var(--accent)"); 
+
+        if (!el.sequence || el.sequence.length === 0) {
+            seqList.innerHTML = '<span style="font-size:11px; color:#aaa;">No steps added. Using Preset Animation.</span>';
+            return;
+        }
+        
+        el.sequence.forEach((step, idx) => {
+            let details = [];
+            let rTag = step.isRelative ? "(Rel) " : "";
+            if (step.x !== null) details.push(`X:${rTag}${step.x}`);
+            if (step.y !== null) details.push(`Y:${rTag}${step.y}`);
+            if (step.scaleX !== null) details.push(`Sx:${rTag}${step.scaleX}`);
+            if (step.scaleY !== null) details.push(`Sy:${rTag}${step.scaleY}`);
+            if (step.rotation !== null) details.push(`R:${rTag}${step.rotation}°`);
+            if (step.opacity !== null) details.push(`Op:${rTag}${step.opacity}`);
+            
+            let summary = `[${idx + 1}] ${step.mode.toUpperCase()}: ${details.join(', ')} | ${step.duration}s`;
+            let borderColor = (editingSequenceIndex === idx) ? "#007bff" : "var(--accent)";
+            
+            let html = `<div class="sequence-step" id="seq-step-${idx}" draggable="true" 
+                ondragstart="window.seqDragStart(event, ${idx})" 
+                ondragover="window.seqDragOver(event)" 
+                ondragleave="window.seqDragLeave(event)" 
+                ondrop="window.seqDrop(event, ${idx})" 
+                ondragend="window.seqDragEnd(event)" 
+                style="border-left-color: ${borderColor}; cursor: grab;">
+                <span style="pointer-events:none;">${summary}</span>
+                <div class="seq-actions">
+                    <button class="edit-btn tool-btn" onclick="editSequenceStep(${idx})">✏️</button>
+                    <button class="del-btn tool-btn" onclick="removeSequenceStep(${idx})">X</button>
+                </div>
+            </div>`;
+            seqList.innerHTML += html;
+        });
+    }
+
+    function editSequenceStep(idx) {
+        if (!selectedId) return; const el = elements.find(e => e.id === selectedId);
+        editingSequenceIndex = idx;
+        const step = el.sequence[idx];
+
+        document.getElementById('kf-build-title').innerText = `Editing Step ${idx + 1}`;
+        document.getElementById('prop-kf-mode').value = step.mode;
+        document.getElementById('prop-kf-relative').checked = step.isRelative;
+        document.getElementById('prop-kf-x').value = step.x !== null ? step.x : '';
+        document.getElementById('prop-kf-y').value = step.y !== null ? step.y : '';
+        document.getElementById('prop-kf-sx').value = step.scaleX !== null ? step.scaleX : '';
+        document.getElementById('prop-kf-sy').value = step.scaleY !== null ? step.scaleY : '';
+        document.getElementById('prop-kf-rot').value = step.rotation !== null ? step.rotation : '';
+        document.getElementById('prop-kf-op').value = step.opacity !== null ? step.opacity : '';
+        document.getElementById('prop-kf-dur').value = step.duration;
+        document.getElementById('prop-kf-ease').value = step.ease;
+
+        document.getElementById('btn-add-step').innerText = "💾 Save Changes to Step";
+        document.getElementById('btn-add-step').style.background = "#007bff";
+        document.getElementById('btn-cancel-edit').style.display = "block";
+
+        renderSequenceUI(el);
+    }
+
+    function cancelEditStep() {
+        editingSequenceIndex = -1;
+        document.getElementById('kf-build-title').innerText = "Build Next Step";
+        document.getElementById('btn-add-step').innerText = "+ Add Step to Sequence";
+        document.getElementById('btn-add-step').style.background = "#28a745";
+        document.getElementById('btn-cancel-edit').style.display = "none";
+        
+        document.getElementById('prop-kf-x').value = ''; document.getElementById('prop-kf-y').value = '';
+        document.getElementById('prop-kf-sx').value = ''; document.getElementById('prop-kf-sy').value = '';
+        document.getElementById('prop-kf-rot').value = ''; document.getElementById('prop-kf-op').value = '';
+        
+        if (selectedId) {
+            const el = elements.find(e => e.id === selectedId);
+            renderSequenceUI(el);
+        }
+    }
+
+    function saveOrAddSequenceStep() {
+        if (!selectedId) return; const el = elements.find(e => e.id === selectedId);
+        
+        let kfx = document.getElementById('prop-kf-x').value; let kfy = document.getElementById('prop-kf-y').value;
+        let kfsx = document.getElementById('prop-kf-sx').value; let kfsy = document.getElementById('prop-kf-sy').value;
+        let kfrot = document.getElementById('prop-kf-rot').value; let kfop = document.getElementById('prop-kf-op').value;
+        let kfdur = document.getElementById('prop-kf-dur').value;
+        
+        let step = {
+            mode: document.getElementById('prop-kf-mode').value,
+            isRelative: document.getElementById('prop-kf-relative').checked, 
+            x: kfx !== '' ? parseFloat(kfx) : null,
+            y: kfy !== '' ? parseFloat(kfy) : null,
+            scaleX: kfsx !== '' ? parseFloat(kfsx) : null,
+            scaleY: kfsy !== '' ? parseFloat(kfsy) : null,
+            rotation: kfrot !== '' ? parseFloat(kfrot) : null,
+            opacity: kfop !== '' ? parseFloat(kfop) : null,
+            duration: kfdur !== '' ? parseFloat(kfdur) : 1.0,
+            ease: document.getElementById('prop-kf-ease').value
+        };
+        
+        if (editingSequenceIndex > -1) {
+            el.sequence[editingSequenceIndex] = step;
+            cancelEditStep(); 
+        } else {
+            el.sequence.push(step);
+            document.getElementById('prop-kf-x').value = ''; document.getElementById('prop-kf-y').value = '';
+            document.getElementById('prop-kf-sx').value = ''; document.getElementById('prop-kf-sy').value = '';
+            document.getElementById('prop-kf-rot').value = ''; document.getElementById('prop-kf-op').value = '';
+            renderSequenceUI(el);
+        }
+        renderTimeline();
+    }
+
+    function removeSequenceStep(index) {
+        if (!selectedId) return; const el = elements.find(e => e.id === selectedId);
+        if (editingSequenceIndex === index) cancelEditStep(); 
+        el.sequence.splice(index, 1); 
+        renderSequenceUI(el); renderTimeline();
+    }
+
+    function toggleCustomAnim() {
+        const useCust = document.getElementById('prop-use-custom').checked;
+        document.getElementById('custom-anim-panel').style.display = useCust ? 'block' : 'none';
+        updateElementData();
+    }
+
+    function selectElement(id) {
+      if (masterTimeline) resetPreview(false);
+
+      if (id === null && selectedId === null) return; 
+      selectedId = id;
+      cancelEditStep(); 
+      document.querySelectorAll('.draggable').forEach(node => node.classList.remove('selected'));
+      document.querySelectorAll('.timeline-label').forEach(node => node.classList.remove('active'));
+
+      if (!id) { 
+          document.getElementById('props-panel').style.display = 'none'; 
+          document.getElementById('canvas-props-panel').style.display = 'block'; 
+          return; 
+      }
+      
+      document.getElementById('props-panel').style.display = 'block'; 
+      document.getElementById('canvas-props-panel').style.display = 'none';
+
+      if(document.getElementById(id)) document.getElementById(id).classList.add('selected');
+      if(document.getElementById('tl_lbl_' + id)) document.getElementById('tl_lbl_' + id).classList.add('active'); 
+
+      const el = elements.find(e => e.id === id);
+      if (el) {
+        populateLinkDropdown(); 
+        document.getElementById('prop-layer-name').value = el.layerName;
+        document.getElementById('prop-parent-link').value = el.parentId || '';
+        document.getElementById('text-props').style.display = el.type === 'text' ? 'block' : 'none';
+        document.getElementById('color-props').style.display = (el.type === 'image' || el.type === 'comp') ? 'none' : 'block';
+        document.getElementById('shape-props').style.display = el.type === 'box' ? 'block' : 'none';
+
+        document.getElementById('prop-shape-type').value = el.shapeType; document.getElementById('prop-content').value = el.content; 
+        document.getElementById('prop-color').value = el.color; 
+        if(/^#[0-9A-F]{6}$/i.test(el.color)) document.getElementById('prop-color-picker').value = el.color;
+        
+        if (el.type === 'text') {
+            document.getElementById('prop-font-family').value = el.fontFamily;
+            document.getElementById('prop-font-size').value = el.fontSize;
+            document.getElementById('prop-text-align').value = el.textAlign;
+            updateUIFormattingButtons(el);
+        }
+
+        document.getElementById('effect-shadow').checked = el.effects.shadow; document.getElementById('effect-glow').checked = el.effects.glow;
+        document.getElementById('effect-glass').checked = el.effects.glass; document.getElementById('effect-gradient').checked = el.effects.gradient;
+        document.getElementById('effect-block3d').checked = el.effects.block3d; document.getElementById('effect-hollow').checked = el.effects.hollow;
+        document.getElementById('effect-scanlines').checked = el.effects.scanlines; document.getElementById('effect-outline').checked = el.effects.outline;
+        document.getElementById('effect-invert').checked = el.effects.invert; document.getElementById('effect-grayscale').checked = el.effects.grayscale;
+        
+        document.getElementById('gradient-settings').style.display = el.effects.gradient ? 'block' : 'none';
+        document.getElementById('prop-grad-angle').value = el.effects.gradientAngle || 135;
+        document.getElementById('lbl-grad-angle').innerText = el.effects.gradientAngle || 135;
+        document.getElementById('prop-grad-c1').value = el.effects.gradientC1 || '';
+        document.getElementById('prop-grad-c2').value = el.effects.gradientC2 || '';
+
+        document.getElementById('prop-width').value = el.width || ''; 
+        document.getElementById('prop-height').value = el.height || ''; 
+        document.getElementById('prop-radius').value = el.borderRadius || 0; 
+        
+        document.getElementById('prop-scaleX').value = el.scaleX; document.getElementById('prop-scaleY').value = el.scaleY; 
+        document.getElementById('prop-rotate').value = el.rotate; document.getElementById('prop-skewX').value = el.skewX; 
+        
+        document.getElementById('prop-anim-type').value = el.animType; 
+        document.getElementById('prop-delay').value = el.delay; 
+        document.getElementById('prop-exit-time').value = el.exitTime !== null ? el.exitTime : ''; 
+        document.getElementById('prop-exit-anim').value = el.exitAnim; 
+        document.getElementById('prop-ambient-anim').value = el.ambientAnim;
+        document.getElementById('prop-use-custom').checked = el.customKf.active;
+        
+        toggleCustomAnim(); renderSequenceUI(el); 
+      }
+    }
+
+    function updateElementData() {
+      if (!selectedId) return; const el = elements.find(e => e.id === selectedId);
+      if (!el) return;
+      
+      el.layerName = document.getElementById('prop-layer-name').value; el.parentId = document.getElementById('prop-parent-link').value;
+      el.shapeType = document.getElementById('prop-shape-type').value; el.content = document.getElementById('prop-content').value; el.color = document.getElementById('prop-color').value;
+      
+      if (el.type === 'text') {
+          el.fontFamily = document.getElementById('prop-font-family').value || 'sans-serif';
+          el.fontSize = parseFloat(document.getElementById('prop-font-size').value) || 36;
+          el.textAlign = document.getElementById('prop-text-align').value;
+      }
+
+      el.effects.shadow = document.getElementById('effect-shadow').checked; el.effects.glow = document.getElementById('effect-glow').checked;
+      el.effects.glass = document.getElementById('effect-glass').checked; el.effects.gradient = document.getElementById('effect-gradient').checked;
+      el.effects.block3d = document.getElementById('effect-block3d').checked; el.effects.hollow = document.getElementById('effect-hollow').checked;
+      el.effects.scanlines = document.getElementById('effect-scanlines').checked; el.effects.outline = document.getElementById('effect-outline').checked;
+      el.effects.invert = document.getElementById('effect-invert').checked; el.effects.grayscale = document.getElementById('effect-grayscale').checked;
+
+      el.effects.gradientAngle = document.getElementById('prop-grad-angle').value;
+      document.getElementById('lbl-grad-angle').innerText = el.effects.gradientAngle;
+      el.effects.gradientC1 = document.getElementById('prop-grad-c1').value;
+      el.effects.gradientC2 = document.getElementById('prop-grad-c2').value;
+      document.getElementById('gradient-settings').style.display = el.effects.gradient ? 'block' : 'none';
+
+      el.width = parseFloat(document.getElementById('prop-width').value) || null; 
+      el.height = parseFloat(document.getElementById('prop-height').value) || null; 
+      el.borderRadius = parseFloat(document.getElementById('prop-radius').value) || 0; 
+      
+      el.scaleX = parseFloat(document.getElementById('prop-scaleX').value) || 1; el.scaleY = parseFloat(document.getElementById('prop-scaleY').value) || 1;
+      el.rotate = parseFloat(document.getElementById('prop-rotate').value) || 0; el.skewX = parseFloat(document.getElementById('prop-skewX').value) || 0;
+      
+      el.animType = document.getElementById('prop-anim-type').value; 
+      el.delay = parseFloat(document.getElementById('prop-delay').value); 
+      
+      let eTime = document.getElementById('prop-exit-time').value;
+      el.exitTime = eTime !== '' ? parseFloat(eTime) : null;
+      el.exitAnim = document.getElementById('prop-exit-anim').value;
+
+      el.ambientAnim = document.getElementById('prop-ambient-anim').value;
+      el.customKf.active = document.getElementById('prop-use-custom').checked;
+      
+      const outerEl = document.getElementById(selectedId); const innerEl = document.getElementById(selectedId + '_inner');
+      if(outerEl && innerEl) {
+          if(el.type === 'text') innerEl.innerHTML = el.content.replace(/\n/g, '<br>'); 
+          applyVisualStyles(el, outerEl, innerEl); 
+      }
+      
+      const lblNode = document.getElementById('tl_lbl_' + el.id);
+      if (lblNode) lblNode.innerHTML = `<span style="pointer-events:none;">${el.parentId ? '↳ ' : ''}${el.layerName}</span>`;
+      
+      renderTimeline(); 
+    }
+
+    function deleteSelected() {
+      if(!selectedId) return; const el = elements.find(e => e.id === selectedId);
+      elements.forEach(child => { if (child.parentId === selectedId) child.parentId = ''; });
+      elements = elements.filter(e => e.id !== selectedId); 
+      selectElement(null); 
+      reRenderAll();
+    }
+
+    // --- HTML EXPORT ---
+    function getExportHTML(el) {
+        let origin = el.ambientAnim === 'pendulum' ? 'top center' : 'center center';
+        let outerStyles = `visibility:hidden; position:absolute; left:${el.x}px; top:${el.y}px; opacity: ${el.effects.ghost ? 0.5 : 1}; transform: scale(${el.scaleX}, ${el.scaleY}) rotate(${el.rotate}deg) skew(${el.skewX}deg, 0deg); transform-origin: ${origin}; display: flex; justify-content: center; align-items: center; `;
+        let innerStyles = `width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; position: relative; `;
+        
+        let filters = [];
+        if (el.effects.shadow) filters.push('drop-shadow(0 15px 15px rgba(0,0,0,0.4))'); 
+        if (el.effects.glow) filters.push(`drop-shadow(0 0 15px ${el.color})`);
+        if (el.effects.block3d) filters.push('drop-shadow(1px 1px 0px #222) drop-shadow(2px 2px 0px #222) drop-shadow(3px 3px 0px #222) drop-shadow(4px 4px 0px #222) drop-shadow(5px 5px 0px #222)');
+        if (el.effects.outline) filters.push(`drop-shadow(2px 0px 0px #fff) drop-shadow(-2px 0px 0px #fff) drop-shadow(0px 2px 0px #fff) drop-shadow(0px -2px 0px #fff)`);
+        if (el.effects.blur) filters.push('blur(4px)');
+        if (el.effects.invert) filters.push('invert(1)'); 
+        if (el.effects.grayscale) filters.push('grayscale(1)');
+        if (filters.length > 0) outerStyles += `filter: ${filters.join(' ')}; `;
+        
+        let c1 = el.effects.gradientC1 || el.color;
+        let c2 = el.effects.gradientC2 || 'transparent';
+        let angle = el.effects.gradientAngle !== undefined ? el.effects.gradientAngle : 135;
+
+        let contentHtml = '';
+
+        if (el.type === 'text') {
+            outerStyles += `width: max-content; height: max-content; `;
+            innerStyles += `font-family:${el.fontFamily}; font-size:${el.fontSize}px; font-weight:${el.fontWeight}; font-style:${el.fontStyle}; text-decoration:${el.textDecoration}; text-align:${el.textAlign}; white-space:pre-wrap; `;
+            if (el.effects.hollow) innerStyles += `color: transparent; -webkit-text-stroke: 2px ${el.color}; `;
+            else if (el.effects.gradient) innerStyles += `background: linear-gradient(${angle}deg, ${c1}, ${c2}); -webkit-background-clip: text; -webkit-text-fill-color: transparent; color: transparent; `;
+            else innerStyles += `color:${el.color}; `;
+            contentHtml = el.content.replace(/\n/g, '<br>');
+        } else if (el.type === 'image') {
+            outerStyles += `width: max-content; height: max-content; `;
+            let imgW = el.width ? el.width+'px' : '200px'; let imgH = el.height ? el.height+'px' : 'auto';
+            let imgStyles = `width:${imgW}; height:${imgH}; object-fit:contain; pointer-events:none; display:block; border-radius:${el.borderRadius || 0}px; `;
+            let overlayStyles = `position:absolute; inset:0; pointer-events:none; `;
+            
+            let overlayBg = [];
+            if (el.effects.scanlines) overlayBg.push(`repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.3) 2px, rgba(0,0,0,0.3) 4px)`);
+            if (el.effects.gradient) {
+                overlayBg.push(`linear-gradient(${angle}deg, ${c1}, ${c2})`);
+                overlayStyles += `-webkit-mask-image: url('${el.src}'); -webkit-mask-size: contain; -webkit-mask-position: center; -webkit-mask-repeat: no-repeat; `;
+            }
+            if (overlayBg.length > 0) overlayStyles += `background: ${overlayBg.join(', ')}; `;
+            
+            innerStyles += `border-radius:${el.borderRadius || 0}px; `;
+            if (el.effects.hollow) innerStyles += `border: 4px solid ${el.color}; `;
+            if (el.effects.glass) innerStyles += `backdrop-filter: blur(12px); `;
+            
+            contentHtml = `<img src="${el.src}" style="${imgStyles}"><div style="${overlayStyles}"></div>`;
+        } else if (el.type === 'box') {
+            let boxW = el.width || 120; let boxH = el.height || 120;
+            outerStyles = outerStyles.replace('width: max-content; height: max-content; ', `width:${boxW}px; height:${boxH}px; `);
+            if (el.shapeType === 'speedlines') { 
+                innerStyles += `background: repeating-linear-gradient(90deg, transparent, transparent 10px, ${el.color} 10px, ${el.color} 20px); `; 
+            } else if (el.effects.hollow) { 
+                innerStyles += `background: transparent; border: 4px solid ${el.color}; `; 
+            } else if (el.effects.gradient) { 
+                innerStyles += `background: linear-gradient(${angle}deg, ${c1}, ${c2}); `; 
+            } else { 
+                innerStyles += `background-color:${el.color}; `; 
+            }
+            
+            if (el.effects.scanlines) innerStyles += `background-image: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.2) 2px, rgba(0,0,0,0.2) 4px); `;
+            if (el.effects.glass) {
+                innerStyles += `backdrop-filter: blur(12px); `;
+                if (!el.effects.hollow) innerStyles += `border: 1px solid rgba(255,255,255,0.5); `;
+                if (!el.effects.gradient && !el.effects.hollow) innerStyles += `background-color: ${hexToRgba(el.color, 0.2)}; `;
+            }
+
+            innerStyles += `border-radius:${el.borderRadius || 0}px; `;
+            if (el.shapeType === 'circle') innerStyles += `border-radius:50%; `;
+            if (el.shapeType === 'triangle') innerStyles += `clip-path:polygon(50% 0%, 0% 100%, 100% 100%); `;
+            if (el.shapeType === 'arrow') innerStyles += `clip-path:polygon(0% 20%, 60% 20%, 60% 0%, 100% 50%, 60% 100%, 60% 80%, 0% 80%); `;
+            if (el.shapeType === 'plus') innerStyles += `clip-path:polygon(33% 0, 66% 0, 66% 33%, 100% 33%, 100% 66%, 66% 66%, 66% 100%, 33% 100%, 33% 66%, 0 66%, 0 33%, 33% 33%); `;
+            if (el.shapeType === 'xmark') innerStyles += `clip-path:polygon(20% 0%, 0% 20%, 30% 50%, 0% 80%, 20% 100%, 50% 70%, 80% 100%, 100% 80%, 70% 50%, 100% 20%, 80% 0%, 50% 30%); `;
+            if (el.shapeType === 'minus') innerStyles += `clip-path:polygon(0% 40%, 100% 40%, 100% 60%, 0% 60%); `;
+            if (el.shapeType === 'starburst') innerStyles += `clip-path:polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); `;
+            
+            htmlInjection += `<div id="${el.id}" style="${outerStyles}"><div id="${el.id}_inner" style="${innerStyles}">${contentHtml}</div></div>\n`;
+        } else if (el.type === 'comp') {
+            outerStyles += `width: 960px; height: 540px; `;
+            innerStyles += `overflow: hidden; position: relative; `;
+            if(el.compCanvas) {
+                 if (el.compCanvas.type === 'solid') innerStyles += `background: ${el.compCanvas.color1}; `;
+                 else if (el.compCanvas.type === 'gradient') innerStyles += `background: linear-gradient(135deg, ${el.compCanvas.color1}, ${el.compCanvas.color2}); `;
+                 else if (el.compCanvas.type === 'radial') innerStyles += `background: radial-gradient(circle, ${el.compCanvas.color1}, ${el.compCanvas.color2}); `;
+                 else if (el.compCanvas.type === 'grid') innerStyles += `background: linear-gradient(${el.compCanvas.color2} 1px, transparent 1px), linear-gradient(90deg, ${el.compCanvas.color2} 1px, transparent 1px), ${el.compCanvas.color1}; background-size: 40px 40px; `;
+                 else if (el.compCanvas.type === 'dots') innerStyles += `background: radial-gradient(${el.compCanvas.color2} 2px, transparent 2px), ${el.compCanvas.color1}; background-size: 20px 20px; `;
+                 else if (el.compCanvas.type === 'image' && el.compCanvas.bgImage) innerStyles += `background: url('${el.compCanvas.bgImage}') center/cover no-repeat, ${el.compCanvas.color1}; `;
+            }
+            if (el.compElements) {
+                el.compElements.forEach(cel => {
+                    contentHtml += getExportHTML(cel);
+                });
+            }
+            htmlInjection += `<div id="${el.id}" style="${outerStyles}"><div id="${el.id}_inner" style="${innerStyles}">${contentHtml}</div></div>\n`;
+        }
+        
+        return htmlInjection;
+    }
+
+    function generateGSAPCode(elArray, baseDelayCode = "0") {
+        let code = '';
+        elArray.forEach(el => {
+            let absDelayStr = `${baseDelayCode} + ${el.delay}`;
+            code += `tl.set("#${el.id}", {visibility: "visible"}, ${absDelayStr});\n`;
+            
+            let entryDur = getEntryDur(el); 
+
+            if (el.animType !== 'none') {
+                if (el.animType === 'pop') { code += `tl.from("#${el.id}", {duration: 0.8, scale: 0, opacity: 0, ease: "back.out(1.7)"}, ${absDelayStr});\n`; }
+                else if (el.animType === 'slideRight') { code += `tl.from("#${el.id}", {duration: 1, x: "-=300", opacity: 0, ease: "power3.out"}, ${absDelayStr});\n`; }
+                else if (el.animType === 'slideUp') { code += `tl.from("#${el.id}", {duration: 1, y: "+=200", opacity: 0, ease: "power2.out"}, ${absDelayStr});\n`; }
+                else if (el.animType === 'fade') { code += `tl.from("#${el.id}", {duration: 1, opacity: 0, ease: "power1.inOut"}, ${absDelayStr});\n`; }
+                else if (el.animType === 'zoomIn') { code += `tl.from("#${el.id}", {duration: 1, scale: 0, opacity: 0, ease: "power2.out"}, ${absDelayStr});\n`; }
+                else if (el.animType === 'wipeRight') { code += `tl.from("#${el.id}_inner", {duration: 1, clipPath: "inset(0 100% 0 0)", ease: "power2.inOut"}, ${absDelayStr});\n`; }
+                else if (el.animType === 'slam') { code += `tl.from("#${el.id}", {duration: 0.5, scale: 5, opacity: 0, ease: "expo.in"}, ${absDelayStr});\n`; }
+                else if (el.animType === 'swirl') { code += `tl.from("#${el.id}", {duration: 1, rotation: 540, scale: 0, opacity: 0, ease: "power2.out"}, ${absDelayStr});\n`; }
+                else if (el.animType === 'zipDash') { code += `tl.from("#${el.id}", {duration: 0.6, x: "-=1200", scaleX: 15, opacity: 0, ease: "power4.out"}, ${absDelayStr});\n`; }
+            }
+
+            let finalEndTimeStr = `${absDelayStr} + ${entryDur}`;
+            if (el.customKf.active && el.sequence && el.sequence.length > 0) {
+                el.sequence.forEach((step) => {
+                    let kfArr = [];
+                    if (step.x !== null) kfArr.push(`x:${getExportVal(step.x, step.isRelative)}`);
+                    if (step.y !== null) kfArr.push(`y:${getExportVal(step.y, step.isRelative)}`);
+                    if (step.scaleX !== null) kfArr.push(`scaleX:${getExportVal(step.scaleX, step.isRelative)}`);
+                    if (step.scaleY !== null) kfArr.push(`scaleY:${getExportVal(step.scaleY, step.isRelative)}`);
+                    if (step.rotation !== null) kfArr.push(`rotation:${getExportVal(step.rotation, step.isRelative)}`);
+                    if (step.opacity !== null) kfArr.push(`opacity:${step.opacity}`); 
+                    kfArr.push(`duration:${step.duration}`); kfArr.push(`ease:"${step.ease}"`);
+                    
+                    let kStr = `{${kfArr.join(', ')}}`;
+                    if (kfArr.length > 2) {
+                        if (step.mode === 'from') code += `tl.from("#${el.id}", ${kStr}, ${finalEndTimeStr});\n`;
+                        else code += `tl.to("#${el.id}", ${kStr}, ${finalEndTimeStr});\n`;
+                    }
+                    finalEndTimeStr += ` + ${step.duration}`;
+                });
+            }
+
+            // THE RESTORED HTML EXPORT AMBIENT ENGINE!
+            let ambientStartStr = finalEndTimeStr;
+            if (el.ambientAnim !== 'none') {
+                if (el.ambientAnim === 'float') code += `gsap.to("#${el.id}", { y: "-=15", duration: 1.5, yoyo: true, repeat: -1, ease: "sine.inOut", delay: ${ambientStartStr} });\n`;
+                else if (el.ambientAnim === 'twinkle') code += `gsap.to("#${el.id}", { opacity: 0.1, duration: 0.6, yoyo: true, repeat: -1, ease: "power1.inOut", delay: ${ambientStartStr} });\n`;
+                else if (el.ambientAnim === 'pulse') { 
+                    let glowColor = el.color === 'transparent' ? '#ffffff' : el.color; 
+                    let baseFilter = el.effects.glow || el.effects.shadow ? "drop-shadow(...)" : ""; // simplified for export generator 
+                    code += `gsap.to("#${el.id}", { filter: "drop-shadow(0px 0px 35px ${glowColor})", duration: 1, yoyo: true, repeat: -1, ease: "sine.inOut", delay: ${ambientStartStr} });\n`; 
+                }
+                else if (el.ambientAnim === 'breathe') code += `gsap.to("#${el.id}", { scaleX: ${el.scaleX * 1.08}, scaleY: ${el.scaleY * 1.08}, duration: 1.5, yoyo: true, repeat: -1, ease: "sine.inOut", delay: ${ambientStartStr} });\n`;
+                else if (el.ambientAnim === 'spin') code += `gsap.to("#${el.id}", { rotation: ${el.rotate + 360}, duration: 4, repeat: -1, ease: "linear", delay: ${ambientStartStr} });\n`;
+                else if (el.ambientAnim === 'wiggle') code += `gsap.to("#${el.id}", { rotation: ${el.rotate + 6}, duration: 0.08, yoyo: true, repeat: -1, ease: "linear", delay: ${ambientStartStr} });\n`;
+                else if (el.ambientAnim === 'heartbeat') code += `gsap.to("#${el.id}", { scaleX: ${el.scaleX * 1.15}, scaleY: ${el.scaleY * 1.15}, duration: 0.15, yoyo: true, repeat: -1, repeatDelay: 0.8, ease: "power1.inOut", delay: ${ambientStartStr} });\n`;
+                else if (el.ambientAnim === 'jello') code += `gsap.to("#${el.id}", { scaleX: ${el.scaleX * 1.1}, scaleY: ${el.scaleY * 0.9}, duration: 0.2, yoyo: true, repeat: -1, ease: "sine.inOut", delay: ${ambientStartStr} });\n`;
+                else if (el.ambientAnim === 'pendulum') code += `gsap.to("#${el.id}", { rotation: ${el.rotate + 15}, duration: 1, yoyo: true, repeat: -1, ease: "sine.inOut", delay: ${ambientStartStr} });\n`;
+                else if (el.ambientAnim === 'tada') code += `gsap.to("#${el.id}", { keyframes: [{scaleX: ${el.scaleX*1.1}, scaleY: ${el.scaleY*1.1}, rotation: ${el.rotate-3}}, {rotation: ${el.rotate+3}}, {rotation: ${el.rotate-3}}, {scaleX: ${el.scaleX}, scaleY: ${el.scaleY}, rotation: ${el.rotate}}], duration: 1, repeat: -1, repeatDelay: 1, delay: ${ambientStartStr} });\n`;
+                else if (el.ambientAnim === 'bounce') code += `gsap.to("#${el.id}", { y: "-=30", duration: 0.5, yoyo: true, repeat: -1, ease: "power1.out", delay: ${ambientStartStr} });\n`;
+                else if (el.ambientAnim === 'continuousShoot') code += `gsap.fromTo("#${el.id}", { x: -1200 }, { x: 1200, duration: 0.8, repeat: -1, ease: "power2.inOut", repeatDelay: 0.2, delay: ${ambientStartStr} });\n`;
+            }
+
+            if (el.exitTime !== null && el.exitTime > el.delay && el.exitAnim !== 'none') {
+                let absExitStr = `${baseDelayCode} + ${el.exitTime}`;
+                if (el.exitAnim === 'hide') { code += `tl.set("#${el.id}", {visibility: "hidden"}, ${absExitStr});\n`; }
+                else if (el.exitAnim === 'fade') { code += `tl.to("#${el.id}", {opacity: 0, duration: 0.5}, ${absExitStr}); tl.set("#${el.id}", {visibility: "hidden"}, ${absExitStr} + 0.5);\n`; }
+                else if (el.exitAnim === 'pop') { code += `tl.to("#${el.id}", {scale: 0, opacity: 0, duration: 0.5, ease: "back.in(1.7)"}, ${absExitStr}); tl.set("#${el.id}", {visibility: "hidden"}, ${absExitStr} + 0.5);\n`; }
+                else if (el.exitAnim === 'slideLeft') { code += `tl.to("#${el.id}", {x: "-=300", opacity: 0, duration: 0.8, ease: "power2.in"}, ${absExitStr}); tl.set("#${el.id}", {visibility: "hidden"}, ${absExitStr} + 0.8);\n`; }
+                else if (el.exitAnim === 'slideRight') { code += `tl.to("#${el.id}", {x: "+=300", opacity: 0, duration: 0.8, ease: "power2.in"}, ${absExitStr}); tl.set("#${el.id}", {visibility: "hidden"}, ${absExitStr} + 0.8);\n`; }
+            }
+
+            if (el.type === 'comp' && el.compElements) {
+                code += generateGSAPCode(el.compElements, absDelayStr);
+            }
+        });
+        return code;
+    }
+
+    function exportCode() {
+      let htmlInjection = ''; 
+      let gsapInjection = 'const tl = gsap.timeline();\n';
+      let canvasStyleString = document.getElementById('canvas').style.background;
+      let canvasSizeString = document.getElementById('canvas').style.backgroundSize;
+
+      elements.forEach(el => {
+         htmlInjection += getExportHTML(el);
+      });
+      
+      gsapInjection += generateGSAPCode(elements, "0");
+
+      const safeElements = elements.map(el => {
+          const cleanEl = { ...el };
+          cleanEl.ambientTween = null; 
+          return cleanEl;
+      });
+
+      let projectData = JSON.stringify({ canvasData: canvasData, elements: safeElements });
+      htmlInjection += `\n\n<script id="studio-project-data" type="application/json">\n${projectData}\n<\/script>\n`;
+
+      const finalHTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Compiled Infographic</title><script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"><\/script><style>body { margin: 0; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; background: #000; } .no-cursor { cursor: none !important; }</style></head><body><div style="width: 960px; height: 540px; position: relative; overflow: hidden; transform: scale(1.5); transform-origin: center; background: ${canvasStyleString}; background-size: ${canvasSizeString || 'auto'};">${htmlInjection}</div><script>document.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'h') document.body.classList.toggle('no-cursor'); }); ${gsapInjection}<\/script></body></html>`;
+      const blob = new Blob([finalHTML], { type: "text/html" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "scene_export.html"; a.click();
+    }
+    
+    window.addEventListener('DOMContentLoaded', (event) => {
+        if (typeof gsap === 'undefined') {
+            console.error("GSAP library did not load. Check internet connection.");
+            alert("Animation Engine failed to load! Please ensure you have an active internet connection so the builder can download the GSAP framework.");
+        } else {
+            buildRuler();
+            reRenderAll();
+        }
+    });
+  </script>
+</body>
+</html>
