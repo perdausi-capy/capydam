@@ -19,6 +19,7 @@ import adminRoutes from './routes/admin.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import uploadRoutes from './routes/uploadRoutes'; // ✅ Imported
 import ittRoutes from './routes/itt.routes'; // ✅ ITT System
+import infrastructureRoutes from './routes/infrastructure.routes';
 
 // Import Services
 import { initCronJobs } from './services/cron.service';
@@ -70,6 +71,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/feedback', feedbackRoutes);
+app.use('/api/infrastructure', infrastructureRoutes);
 
 // ✅ NEW ITT ROUTES
 app.use('/api/itt', ittRoutes);

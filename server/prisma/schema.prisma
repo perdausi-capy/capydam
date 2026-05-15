@@ -425,3 +425,25 @@ model UserLog {
   
   createdAt DateTime @default(now())
 }
+
+// ✅ NEW: SECURE INFRASTRUCTURE VAULT (Admins Only)
+model InfrastructureNode {
+  id              String   @id @default(uuid())
+  name            String   
+  provider        String   @default("Hetzner")
+  project         String?  
+  owner           String?  
+  ip              String?
+  vcpu            String?
+  ram             String?
+  disk            String?
+  services        String?  @db.Text 
+  sshKey          String?  @db.Text // Stores the secure file content
+  sshKeyFileName  String?  // ✅ NEW: Stores the actual file name (e.g., "my-server-key.ppk")
+  monthlyCost     Float?   @default(0.0)
+  backup          String?  
+  notes           String?  @db.Text
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

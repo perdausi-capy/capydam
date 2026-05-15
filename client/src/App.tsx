@@ -42,7 +42,11 @@ import AdminDailyQuest from './pages/AdminDailyQuest';
 
 // ✅ NEW ITT DASHBOARD
 import ITTDashboard from './pages/ITTDashboard';
+
+import AdminInfrastructure from './pages/AdminInfrastructure';
+
 import client from './api/client';
+
 
 import { useSessionTracker } from './hooks/useSessionTracker';
 
@@ -132,6 +136,7 @@ function App() {
                 <Route path="/admin/analytics" element={<AdminRoute><AdminAnalytics /></AdminRoute>} />
                 <Route path="/admin/recycle-bin" element={<AdminRoute><RecycleBin /></AdminRoute>} />
                 <Route path="/admin/daily-quest" element={<AdminRoute><AdminDailyQuest /></AdminRoute>} />
+                <Route path="/admin/infrastructure" element={<AdminRoute><AdminInfrastructure /></AdminRoute>} />
 
                 {/* ✅ NEW: ITT System Dashboard */}
                 <Route path="/admin/itt" element={<AdminRoute><ITTDashboard /></AdminRoute>} />

@@ -29,7 +29,8 @@ import {
   Moon,
   PanelLeftClose,
   Trophy,
-  Monitor
+  Monitor,
+  Server
 } from 'lucide-react';
 import FloatingClickUp from './FloatingClickUp';
 
@@ -231,11 +232,12 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             <>
               <NavSectionHeader label="Administration" isCollapsed={activeCollapsed} />
               <NavItem to="/users" icon={<Users size={20} />} label="Users" isCollapsed={activeCollapsed} active={isActive('/users')} onClick={handleNavClick} badge={stats?.pendingUsers} />
+              <NavItem to="/admin/daily-quest" icon={<Sparkles size={20} />} label="Daily Quest" isCollapsed={activeCollapsed} active={isActive('/admin/daily-quest')} onClick={handleNavClick} />
               <NavItem to="/admin/feedback" icon={<MessageSquare size={20} />} label="Feedback" isCollapsed={activeCollapsed} active={isActive('/admin/feedback')} onClick={handleNavClick} badge={stats?.newFeedback} />
+              <NavItem to="/admin/itt" icon={<Monitor size={20} />} label="ITT Inventory" isCollapsed={activeCollapsed} active={isActive('/admin/itt')} onClick={handleNavClick} />
+              <NavItem to="/admin/infrastructure" icon={<Server size={20} />} label="Infrastructure" isCollapsed={activeCollapsed} active={isActive('/admin/infrastructure')} onClick={handleNavClick} />
               <NavItem to="/admin/analytics" icon={<TrendingUp size={20} />} label="Analytics" isCollapsed={activeCollapsed} active={isActive('/admin/analytics')} onClick={handleNavClick} />
               <NavItem to="/admin/recycle-bin" icon={<Trash2 size={20} />} label="Bin" isCollapsed={activeCollapsed} active={isActive('/admin/recycle-bin')} onClick={handleNavClick} />
-              <NavItem to="/admin/daily-quest" icon={<Sparkles size={20} />} label="Daily Quest" isCollapsed={activeCollapsed} active={isActive('/admin/daily-quest')} onClick={handleNavClick} />
-              <NavItem to="/admin/itt" icon={<Monitor size={20} />} label="ITT Inventory" isCollapsed={activeCollapsed} active={isActive('/admin/itt')} onClick={handleNavClick} />
             </>
           )}
         </nav>
