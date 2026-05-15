@@ -7,7 +7,7 @@ import {
     Search, Hash, Layers, Database, View, Zap, User,
     Eye, X, MessageSquare, Send, Clock, CheckCircle, RefreshCw,
     AlertCircle, FileText, Loader2, Check, ChevronUp, ChevronDown, ChevronRight,
-    Settings, Package, Wrench, XCircle, UserMinus, List, Grid,
+    Settings, Package, Wrench, XCircle, List, Grid,
     Camera, Headphones, Keyboard, Cable, Plug, Wifi
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
