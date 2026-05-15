@@ -26,7 +26,12 @@ jobs:
             echo "🛠️ Building Backend..."
             cd server
             npm ci 
-            npx prisma db push --accept-data-loss
+            
+            # 🚨 SAFETY GUARD: Never add --accept-data-loss here. 
+            # It will silently wipe production data if there is a schema conflict.
+            # If the pipeline fails here, SSH in and manually resolve the DB conflict safely.
+            npx prisma db push 
+            
             npx prisma generate
             npm run build
             cd ..
