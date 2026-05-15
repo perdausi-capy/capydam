@@ -35,6 +35,7 @@ import ScormExtractor from './pages/ScormExtractor';
 // ✅ NEW APPS PAGES IMPORT
 import Apps from './pages/Apps';
 import DdlGenerator from './pages/DdlGenerator';
+import Builder from './pages/Builder';
 
 import FloatingDailyQuestion from './components/FloatingDailyQuestion';
 import AdminDailyQuest from './pages/AdminDailyQuest';
@@ -120,6 +121,7 @@ function App() {
                 {/* 6. ✅ NEW APPS ROUTES */}
                 <Route path="/apps" element={<ProtectedRoute><Apps /></ProtectedRoute>} />
                 <Route path="/ddl-generator" element={<ProtectedRoute><DdlGenerator /></ProtectedRoute>} />
+                <Route path="/builder" element={<ProtectedRoute><Builder /></ProtectedRoute>} />
 
                 {/* 6. ✅ NEW CHAT ScormExtractor */}
                 <Route path="/scorm-extractor" element={<ProtectedRoute><ScormExtractor /></ProtectedRoute>} />
