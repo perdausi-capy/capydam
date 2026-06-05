@@ -313,7 +313,8 @@ const ITTWorkstations = () => {
         ram: '',
         gpu: '',
         storage: '',
-        status: ''
+        status: '',
+        sortBy: ''
     });
     const [viewMode, setViewMode] = useState<'list' | 'floor'>('list');
 
@@ -329,7 +330,7 @@ const ITTWorkstations = () => {
 
     const resetFilters = () => {
         setSearchTerm('');
-        setSpecFilters({ cpu: '', ram: '', gpu: '', storage: '', status: '' });
+        setSpecFilters({ cpu: '', ram: '', gpu: '', storage: '', status: '', sortBy: '' });
     };
 
     const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -680,7 +681,7 @@ const ITTWorkstations = () => {
     }, [users, assignedUserIdsSet, editingId, formData.assignedUserIds]);
 
     const filteredWorkstations = useMemo(() => {
-        return workstations.filter(ws => {
+        let filtered = workstations.filter(ws => {
             // 1. Text Search (Unit ID or Assignee)
             const matchesSearch =
                 ws.unitId.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -691,10 +692,30 @@ const ITTWorkstations = () => {
             const matchesRam = !specFilters.ram || ws.ram === specFilters.ram;
             const matchesGpu = !specFilters.gpu || ws.gpu === specFilters.gpu;
             const matchesStorage = !specFilters.storage || ws.storage === specFilters.storage;
-            const matchesStatus = !specFilters.status || ws.status === specFilters.status;
+            const matchesStatus = !specFilters.status || 
+                (specFilters.status === 'available' ? (!ws.assignedUsers || ws.assignedUsers.length === 0) : ws.status === specFilters.status);
 
             return matchesSearch && matchesCpu && matchesRam && matchesGpu && matchesStorage && matchesStatus;
         });
+
+        if (specFilters.sortBy) {
+            filtered = [...filtered].sort((a, b) => {
+                if (specFilters.sortBy === 'unitId_asc') {
+                    return a.unitId.localeCompare(b.unitId);
+                }
+                if (specFilters.sortBy === 'unitId_desc') {
+                    return b.unitId.localeCompare(a.unitId);
+                }
+                if (specFilters.sortBy === 'availability') {
+                    const aAvail = !a.assignedUsers || a.assignedUsers.length === 0 ? 1 : 0;
+                    const bAvail = !b.assignedUsers || b.assignedUsers.length === 0 ? 1 : 0;
+                    return bAvail - aAvail; // Available first
+                }
+                return 0;
+            });
+        }
+
+        return filtered;
     }, [workstations, searchTerm, specFilters]);
 
     const statusColors: Record<string, string> = {
@@ -906,11 +927,26 @@ const ITTWorkstations = () => {
                                 onChange={val => setSpecFilters({ ...specFilters, status: val })}
                                 options={[
                                     { value: '', label: 'All Statuses' },
+                                    { value: 'available', label: 'Available' },
                                     { value: 'animation_ready', label: 'Animation Ready' },
                                     { value: 'dev_ready', label: 'Dev Ready' },
                                     { value: 'maintenance', label: 'Maintenance' },
                                     { value: 'active', label: 'Active' },
                                     { value: 'retired', label: 'Retired' },
+                                ]}
+                            />
+                        </div>
+
+                        {/* Sort Filter */}
+                        <div className="flex-1 min-w-[140px]">
+                            <CustomSelect
+                                value={specFilters.sortBy}
+                                onChange={val => setSpecFilters({ ...specFilters, sortBy: val })}
+                                options={[
+                                    { value: '', label: 'Sort By...' },
+                                    { value: 'availability', label: 'Availability' },
+                                    { value: 'unitId_asc', label: 'Unit ID (A-Z)' },
+                                    { value: 'unitId_desc', label: 'Unit ID (Z-A)' }
                                 ]}
                             />
                         </div>
