@@ -113,7 +113,8 @@ const WorkstationSpecs = ({
     const parts = viewingWs.parts || [];
 
     // Sort into primary/extended simply for layout consistency
-    const primaryTypes = ['CPU', 'RAM', 'STORAGE', 'GPU'];
+    const primaryTypes = ['MOBO', 'CPU', 'GPU', 'RAM', 'STORAGE'];
+    const extendedOrder = ['MONITOR', 'PSU', 'WEBCAM', 'HEADSET', 'KEYBOARD', 'LAN_CABLE', 'CABLE_ADAPTOR', 'WIFI_ADAPTOR'];
     const primaryParts = parts.filter(p => primaryTypes.includes(p.type));
     const extendedParts = parts.filter(p => !primaryTypes.includes(p.type));
 
@@ -137,6 +138,13 @@ const WorkstationSpecs = ({
         groupedExtendedParts[p.type].push(p);
     });
 
+    const sortedPrimaryEntries = Object.entries(groupedPrimaryParts).sort(([a], [b]) => primaryTypes.indexOf(a) - primaryTypes.indexOf(b));
+    const sortedExtendedEntries = Object.entries(groupedExtendedParts).sort(([a], [b]) => {
+        const indexA = extendedOrder.indexOf(a);
+        const indexB = extendedOrder.indexOf(b);
+        return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+    });
+
     return (
         <div className="w-72 shrink-0 border-r border-white/5 overflow-y-auto p-6 space-y-5 bg-black/10 custom-scrollbar">
             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -146,13 +154,14 @@ const WorkstationSpecs = ({
 
             {/* Primary Grid */}
             <div className="space-y-5">
-                {Object.keys(groupedPrimaryParts).length > 0 ? Object.entries(groupedPrimaryParts).map(([type, partsOfType]) => (
+                {sortedPrimaryEntries.length > 0 ? sortedPrimaryEntries.map(([type, partsOfType]) => (
                     <div key={type}>
                         <h4 className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1.5 mb-1">
-                            {type === 'CPU' ? <Cpu size={14} /> :
-                                type === 'RAM' ? <Database size={14} /> :
-                                    type === 'STORAGE' ? <HardDrive size={14} /> :
-                                        type === 'GPU' ? <View size={14} /> : <Package size={14} />}
+                            {type === 'MOBO' ? <Layers size={14} /> :
+                                type === 'CPU' ? <Cpu size={14} /> :
+                                    type === 'RAM' ? <Database size={14} /> :
+                                        type === 'STORAGE' ? <HardDrive size={14} /> :
+                                            type === 'GPU' ? <View size={14} /> : <Package size={14} />}
                             {type}
                         </h4>
                         <div className="space-y-2">
@@ -178,11 +187,10 @@ const WorkstationSpecs = ({
                         exit={{ height: 0, opacity: 0 }}
                         className="space-y-5 overflow-hidden pt-5 border-t border-white/5"
                     >
-                        {Object.entries(groupedExtendedParts).map(([type, partsOfType]) => (
+                        {sortedExtendedEntries.map(([type, partsOfType]) => (
                             <div key={type}>
                                 <h4 className="text-[10px] font-bold text-gray-400 uppercase flex items-center gap-1.5 mb-1">
-                                    {type === 'MOBO' ? <Layers size={14} /> :
-                                        type === 'PSU' ? <Zap size={14} /> : 
+                                    {type === 'PSU' ? <Zap size={14} /> : 
                                         type === 'MONITOR' ? <MonitorIcon size={14} /> :
                                         type === 'WEBCAM' ? <Camera size={14} /> :
                                         type === 'HEADSET' ? <Headphones size={14} /> :
