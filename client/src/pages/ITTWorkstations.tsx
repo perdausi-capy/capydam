@@ -312,7 +312,8 @@ const ITTWorkstations = () => {
         cpu: '',
         ram: '',
         gpu: '',
-        storage: ''
+        storage: '',
+        status: ''
     });
     const [viewMode, setViewMode] = useState<'list' | 'floor'>('list');
 
@@ -328,7 +329,7 @@ const ITTWorkstations = () => {
 
     const resetFilters = () => {
         setSearchTerm('');
-        setSpecFilters({ cpu: '', ram: '', gpu: '', storage: '' });
+        setSpecFilters({ cpu: '', ram: '', gpu: '', storage: '', status: '' });
     };
 
     const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -690,8 +691,9 @@ const ITTWorkstations = () => {
             const matchesRam = !specFilters.ram || ws.ram === specFilters.ram;
             const matchesGpu = !specFilters.gpu || ws.gpu === specFilters.gpu;
             const matchesStorage = !specFilters.storage || ws.storage === specFilters.storage;
+            const matchesStatus = !specFilters.status || ws.status === specFilters.status;
 
-            return matchesSearch && matchesCpu && matchesRam && matchesGpu && matchesStorage;
+            return matchesSearch && matchesCpu && matchesRam && matchesGpu && matchesStorage && matchesStatus;
         });
     }, [workstations, searchTerm, specFilters]);
 
@@ -895,6 +897,22 @@ const ITTWorkstations = () => {
                     <div className="flex flex-wrap gap-3 bg-white/40 dark:bg-white/5 backdrop-blur-md p-4 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm mb-6">
                         <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest mr-2">
                             <Settings size={14} /> Filters:
+                        </div>
+
+                        {/* Status Filter */}
+                        <div className="flex-1 min-w-[140px]">
+                            <CustomSelect
+                                value={specFilters.status}
+                                onChange={val => setSpecFilters({ ...specFilters, status: val })}
+                                options={[
+                                    { value: '', label: 'All Statuses' },
+                                    { value: 'animation_ready', label: 'Animation Ready' },
+                                    { value: 'dev_ready', label: 'Dev Ready' },
+                                    { value: 'maintenance', label: 'Maintenance' },
+                                    { value: 'active', label: 'Active' },
+                                    { value: 'retired', label: 'Retired' },
+                                ]}
+                            />
                         </div>
 
                         {/* CPU Filter */}
