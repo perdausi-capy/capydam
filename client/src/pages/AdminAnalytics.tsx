@@ -5,7 +5,7 @@ import client from '../api/client';
 import { formatDistanceToNow, differenceInDays } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Activity, HardDrive, Users, FileImage, Search, ArrowUpRight, X, AlertTriangle, ChevronLeft, UploadCloud, DownloadCloud, Edit3, Trash2 } from 'lucide-react';
+import { Activity, HardDrive, Users, FileImage, Search, ArrowUpRight, X, AlertTriangle, ChevronLeft, UploadCloud, DownloadCloud, Edit3, Trash2, Zap, Moon } from 'lucide-react';
 
 // --- TYPES ---
 interface User {
@@ -33,13 +33,13 @@ interface AnalyticsData {
   storage: { totalBytes: number; totalAssets: number };
   breakdown: { images: number; videos: number; audio: number; docs: number; others: number };
   users: { total: number; admins: number; editors: number; viewers: number };
-  actionTotals: { UPLOAD: number; DOWNLOAD: number; EDIT: number; DELETE: number }; 
+  actionTotals: { UPLOAD: number; DOWNLOAD: number; EDIT: number; DELETE: number; OPEN_LINK: number }; 
   recentUserLogs: AuditLog[];
   allUsers: User[];
   velocityChart: {
-    weekly: Array<{ name: string; uploads: number; downloads: number }>;
-    monthly: Array<{ name: string; uploads: number; downloads: number }>;
-    yearly: Array<{ name: string; uploads: number; downloads: number }>;
+    weekly: Array<{ name: string; uploads: number; downloads: number; links: number }>;
+    monthly: Array<{ name: string; uploads: number; downloads: number; links: number }>;
+    yearly: Array<{ name: string; uploads: number; downloads: number; links: number }>;
   };
 }
 
@@ -58,29 +58,28 @@ const getBadgeStyle = (action: string) => {
   if (act.includes('UPLOAD')) return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
   if (act.includes('DOWNLOAD')) return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
   if (act.includes('EDIT') || act.includes('UPDATE')) return 'bg-orange-500/10 text-orange-500 border-orange-500/20';
+  if (act.includes('LINK')) return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
   return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
 };
 
-// Evaluates if a user should be penalized
-const getPenaltyStatus = (u: User) => {
+// 🚨 NEW: 3-Tier Engagement Engine
+const getUserEngagement = (u: User) => {
   const daysSince = !u.lastActive ? u.createdDaysAgo : differenceInDays(new Date(), new Date(u.lastActive));
   
-  if (daysSince >= 60 || (u.uploads === 0 && daysSince >= 30)) {
-    return { tier: 'CRITICAL', label: 'Penalty Box', color: 'text-red-500 bg-red-500/10 border-red-500/20', daysSince };
+  if (!u.lastActive || daysSince >= 60) {
+    return { tier: 'GHOST', label: 'Rare / Ghost', color: 'text-red-500 bg-red-500/10 border-red-500/20', daysSince };
   }
   if (daysSince >= 30) {
-    return { tier: 'WARNING', label: 'Warning', color: 'text-orange-500 bg-orange-500/10 border-orange-500/20', daysSince };
+    return { tier: 'AT_RISK', label: 'Occasional', color: 'text-orange-500 bg-orange-500/10 border-orange-500/20', daysSince };
   }
-  return null;
+  return { tier: 'FREQUENT', label: 'Frequent', color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20', daysSince };
 };
 
-// 🚨 NEW: Smart Action Link Renderer with Legacy Fallback
 const renderActionLink = (log: AuditLog) => {
   const act = log.action.toUpperCase();
   const isDelete = act.includes('DELETE') || act.includes('REMOVE');
   const isEdit = act.includes('EDIT') || act.includes('UPDATE') || act.includes('RENAME');
 
-  // Deletes always route to the recycle bin
   if (isDelete) {
      return (
        <Link 
@@ -94,7 +93,6 @@ const renderActionLink = (log: AuditLog) => {
      );
   }
 
-  // If the asset exists and was tracked properly (Upload, Download, Edit)
   if (log.assetId) {
      return (
        <Link 
@@ -108,7 +106,6 @@ const renderActionLink = (log: AuditLog) => {
      );
   }
 
-  // 🚨 UX FIX: Show a disabled badge for old database logs
   return (
     <span 
       className="flex items-center gap-1.5 px-2 py-1 bg-white/[0.02] border border-white/5 rounded-md text-gray-600 text-[10px] font-mono cursor-not-allowed shrink-0" 
@@ -121,46 +118,35 @@ const renderActionLink = (log: AuditLog) => {
 
 const AdminAnalytics = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [userTab, setUserTab] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
+  // 🚨 NEW: 3-Tier State
+  const [userTab, setUserTab] = useState<'FREQUENT' | 'AT_RISK' | 'GHOST'>('FREQUENT');
   const [timeRange, setTimeRange] = useState<'weekly' | 'monthly' | 'yearly'>('weekly');
   
-  // Modal States
   const [showRosterModal, setShowRosterModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
-  // 1. Fetch Global Analytics
   const { data, isLoading } = useQuery<AnalyticsData>({
     queryKey: ['admin-analytics'],
     queryFn: async () => (await client.get('/analytics')).data,
     refetchInterval: 15000 
   });
 
-  // 2. Fetch Specific User Logs (Only runs when a user is clicked)
   const { data: userLogs, isLoading: isLoadingLogs } = useQuery<AuditLog[]>({
     queryKey: ['user-logs', selectedUser?.id],
     queryFn: async () => (await client.get(`/analytics/user/${selectedUser?.id}`)).data,
     enabled: !!selectedUser
   });
 
-  const { storageData, allTopUsers, allGhostUsers, filteredLogs, chartData } = useMemo(() => {
-    if (!data) return { storageData: { val: '0', unit: 'B', pct: 0 }, allTopUsers: [], allGhostUsers: [], filteredLogs: [], chartData: [] };
+  const { storageData, frequentUsers, atRiskUsers, ghostUsers, filteredLogs, chartData } = useMemo(() => {
+    if (!data) return { storageData: { val: '0', unit: 'B', pct: 0 }, frequentUsers: [], atRiskUsers: [], ghostUsers: [], filteredLogs: [], chartData: [] };
 
     const sData = formatBytes(data.storage.totalBytes);
     const sPct = data.storage.totalBytes > 0 ? Math.min(100, (data.storage.totalBytes / (500 * 1024 * 1024 * 1024)) * 100).toFixed(0) : 0;
 
-    const activeSorted = [...data.allUsers].sort((a, b) => {
-      if (b.uploads !== a.uploads) return b.uploads - a.uploads;
-      const timeA = a.lastActive ? new Date(a.lastActive).getTime() : 0;
-      const timeB = b.lastActive ? new Date(b.lastActive).getTime() : 0;
-      return timeB - timeA; 
-    });
-
-    const inactiveSorted = [...data.allUsers].sort((a, b) => {
-      if (a.uploads !== b.uploads) return a.uploads - b.uploads;
-      const timeA = a.lastActive ? new Date(a.lastActive).getTime() : 0;
-      const timeB = b.lastActive ? new Date(b.lastActive).getTime() : 0;
-      return timeA - timeB; 
-    });
+    // 🚨 NEW: Bucket and Sort Users exactly like our Database Investigation
+    const freq = data.allUsers.filter(u => getUserEngagement(u).tier === 'FREQUENT').sort((a, b) => b.uploads - a.uploads);
+    const risk = data.allUsers.filter(u => getUserEngagement(u).tier === 'AT_RISK').sort((a, b) => getUserEngagement(b).daysSince - getUserEngagement(a).daysSince);
+    const ghost = data.allUsers.filter(u => getUserEngagement(u).tier === 'GHOST').sort((a, b) => getUserEngagement(b).daysSince - getUserEngagement(a).daysSince);
 
     const logs = data.recentUserLogs.filter(log => {
       if (!searchTerm) return true;
@@ -170,8 +156,9 @@ const AdminAnalytics = () => {
 
     return { 
         storageData: { ...sData, pct: Number(sPct) }, 
-        allTopUsers: activeSorted, 
-        allGhostUsers: inactiveSorted,
+        frequentUsers: freq, 
+        atRiskUsers: risk,
+        ghostUsers: ghost,
         filteredLogs: logs,
         chartData: data.velocityChart ? data.velocityChart[timeRange] : []
     };
@@ -180,6 +167,12 @@ const AdminAnalytics = () => {
   const closeRosterModal = () => {
     setShowRosterModal(false);
     setTimeout(() => setSelectedUser(null), 300); 
+  };
+
+  const getActiveTabUsers = () => {
+      if (userTab === 'FREQUENT') return frequentUsers;
+      if (userTab === 'AT_RISK') return atRiskUsers;
+      return ghostUsers;
   };
 
   if (isLoading || !data) return (
@@ -191,7 +184,6 @@ const AdminAnalytics = () => {
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-gray-200 font-sans pb-24">
       
-      {/* HEADER */}
       <div className="sticky top-0 z-40 bg-[#0A0A0A]/80 backdrop-blur-md border-b border-white/10 px-8 py-4">
         <h1 className="text-xl font-semibold text-white tracking-tight">Platform Analytics</h1>
         <p className="text-sm text-gray-500">Monitor storage, asset health, and personnel activity.</p>
@@ -234,7 +226,7 @@ const AdminAnalytics = () => {
               <Users size={16} className="text-gray-500" />
             </div>
             <div className="text-3xl font-semibold text-white tracking-tight mb-2">
-              {data.users.total}
+              {frequentUsers.length} <span className="text-lg text-gray-500 font-normal">/ {data.users.total}</span>
             </div>
             <div className="text-xs text-gray-500 space-x-2">
               <span>{data.users.admins} Admins</span>
@@ -298,14 +290,12 @@ const AdminAnalytics = () => {
         )}
 
         {/* 3. PLATFORM VELOCITY CHART */}
-        {/* 3. PLATFORM VELOCITY CHART */}
         <div className="bg-[#121212] border border-white/5 rounded-xl p-5 shadow-sm">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
             <div>
               <h2 className="text-sm font-semibold text-white">Platform Velocity</h2>
               <p className="text-xs text-gray-500 mt-1 mb-3">Ingestion vs. extraction rates over time.</p>
               
-              {/* ✅ NEW: Custom Legend with glowing indicator dots */}
               <div className="flex items-center gap-4">
                  <div className="flex items-center gap-1.5">
                    <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
@@ -371,7 +361,6 @@ const AdminAnalytics = () => {
 
         {/* 4. ASSETS & USER ENGAGEMENT */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Asset Breakdown (Circular Chart) */}
           <div className="bg-[#121212] border border-white/5 rounded-xl p-5 shadow-sm flex flex-col h-[420px]">
             <div>
               <h2 className="text-sm font-semibold text-white">Asset Composition</h2>
@@ -379,17 +368,15 @@ const AdminAnalytics = () => {
             </div>
             
             <div className="flex-1 flex flex-col justify-center items-center">
-               
-               {/* 🍩 DONUT CHART */}
                <div className="h-[200px] w-full relative">
                   <ResponsiveContainer width="100%" height="100%">
                      <PieChart>
                        <Pie
                          data={[
-                           { name: 'Images', value: data.breakdown.images, color: '#3b82f6' },   // blue-500
-                           { name: 'Videos', value: data.breakdown.videos, color: '#a855f7' },   // purple-500
-                           { name: 'Documents', value: data.breakdown.docs, color: '#10b981' },  // emerald-500
-                           { name: 'Others', value: data.breakdown.others, color: '#6b7280' },   // gray-500
+                           { name: 'Images', value: data.breakdown.images, color: '#3b82f6' },
+                           { name: 'Videos', value: data.breakdown.videos, color: '#a855f7' },
+                           { name: 'Documents', value: data.breakdown.docs, color: '#10b981' },
+                           { name: 'Others', value: data.breakdown.others, color: '#6b7280' },
                          ]}
                          cx="50%"
                          cy="50%"
@@ -410,14 +397,13 @@ const AdminAnalytics = () => {
                          ))}
                        </Pie>
                        <Tooltip 
-                          contentStyle={{ backgroundColor: '#171717', borderColor: '#262626', borderRadius: '8px', padding: '8px 12px' }} 
-                          itemStyle={{ color: '#e5e5e5', fontSize: '12px', fontWeight: '500' }}
-                          formatter={(value: any) => [value?.toLocaleString() || '0', 'Assets']}
-                        />
+                         contentStyle={{ backgroundColor: '#171717', borderColor: '#262626', borderRadius: '8px', padding: '8px 12px' }} 
+                         itemStyle={{ color: '#e5e5e5', fontSize: '12px', fontWeight: '500' }}
+                         formatter={(value: any) => [value?.toLocaleString() || '0', 'Assets']}
+                       />
                      </PieChart>
                   </ResponsiveContainer>
 
-                  {/* 🎯 CENTER TOTAL COUNTER */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                      <span className="text-3xl font-bold text-white tracking-tight leading-none">
                         {data.storage.totalAssets.toLocaleString()}
@@ -428,7 +414,6 @@ const AdminAnalytics = () => {
                   </div>
                </div>
 
-               {/* 📊 CUSTOM LEGEND GRID */}
                <div className="w-full mt-8 grid grid-cols-2 gap-y-4 gap-x-6 px-2">
                   {[
                     { label: 'Images', count: data.breakdown.images, color: '#3b82f6' },
@@ -448,7 +433,6 @@ const AdminAnalytics = () => {
                     </div>
                   ))}
                </div>
-
             </div>
           </div>
 
@@ -456,12 +440,18 @@ const AdminAnalytics = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border-b border-white/5 gap-4 shrink-0">
               <div>
                 <h2 className="text-sm font-semibold text-white">Personnel Engagement</h2>
-                <p className="text-xs text-gray-500 mt-1">Snapshot of top contributors and warning accounts.</p>
+                <p className="text-xs text-gray-500 mt-1">Snapshot of user activity based on real login data.</p>
               </div>
-              <div className="flex bg-[#0A0A0A] p-0.5 rounded-lg border border-white/5 shrink-0">
-                <button onClick={() => setUserTab('ACTIVE')} className={`px-3 py-1.5 text-xs rounded-md font-medium transition-all ${userTab === 'ACTIVE' ? 'bg-[#2A2A2A] text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}>Top Contributors</button>
-                <button onClick={() => setUserTab('INACTIVE')} className={`px-3 py-1.5 text-xs rounded-md font-medium transition-all flex items-center gap-1.5 ${userTab === 'INACTIVE' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'text-gray-500 hover:text-gray-300'}`}>
-                  <AlertTriangle size={12}/> Warnings
+              {/* 🚨 NEW: 3-Tier Tab Controls */}
+              <div className="flex bg-[#0A0A0A] p-0.5 rounded-lg border border-white/5 shrink-0 overflow-x-auto custom-scrollbar">
+                <button onClick={() => setUserTab('FREQUENT')} className={`px-3 py-1.5 text-xs rounded-md font-medium transition-all whitespace-nowrap flex items-center gap-1.5 ${userTab === 'FREQUENT' ? 'bg-[#2A2A2A] text-emerald-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}>
+                  <Zap size={12}/> Frequent ({frequentUsers.length})
+                </button>
+                <button onClick={() => setUserTab('AT_RISK')} className={`px-3 py-1.5 text-xs rounded-md font-medium transition-all whitespace-nowrap flex items-center gap-1.5 ${userTab === 'AT_RISK' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' : 'text-gray-500 hover:text-gray-300'}`}>
+                  <AlertTriangle size={12}/> Occasional ({atRiskUsers.length})
+                </button>
+                <button onClick={() => setUserTab('GHOST')} className={`px-3 py-1.5 text-xs rounded-md font-medium transition-all whitespace-nowrap flex items-center gap-1.5 ${userTab === 'GHOST' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'text-gray-500 hover:text-gray-300'}`}>
+                  <Moon size={12}/> Ghosts ({ghostUsers.length})
                 </button>
               </div>
             </div>
@@ -478,8 +468,8 @@ const AdminAnalytics = () => {
                  </thead>
                  <tbody>
                    <AnimatePresence mode="popLayout">
-                     {(userTab === 'ACTIVE' ? allTopUsers : allGhostUsers).slice(0, 5).map((u) => {
-                       const penalty = getPenaltyStatus(u);
+                     {getActiveTabUsers().slice(0, 5).map((u) => {
+                       const engagement = getUserEngagement(u);
                        
                        return (
                        <motion.tr 
@@ -496,15 +486,9 @@ const AdminAnalytics = () => {
                          <td className="px-4 py-3 text-gray-400 capitalize">{u.role}</td>
                          <td className="px-4 py-3 text-right font-medium text-gray-200">{u.uploads}</td>
                          <td className="px-4 py-3 text-right">
-                           {userTab === 'INACTIVE' && penalty ? (
-                             <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider border ${penalty.color}`}>
-                               {penalty.label} ({penalty.daysSince}d)
-                             </span>
-                           ) : (
-                             <span className="text-gray-400">
-                               {u.lastActive ? formatDistanceToNow(new Date(u.lastActive), { addSuffix: true }) : 'Never'}
-                             </span>
-                           )}
+                            <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider border ${engagement.color}`}>
+                              {engagement.label} ({engagement.daysSince}d)
+                            </span>
                          </td>
                        </motion.tr>
                      )})}
@@ -572,7 +556,6 @@ const AdminAnalytics = () => {
                            <span className="truncate max-w-xs md:max-w-md">
                              {log.asset ? <span className="text-gray-200 font-medium">{log.asset.originalName}</span> : log.details}
                            </span>
-                           {/* 🚨 THE RENDERER OUTPUT */}
                            {renderActionLink(log)}
                         </div>
                      </td>
@@ -637,14 +620,16 @@ const AdminAnalytics = () => {
                             transition={{ duration: 0.2 }}
                             className="absolute inset-0 p-6 overflow-y-auto custom-scrollbar"
                           >
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                
+                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                               
+                                {/* TIER 1: FREQUENT */}
                                 <div>
-                                   <h3 className="text-sm font-semibold text-white border-b border-white/10 pb-3 mb-4 flex items-center gap-2">
-                                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Heavy Lifters
+                                   <h3 className="text-sm font-semibold text-white border-b border-white/10 pb-3 mb-4 flex items-center justify-between">
+                                     <div className="flex items-center gap-2"><Zap size={14} className="text-emerald-500" /> Active Users</div>
+                                     <span className="bg-white/5 text-gray-400 px-2 py-0.5 rounded text-xs">{frequentUsers.length}</span>
                                    </h3>
                                    <div className="space-y-2">
-                                      {allTopUsers.filter(u => u.uploads > 0 || u.lastActive).map((u, i) => (
+                                      {frequentUsers.map((u, i) => (
                                          <div 
                                             key={u.id} 
                                             onClick={() => setSelectedUser(u)}
@@ -655,67 +640,75 @@ const AdminAnalytics = () => {
                                                   {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : u.name.charAt(0)}
                                                </div>
                                                <div>
-                                                 <div className="text-sm font-medium text-gray-200">
-                                                    {u.name} <span className="text-xs text-gray-500 ml-1">#{i + 1}</span>
-                                                 </div>
-                                                 <div className="text-xs text-gray-500">
-                                                    {u.lastActive ? formatDistanceToNow(new Date(u.lastActive), { addSuffix: true }) : 'Never'}
-                                                 </div>
+                                                 <div className="text-sm font-medium text-gray-200 truncate max-w-[120px]">{u.name}</div>
+                                                 <div className="text-xs text-gray-500">{u.lastActive ? formatDistanceToNow(new Date(u.lastActive), { addSuffix: true }) : 'Never'}</div>
                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                               <div className="text-sm font-bold text-emerald-500">{u.uploads}</div>
-                                               <div className="text-[10px] text-gray-500 uppercase tracking-wider">Uploads</div>
                                             </div>
                                          </div>
                                       ))}
                                    </div>
                                 </div>
 
+                                {/* TIER 2: AT RISK */}
                                 <div>
-                                   <h3 className="text-sm font-semibold text-white border-b border-white/10 pb-3 mb-4 flex items-center gap-2">
-                                     <span className="w-2 h-2 rounded-full bg-red-500"></span> Needs Review (Penalty Box)
+                                   <h3 className="text-sm font-semibold text-white border-b border-white/10 pb-3 mb-4 flex items-center justify-between">
+                                     <div className="flex items-center gap-2"><AlertTriangle size={14} className="text-orange-500" /> At Risk (30d+)</div>
+                                     <span className="bg-white/5 text-gray-400 px-2 py-0.5 rounded text-xs">{atRiskUsers.length}</span>
                                    </h3>
                                    <div className="space-y-2">
-                                      {allGhostUsers.map(u => {
-                                        const penalty = getPenaltyStatus(u);
-                                        if (!penalty) return null;
-
+                                      {atRiskUsers.map(u => {
+                                        const engagement = getUserEngagement(u);
                                         return (
                                          <div 
                                             key={u.id} 
                                             onClick={() => setSelectedUser(u)}
-                                            className="flex flex-col p-3 bg-[#121212] border border-white/5 rounded-lg hover:border-white/10 hover:bg-white/[0.02] cursor-pointer transition-colors"
+                                            className="flex items-center justify-between p-3 bg-[#121212] border border-orange-500/20 rounded-lg hover:border-orange-500/40 cursor-pointer transition-colors"
                                          >
-                                            <div className="flex items-center justify-between mb-2">
-                                               <div className="flex items-center gap-3">
-                                                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs font-medium text-gray-300 overflow-hidden shrink-0 grayscale opacity-70">
-                                                     {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : u.name.charAt(0)}
-                                                  </div>
-                                                  <div>
-                                                    <div className="text-sm font-medium text-gray-200">{u.name}</div>
-                                                    <div className="text-xs text-gray-500 capitalize">{u.role}</div>
-                                                  </div>
+                                            <div className="flex items-center gap-3">
+                                               <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs font-medium text-gray-300 overflow-hidden shrink-0 grayscale opacity-80">
+                                                  {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : u.name.charAt(0)}
                                                </div>
-                                               <div className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wider rounded border ${penalty.color}`}>
-                                                  {penalty.label}
+                                               <div>
+                                                 <div className="text-sm font-medium text-gray-200 truncate max-w-[120px]">{u.name}</div>
+                                                 <div className="text-xs text-orange-400/80 font-medium">{engagement.daysSince} days inactive</div>
                                                </div>
-                                            </div>
-                                            <div className="bg-black/20 rounded p-2 text-xs text-gray-400 flex justify-between">
-                                              <span>Uploads: <strong className="text-white">{u.uploads}</strong></span>
-                                              <span>Inactive: <strong className="text-white">{penalty.daysSince} days</strong></span>
                                             </div>
                                          </div>
                                         )
                                       })}
-                                      
-                                      {allGhostUsers.filter(u => getPenaltyStatus(u)).length === 0 && (
-                                        <div className="p-8 text-center text-sm text-gray-500 border border-dashed border-white/10 rounded-lg">
-                                          No users currently require warnings or penalties.
-                                        </div>
-                                      )}
                                    </div>
                                 </div>
+
+                                {/* TIER 3: GHOSTS */}
+                                <div>
+                                   <h3 className="text-sm font-semibold text-white border-b border-white/10 pb-3 mb-4 flex items-center justify-between">
+                                     <div className="flex items-center gap-2"><Moon size={14} className="text-red-500" /> Ghosts (60d+)</div>
+                                     <span className="bg-white/5 text-gray-400 px-2 py-0.5 rounded text-xs">{ghostUsers.length}</span>
+                                   </h3>
+                                   <div className="space-y-2">
+                                      {ghostUsers.map(u => {
+                                        const engagement = getUserEngagement(u);
+                                        return (
+                                         <div 
+                                            key={u.id} 
+                                            onClick={() => setSelectedUser(u)}
+                                            className="flex items-center justify-between p-3 bg-[#121212] border border-red-500/20 rounded-lg hover:border-red-500/40 cursor-pointer transition-colors"
+                                         >
+                                            <div className="flex items-center gap-3">
+                                               <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs font-medium text-gray-300 overflow-hidden shrink-0 grayscale opacity-50">
+                                                  {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : u.name.charAt(0)}
+                                               </div>
+                                               <div>
+                                                 <div className="text-sm font-medium text-gray-200 truncate max-w-[120px]">{u.name}</div>
+                                                 <div className="text-xs text-red-400/80 font-medium">{!u.lastActive ? 'Never Logged In' : `${engagement.daysSince} days inactive`}</div>
+                                               </div>
+                                            </div>
+                                         </div>
+                                        )
+                                      })}
+                                   </div>
+                                </div>
+
                              </div>
                           </motion.div>
                       ) : (
@@ -766,7 +759,6 @@ const AdminAnalytics = () => {
                                                   <span className="truncate max-w-sm">
                                                     {log.asset ? <span className="text-white font-medium">{log.asset.originalName}</span> : log.details}
                                                   </span>
-                                                  {/* 🚨 THE RENDERER OUTPUT IN MODAL */}
                                                   {renderActionLink(log)}
                                               </div>
                                             </td>
