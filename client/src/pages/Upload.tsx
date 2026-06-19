@@ -17,13 +17,18 @@ import {
   Loader2,
   Search,
   Plus,
-  User,
   HardDrive,
   Layers,
   Info,
   ArrowUp,
   ArrowDown,
-  Calendar
+  Calendar,
+  CopyPlus,
+  ChevronDown,
+  ChevronUp,
+  User,
+  Trash2,
+  AlertCircle
 } from 'lucide-react';
 import client from '../api/client';
 import { useNavigate } from 'react-router-dom';
@@ -42,7 +47,6 @@ const customStyles = `
   .animate-shimmer {
     animation: shimmer 3s linear infinite;
   }
-  /* Fix date picker calendar icon color in dark mode */
   input[type="date"]::-webkit-calendar-picker-indicator {
       cursor: pointer;
       opacity: 0.6;
@@ -66,7 +70,6 @@ interface UploadItem {
   progress: number;
   newName: string;
   externalLinks: string[]; 
-  customUploader: string;
   errorMessage?: string;
 }
 
@@ -99,6 +102,8 @@ const Upload = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  // AI & Advanced Settings
+  const [showAISettings, setShowAISettings] = useState(false);
   const [creativity, setCreativity] = useState(0.2);
   const [specificity, setSpecificity] = useState<'general' | 'high'>('general');
 
@@ -106,7 +111,6 @@ const Upload = () => {
   const [isRecentModalOpen, setIsRecentModalOpen] = useState(false);
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false); 
   
-  // ✅ CLEANED UP FILTER STATES
   const [modalSearchQuery, setModalSearchQuery] = useState('');
   const [dateStart, setDateStart] = useState<string>(''); 
   const [dateEnd, setDateEnd] = useState<string>('');
@@ -127,10 +131,7 @@ const Upload = () => {
 
   useEffect(() => { fetchRecent(); }, []);
 
-  // ✅ LOGIC: Range Filter + Uploader Sort
   const processedRecentUploads = useMemo(() => {
-    
-    // 1. Pre-process to extract customUploader and tags
     const enrichedAssets = recentUploads.map(asset => {
         let customUploader = '';
         let tagsStr = '';
@@ -146,7 +147,6 @@ const Upload = () => {
         return { ...asset, displayUploader, tagsStr };
     });
 
-    // 2. Filter Results (Search + Date Range)
     let arr = enrichedAssets.filter(asset => {
         const query = modalSearchQuery.toLowerCase();
         const fileName = (asset.originalName || '').toLowerCase();
@@ -162,27 +162,25 @@ const Upload = () => {
 
         if (dateStart) {
             const start = new Date(dateStart);
-            start.setHours(0, 0, 0, 0); // Start of day
+            start.setHours(0, 0, 0, 0);
             if (assetTime < start.getTime()) matchesDate = false;
         }
         
         if (dateEnd) {
             const end = new Date(dateEnd);
-            end.setHours(23, 59, 59, 999); // End of day
+            end.setHours(23, 59, 59, 999);
             if (assetTime > end.getTime()) matchesDate = false;
         }
 
         return matchesSearch && matchesDate;
     });
 
-    // 3. Sort Results
     return arr.sort((a, b) => {
         let comparison = 0;
         if (sortBy === 'date') comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         if (sortBy === 'name') comparison = (a.originalName || '').localeCompare(b.originalName || '');
         if (sortBy === 'uploader') comparison = a.displayUploader.localeCompare(b.displayUploader);
         
-        // Reverse if Descending
         return sortOrder === 'asc' ? comparison : -comparison;
     });
   }, [recentUploads, sortBy, sortOrder, modalSearchQuery, dateStart, dateEnd]);
@@ -198,7 +196,6 @@ const Upload = () => {
       progress: 0,
       newName: file.name,
       externalLinks: [''],
-      customUploader: ''
     }));
   
     setQueue(prev => {
@@ -262,17 +259,24 @@ const Upload = () => {
       });
   };
 
+  const applyLinksToAll = (linksToCopy: string[]) => {
+      const validLinks = linksToCopy.filter(l => l.trim() !== '');
+      if (validLinks.length === 0) {
+          toast.warning("Nothing to apply! Please enter a valid link first.");
+          return;
+      }
+      setQueue(prev => prev.map(item => ({ ...item, externalLinks: [...validLinks] })));
+      toast.success("Source links instantly applied to all files!", { autoClose: 2000 });
+  };
+
   const startUpload = async () => {
     if (queue.length === 0) return;
 
-    const hasValidationErrors = queue.some(item => {
-        const hasUploader = item.customUploader.trim() !== '';
-        const hasValidLink = item.externalLinks.some(link => link.trim() !== '');
-        return !hasUploader || !hasValidLink;
-    });
+    // Validation Check
+    const hasValidationErrors = queue.some(item => !item.externalLinks.some(link => link.trim() !== ''));
 
     if (hasValidationErrors) {
-        toast.error('⚠️ Upload halted: Please ensure every file has a Credit/Uploader name and at least one Source Link.', { autoClose: 5000 });
+        toast.error('⚠️ Upload halted: Please ensure every file has at least one valid Source Link.', { autoClose: 5000 });
         setIsQueueModalOpen(true); 
         return;
     }
@@ -303,10 +307,6 @@ const Upload = () => {
       if (validLinks.length > 0) {
           aiDataObj.externalLink = validLinks[0];
           aiDataObj.links = validLinks;
-      }
-      
-      if (currentQueue[i].customUploader.trim() !== '') {
-          aiDataObj.customUploader = currentQueue[i].customUploader.trim();
       }
       
       if (Object.keys(aiDataObj).length > 0) {
@@ -400,9 +400,8 @@ const Upload = () => {
                       <p className="font-bold text-blue-800 dark:text-blue-300 text-base">Before you upload:</p>
                       <ul className="list-disc pl-5 space-y-1 opacity-90">
                           <li>You can edit the filename before you upload.</li>
-                          <li>You <strong className="text-blue-700 dark:text-blue-400">must</strong> provide a Credit/Uploader name.</li>
-                          <li>You <strong className="text-blue-700 dark:text-blue-400">must</strong> include at least one or two working Source Link (e.g., Google Drive URL).</li>
-                          <li>You can find the task card on the right sidebar.</li>
+                          <li>You <strong className="text-blue-700 dark:text-blue-400">must</strong> include at least one working Source Link (e.g., Google Drive URL).</li>
+                          <li>You can copy links to all items instantly using the "Apply to All" button in the queue.</li>
                       </ul>
                   </div>
               </div>
@@ -473,31 +472,6 @@ const Upload = () => {
                     <span className="relative z-10 flex items-center gap-2 drop-shadow-sm">{getButtonContent()}</span>
                 </button>
                 
-                {/* AI SETTINGS */}
-                <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1D21] p-6 shadow-sm">
-                    <div className="flex items-center gap-2 mb-4 text-gray-800 dark:text-white">
-                        <Settings size={18} className="text-gray-500" />
-                        <h3 className="font-bold text-sm">AI Configuration</h3>
-                    </div>
-                    <div className="space-y-6">
-                        <div>
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Tagging Mode</label>
-                            <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 dark:bg-black/20 rounded-xl">
-                                <button onClick={() => setSpecificity('general')} className={`py-2 text-xs font-bold rounded-lg transition-all ${specificity === 'general' ? 'bg-white dark:bg-white/10 text-black dark:text-white shadow-sm border border-gray-200 dark:border-white/5' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border border-transparent'}`}>Standard</button>
-                                <button onClick={() => setSpecificity('high')} className={`py-2 text-xs font-bold rounded-lg transition-all ${specificity === 'high' ? 'bg-indigo-600 text-white shadow-sm border border-indigo-700' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border border-transparent'}`}>Deep Scan</button>
-                            </div>
-                        </div>
-                        <div>
-                            <div className="flex justify-between items-end mb-2">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Creativity</label>
-                                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{Math.round(creativity * 100)}%</span>
-                            </div>
-                            <input type="range" min="0" max="1" step="0.1" value={creativity} onChange={e => setCreativity(parseFloat(e.target.value))} className="w-full h-1.5 bg-gray-200 dark:bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                            <p className="mt-2 text-[10px] text-gray-500 dark:text-gray-400 leading-snug">{getCreativityLabel(creativity)} mode.</p>
-                        </div>
-                    </div>
-                </div>
-
                 {/* RECENT UPLOADS BUTTON */}
                 {recentUploads.length > 0 && (
                     <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1D21] p-6 shadow-sm animate-in fade-in slide-in-from-right-4 duration-700">
@@ -509,30 +483,72 @@ const Upload = () => {
                         <button onClick={() => setIsRecentModalOpen(true)} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 hover:bg-gray-100 dark:hover:bg-white/5 hover:border-blue-300 dark:hover:border-blue-500/50 transition-all text-sm font-bold text-gray-700 dark:text-gray-300 group">View All Recent <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform text-blue-500" /></button>
                     </div>
                 )}
+
+                {/* ✅ COLLAPSED AI SETTINGS */}
+                <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1D21] shadow-sm overflow-hidden">
+                    <button 
+                        onClick={() => setShowAISettings(!showAISettings)} 
+                        className="w-full flex items-center justify-between p-6 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors focus:outline-none"
+                    >
+                        <div className="flex items-center gap-2 text-gray-800 dark:text-white">
+                            <Settings size={18} className="text-gray-500" />
+                            <h3 className="font-bold text-sm">Advanced AI Options</h3>
+                        </div>
+                        {showAISettings ? <ChevronUp size={16} className="text-gray-400"/> : <ChevronDown size={16} className="text-gray-400"/>}
+                    </button>
+                    
+                    <AnimatePresence>
+                        {showAISettings && (
+                            <motion.div 
+                                initial={{ height: 0, opacity: 0 }} 
+                                animate={{ height: 'auto', opacity: 1 }} 
+                                exit={{ height: 0, opacity: 0 }} 
+                                className="overflow-hidden"
+                            >
+                                <div className="p-6 pt-0 space-y-6">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Tagging Mode</label>
+                                        <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 dark:bg-black/20 rounded-xl">
+                                            <button onClick={() => setSpecificity('general')} className={`py-2 text-xs font-bold rounded-lg transition-all ${specificity === 'general' ? 'bg-white dark:bg-white/10 text-black dark:text-white shadow-sm border border-gray-200 dark:border-white/5' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border border-transparent'}`}>Standard</button>
+                                            <button onClick={() => setSpecificity('high')} className={`py-2 text-xs font-bold rounded-lg transition-all ${specificity === 'high' ? 'bg-indigo-600 text-white shadow-sm border border-indigo-700' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 border border-transparent'}`}>Deep Scan</button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="flex justify-between items-end mb-2">
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Creativity</label>
+                                            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{Math.round(creativity * 100)}%</span>
+                                        </div>
+                                        <input type="range" min="0" max="1" step="0.1" value={creativity} onChange={e => setCreativity(parseFloat(e.target.value))} className="w-full h-1.5 bg-gray-200 dark:bg-white/10 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                                        <p className="mt-2 text-[10px] text-gray-500 dark:text-gray-400 leading-snug">{getCreativityLabel(creativity)} mode.</p>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+
             </div>
           </div>
 
         </div>
       </div>
 
-      {/* ✅ REFINED QUEUE REVIEW MODAL */}
+      {/* ✅ COMPLETELY REDESIGNED QUEUE MODAL (Grid/Table Layout) */}
       <AnimatePresence>
           {isQueueModalOpen && queue.length > 0 && (
               <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                  {/* Backdrop */}
                   <motion.div 
                       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
                       className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
                       onClick={() => setIsQueueModalOpen(false)} 
                   />
                   
-                  {/* Modal Panel */}
                   <motion.div 
                       initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} 
-                      className="relative w-full max-w-5xl bg-[#F8F9FC] dark:bg-[#0B0D0F] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-gray-200 dark:border-white/10"
+                      className="relative w-full max-w-6xl bg-white dark:bg-[#0B0D0F] rounded-3xl shadow-2xl flex flex-col max-h-[90vh] border border-gray-200 dark:border-white/10 overflow-hidden"
                   >
                       {/* Header */}
-                      <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] shrink-0">
+                      <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-[#1A1D21] shrink-0">
                           <div className="flex items-center gap-3">
                               <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg"><Layers size={20} /></div>
                               <div>
@@ -540,107 +556,143 @@ const Upload = () => {
                                   <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{queue.length} files selected</p>
                               </div>
                           </div>
-                          <button onClick={() => setIsQueueModalOpen(false)} className="text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10"><X size={20} /></button>
+                          <button onClick={() => setIsQueueModalOpen(false)} className="text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors p-2 rounded-full hover:bg-gray-200 dark:hover:bg-white/10"><X size={20} /></button>
                       </div>
 
-                      {/* Modal Content */}
-                      <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar space-y-3 bg-gray-50/30 dark:bg-black/20">
-                          {queue.map((item, index) => {
-                              const isMissingUploader = item.customUploader.trim() === '';
-                              const isMissingLink = !item.externalLinks.some(link => link.trim() !== '');
+                      {/* Desktop Grid Headers */}
+                      <div className="hidden lg:grid grid-cols-12 gap-6 px-6 py-3 border-b border-gray-200 dark:border-white/5 bg-white dark:bg-[#111316] text-[10px] font-black text-gray-400 uppercase tracking-widest shrink-0 items-center shadow-sm z-10">
+                          <div className="col-span-3">File Details</div>
+                          <div className="col-span-4">Display Name</div>
+                          <div className="col-span-4 flex items-center justify-between">
+                              <span>Source Links <span className="text-red-500">*</span></span>
+                          </div>
+                          <div className="col-span-1 text-right">Action</div>
+                      </div>
 
-                              return (
-                                <div key={item.id} className={`relative bg-white dark:bg-[#1A1D21] border rounded-2xl p-4 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row gap-4 md:items-start group overflow-hidden ${isMissingUploader || isMissingLink ? 'border-red-300 dark:border-red-900/50' : 'border-gray-200 dark:border-white/5'}`}>
-                                    
-                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      {/* Content - Data Entry Rows */}
+                      <div className="flex-1 overflow-y-auto custom-scrollbar bg-gray-50/30 dark:bg-[#0B0D0F]">
+                          <div className="flex flex-col">
+                              {queue.map((item, index) => {
+                                  const isMissingLink = !item.externalLinks.some(link => link.trim() !== '');
 
-                                    <div className="flex justify-between items-start mb-5">
-                                        <div className="flex items-center gap-4">
-                                            <div className="h-16 w-16 shrink-0 bg-gray-50 dark:bg-black/40 rounded-xl overflow-hidden border border-gray-100 dark:border-white/5 flex items-center justify-center relative">
+                                  return (
+                                    <div key={item.id} className={`group relative grid grid-cols-1 lg:grid-cols-12 gap-6 p-4 lg:px-6 lg:py-5 border-b transition-colors items-start ${isMissingLink ? 'border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-900/5' : 'border-gray-100 dark:border-white/5 hover:bg-white dark:hover:bg-white/[0.02]'}`}>
+                                        
+                                        {/* Error Border Indicator */}
+                                        {isMissingLink && <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500 rounded-r shadow-[0_0_10px_rgba(239,68,68,0.5)]" />}
+
+                                        {/* Column 1: File Info */}
+                                        <div className="lg:col-span-3 flex items-center gap-4 min-w-0">
+                                            <div className="h-14 w-14 shrink-0 bg-gray-100 dark:bg-black/40 rounded-xl overflow-hidden border border-gray-200 dark:border-white/5 flex items-center justify-center relative shadow-sm">
                                                 {item.file.preview ? <img src={item.file.preview} className="h-full w-full object-cover" alt="" /> : getFileIcon(item.file.type)}
                                             </div>
-                                            <div className="min-w-0">
-                                                <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate max-w-[200px] sm:max-w-sm">{item.file.name}</h4>
+                                            <div className="min-w-0 pr-2">
+                                                <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate" title={item.file.name}>{item.file.name}</h4>
                                                 <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider">
                                                     <span className="flex items-center gap-1"><HardDrive size={10} /> {(item.file.size / 1024 / 1024).toFixed(2)} MB</span>
                                                 </div>
                                             </div>
                                         </div>
-                                        {item.status === 'pending' && (
-                                            <button onClick={() => removeFile(index)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"><X size={16} /></button>
+
+                                        {/* Column 2: Display Name Input */}
+                                        <div className="lg:col-span-4 w-full">
+                                            <label className="lg:hidden text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1.5 block">Display Name</label>
+                                            <div className="relative flex items-center bg-gray-100 dark:bg-black/40 rounded-xl overflow-hidden transition-all border border-transparent focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500">
+                                                <div className="px-3 text-gray-400"><Edit2 size={14} /></div>
+                                                <input 
+                                                    type="text" 
+                                                    value={item.newName} 
+                                                    onChange={(e) => updateItem(index, 'newName', e.target.value)} 
+                                                    disabled={item.status !== 'pending'} 
+                                                    className="w-full bg-transparent py-2.5 text-sm font-medium text-gray-900 dark:text-white outline-none placeholder-gray-400 pr-3" 
+                                                />
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Column 3: Source Links */}
+                                        <div className="lg:col-span-4 w-full flex flex-col gap-2">
+                                            <div className="flex lg:hidden items-center justify-between mb-1">
+                                                <label className={`text-[10px] font-bold uppercase tracking-widest block ${isMissingLink ? 'text-red-500 flex items-center gap-1' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                    {isMissingLink && <AlertCircle size={10} />} Source Links <span className="text-red-500">*</span>
+                                                </label>
+                                            </div>
+
+                                            {item.externalLinks.map((link, lIndex) => (
+                                                <div key={lIndex} className="flex items-center gap-2 group/link relative">
+                                                    <div className={`flex flex-1 items-center bg-gray-100 dark:bg-black/40 rounded-xl overflow-hidden transition-all border ${isMissingLink ? 'border-red-400 dark:border-red-600 ring-1 ring-red-400/50' : 'border-transparent focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500'}`}>
+                                                        <div className={`px-3 ${isMissingLink ? 'text-red-400' : 'text-gray-400'}`}><LinkIcon size={14} /></div>
+                                                        <input 
+                                                            type="url" 
+                                                            value={link} 
+                                                            onChange={(e) => updateLink(index, lIndex, e.target.value)} 
+                                                            disabled={item.status !== 'pending'} 
+                                                            className="w-full bg-transparent py-2 text-xs md:text-sm text-gray-900 dark:text-white outline-none placeholder-gray-400/70" 
+                                                            placeholder="Paste Google Drive URL..." 
+                                                        />
+                                                    </div>
+                                                    
+                                                    {/* Row-Level Link Actions */}
+                                                    {item.status === 'pending' && (
+                                                        <div className="flex items-center gap-1 shrink-0">
+                                                            {/* Apply to All Magic Wand */}
+                                                            {lIndex === 0 && queue.length > 1 && (
+                                                                <button 
+                                                                    onClick={() => applyLinksToAll(item.externalLinks)} 
+                                                                    className="p-2 text-indigo-500 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+                                                                    title="Copy to all rows"
+                                                                >
+                                                                    <CopyPlus size={16} />
+                                                                </button>
+                                                            )}
+                                                            {/* Remove specific link */}
+                                                            {item.externalLinks.length > 1 && (
+                                                                <button onClick={() => removeLinkField(index, lIndex)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="Remove Link">
+                                                                    <X size={16} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            
+                                            {/* Add another link button */}
+                                            {item.status === 'pending' && (
+                                                <button onClick={() => addLinkField(index)} className="self-start text-[10px] font-bold text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 flex items-center gap-1 px-1 py-0.5 transition-colors uppercase tracking-wider">
+                                                    <Plus size={12} /> Add Link
+                                                </button>
+                                            )}
+                                        </div>
+                                        
+                                        {/* Column 4: Row Actions */}
+                                        <div className="absolute top-4 right-4 lg:relative lg:top-0 lg:right-0 lg:col-span-1 flex justify-end shrink-0 lg:pt-1">
+                                            {item.status === 'pending' && (
+                                                <button onClick={() => removeFile(index)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="Delete Row">
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Progress Bar Indicator */}
+                                        {item.status !== 'pending' && (
+                                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-100 dark:bg-white/5">
+                                                <div className={`h-full transition-all duration-300 ${item.status === 'success' ? 'bg-green-500' : item.status === 'error' ? 'bg-red-500' : 'bg-indigo-500'}`} style={{ width: `${item.progress}%` }} />
+                                            </div>
                                         )}
                                     </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 flex-1">
-                                        <div className="space-y-4">
-                                            <div>
-                                                <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-1.5 block ml-1">Display Name</label>
-                                                <div className="flex items-center bg-gray-50 dark:bg-[#0B0D0F]/50 border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-indigo-500/50 transition-all hover:border-gray-300 dark:hover:border-white/20">
-                                                    <Edit2 size={14} className="text-gray-400 mr-2 shrink-0" />
-                                                    <input type="text" value={item.newName} onChange={(e) => updateItem(index, 'newName', e.target.value)} disabled={item.status !== 'pending'} className="w-full bg-transparent text-sm font-medium text-gray-900 dark:text-white outline-none placeholder-gray-400" />
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label className={`text-[10px] font-bold uppercase tracking-widest mb-1.5 block ml-1 ${isMissingUploader ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
-                                                    Credit / Uploader <span className="text-red-500">*</span>
-                                                </label>
-                                                <div className={`flex items-center bg-gray-50 dark:bg-[#0B0D0F]/50 border rounded-xl px-3 py-2.5 focus-within:ring-2 transition-all hover:border-gray-300 dark:hover:border-white/20 ${isMissingUploader ? 'border-red-300 dark:border-red-900 focus-within:ring-red-500/50' : 'border-gray-200 dark:border-white/10 focus-within:ring-indigo-500/50'}`}>
-                                                    <User size={14} className={isMissingUploader ? 'text-red-400 mr-2 shrink-0' : 'text-gray-400 mr-2 shrink-0'} />
-                                                    <input type="text" value={item.customUploader} onChange={(e) => updateItem(index, 'customUploader', e.target.value)} disabled={item.status !== 'pending'} className="w-full bg-transparent text-sm font-medium text-gray-900 dark:text-white outline-none placeholder-gray-400" placeholder="DAM uploader doing the task" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="space-y-3 md:border-l md:border-gray-100 md:dark:border-white/5 md:pl-8">
-                                            <div className="flex items-center justify-between">
-                                                <label className={`text-[10px] font-bold uppercase tracking-widest block ml-1 ${isMissingLink ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
-                                                    Source Links <span className="text-red-500">*</span>
-                                                </label>
-                                                {item.status === 'pending' && (
-                                                    <button onClick={() => addLinkField(index)} className="text-[10px] bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold hover:bg-indigo-100 dark:hover:bg-indigo-500/20 px-2 py-1 rounded flex items-center gap-1 transition-colors"><Plus size={10} /> Add Link</button>
-                                                )}
-                                            </div>
-                                            <div className="space-y-2.5">
-                                                {item.externalLinks.map((link, lIndex) => (
-                                                    <div key={lIndex} className="flex items-center gap-2 animate-in fade-in slide-in-from-top-1 group/link">
-                                                        <div className={`flex flex-1 items-center bg-gray-50 dark:bg-[#0B0D0F]/50 rounded-lg px-2 py-1.5 border focus-within:ring-1 transition-colors ${isMissingLink ? 'border-red-300 dark:border-red-900 focus-within:ring-red-500 focus-within:border-red-500' : 'border-gray-200 dark:border-white/10 focus-within:ring-indigo-500 focus-within:border-indigo-500'}`}>
-                                                          <LinkIcon size={12} className={isMissingLink ? 'text-red-400 shrink-0 mr-2' : 'text-gray-400 shrink-0 mr-2'} />
-                                                          <input 
-                                                              type="url" 
-                                                              value={link} 
-                                                              onChange={(e) => updateLink(index, lIndex, e.target.value)} 
-                                                              disabled={item.status !== 'pending'} 
-                                                              className="w-full bg-transparent text-xs text-gray-800 dark:text-gray-200 outline-none placeholder-gray-400" 
-                                                              placeholder="https://..." 
-                                                          />
-                                                        </div>
-                                                        {item.status === 'pending' && item.externalLinks.length > 1 && (
-                                                            <button onClick={() => removeLinkField(index, lIndex)} className="opacity-0 group-hover/link:opacity-100 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-all shrink-0"><X size={14} /></button>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {item.status !== 'pending' && (
-                                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-100 dark:bg-white/5">
-                                            <div className={`h-full transition-all duration-300 ${item.status === 'success' ? 'bg-green-500' : item.status === 'error' ? 'bg-red-500' : 'bg-indigo-500'}`} style={{ width: `${item.progress}%` }} />
-                                        </div>
-                                    )}
-                                </div>
-                              );
-                          })}
+                                  );
+                              })}
+                          </div>
                       </div>
 
                       {/* Footer Actions */}
-                      <div className="p-4 border-t border-gray-200 dark:border-white/5 bg-white dark:bg-[#1A1D21] shrink-0 flex items-center justify-between gap-3">
-                          <button onClick={() => setIsQueueModalOpen(false)} className="px-5 py-2.5 rounded-xl font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">Close / Edit More</button>
+                      <div className="p-4 md:px-6 md:py-5 border-t border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-[#1A1D21] shrink-0 flex flex-col sm:flex-row items-center justify-between gap-4 z-10">
+                          <button onClick={() => setIsQueueModalOpen(false)} className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">Close / Add More</button>
                           
                           <button
                               onClick={startUpload}
                               disabled={isProcessing || isRedirecting || queue.length === 0}
                               className={`
-                                  relative overflow-hidden px-8 py-2.5 rounded-xl font-bold shadow-md transition-all duration-300 flex items-center gap-2
+                                  relative overflow-hidden w-full sm:w-auto px-10 py-3 rounded-xl font-bold shadow-md transition-all duration-300 flex justify-center items-center gap-2
                                   ${isProcessing || isRedirecting
                                       ? 'bg-gray-800 text-white cursor-wait shadow-none' 
                                       : 'bg-indigo-600 hover:bg-indigo-700 text-white hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0'
@@ -768,7 +820,6 @@ const Upload = () => {
                                               <div className="min-w-0 flex-1">
                                                   <p className="text-sm font-bold text-gray-800 dark:text-gray-200 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" title={recent.originalName}>{recent.originalName}</p>
                                                   
-                                                  {/* ✅ SHOW ACTUAL UPLOADER NAME (from aiData customUploader) */}
                                                   {recent.displayUploader && (
                                                       <p className="text-[11px] font-semibold text-gray-500 flex items-center gap-1 mt-0.5 truncate">
                                                           <User size={10} /> {recent.displayUploader}
