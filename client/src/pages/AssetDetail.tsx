@@ -220,8 +220,12 @@ const AssetDetail = () => {
   const handleDownload = async () => {
     if (!asset) return;
     try {
-    // ✅ NEW: Log the download asynchronously (we catch errors so it doesn't break the download if tracking fails)
-      client.post('/analytics/log', { action: 'DOWNLOAD', details: asset.originalName }).catch(() => {});
+      // 🚨 THE FIX: Explicitly send `assetId` so the Locate button renders in the Analytics page!
+      client.post('/analytics/log', { 
+          action: 'DOWNLOAD', 
+          details: `Downloaded asset: ${asset.originalName}`,
+          assetId: asset.id 
+      }).catch(() => {});
 
       toast.info('Downloading...');
       const response = await fetch(asset.path);
@@ -238,8 +242,26 @@ const AssetDetail = () => {
   };
 
   const handleShare = () => {
+    if (!asset) return;
     navigator.clipboard.writeText(window.location.href);
     toast.success("Link copied to clipboard!");
+    
+    // Optional: Log shares to Analytics
+    client.post('/analytics/log', { 
+        action: 'SHARE', 
+        details: `Copied link to clipboard`,
+        assetId: asset.id 
+    }).catch(() => {});
+  };
+
+  // ✅ NEW: Log when someone opens an external source link
+  const handleLinkClick = (link: string) => {
+    if (!asset) return;
+    client.post('/analytics/log', { 
+        action: 'OPEN_LINK', 
+        details: `Opened source link: ${link}`,
+        assetId: asset.id 
+    }).catch(() => {});
   };
 
   const handleDelete = async () => {
@@ -268,7 +290,6 @@ const AssetDetail = () => {
       }
   };
 
-  // ✅ NEW: Save Multiple Links
   const saveDriveLinks = async () => {
       if (!asset) return;
       setIsSavingLink(true);
@@ -400,19 +421,19 @@ const AssetDetail = () => {
                                       >
                                           <div className="h-8 w-8 rounded bg-gray-200 dark:bg-white/10 overflow-hidden shrink-0">
                                               {result.mimeType.startsWith('image') ? (
-                                                    <img src={result.thumbnailPath || result.path} className="w-full h-full object-cover" />
-                                               ) : (
-                                                    <div className="w-full h-full flex items-center justify-center text-gray-500">
-                                                        {result.mimeType.startsWith('video') ? <Video size={14} /> : <FileText size={14} />}
-                                                    </div>
-                                                )}
+                                                  <img src={result.thumbnailPath || result.path} className="w-full h-full object-cover" />
+                                              ) : (
+                                                  <div className="w-full h-full flex items-center justify-center text-gray-500">
+                                                      {result.mimeType.startsWith('video') ? <Video size={14} /> : <FileText size={14} />}
+                                                  </div>
+                                              )}
                                           </div>
                                           <div className="min-w-0">
                                               <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{result.originalName}</p>
                                               <p className="text-[10px] text-gray-500 uppercase">{result.mimeType.split('/')[1]}</p>
                                           </div>
                                       </button>
-                                   ))}
+                                  ))}
                                   <div className="border-t border-gray-100 dark:border-white/5 mt-1 pt-1">
                                       <button 
                                           onClick={() => navigate(`/library?search=${encodeURIComponent(searchQuery)}`)}
@@ -646,6 +667,7 @@ const AssetDetail = () => {
                                           href={link} 
                                           target="_blank" 
                                           rel="noreferrer" 
+                                          onClick={() => handleLinkClick(link)} // 🚨 TRACKS THE LINK CLICK HERE
                                           className="flex items-center gap-2 w-full bg-white dark:bg-[#1A1D21] border border-gray-200 dark:border-white/10 hover:border-blue-400 dark:hover:border-blue-500 text-gray-700 dark:text-gray-200 font-semibold py-2.5 px-3 rounded-xl shadow-sm transition-all hover:shadow-md group text-sm truncate"
                                       >
                                           <LinkIcon size={14} className="text-blue-500 group-hover:rotate-45 transition-transform shrink-0" />
@@ -670,7 +692,7 @@ const AssetDetail = () => {
                   {/* 5. TAGS (Collapsible) */}
                   <div>
                       <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tags</h3>
+                          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-0">Tags</h3>
                           {canManageAsset && !isAddingTag && (
                               <button onClick={() => setIsAddingTag(true)} className="text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-white/5 p-1 rounded transition-colors">
                                   <Plus size={14} />

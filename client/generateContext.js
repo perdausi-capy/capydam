@@ -1,35 +1,32 @@
-/// <reference types="node" />
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-// 1. CONFIGURATION
-// Assuming this is in server/src/scripts/generateContext.ts
-const ROOT_DIR = path.resolve(__dirname, '../..'); // Points to 'server/'
-const OUTPUT_FILE = path.join(ROOT_DIR, 'full_codebase_context.txt');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Folders/Files to IGNORE (Noise)
+const ROOT_DIR = __dirname;
+const OUTPUT_FILE = path.join(ROOT_DIR, 'client_codebase_context.txt');
+
 const IGNORE_PATTERNS = [
   'node_modules', 
   '.git', 
   'dist', 
-  'coverage', 
+  'build',
   'package-lock.json', 
   'yarn.lock',
   '.env',
-  'migration_errors.log',
-  'uploads',
-  'README.md',
-  'full_codebase_context.txt' // ✅ PREVENTS SCRIPT FROM READING ITS OWN OUTPUT
+  'public',
+  'client_codebase_context.txt' 
 ];
 
-// File extensions we actually care about
-const INCLUDE_EXTENSIONS = ['.ts', '.js', '.prisma', '.json', '.sql'];
+const INCLUDE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.json', '.css'];
 
-function shouldIgnore(entryName: string): boolean {
+function shouldIgnore(entryName) {
   return IGNORE_PATTERNS.some(pattern => entryName.includes(pattern));
 }
 
-function scanDirectory(dir: string, fileList: string[] = []) {
+function scanDirectory(dir, fileList = []) {
   const entries = fs.readdirSync(dir);
 
   for (const entry of entries) {
@@ -53,17 +50,15 @@ function scanDirectory(dir: string, fileList: string[] = []) {
 }
 
 function generateContext() {
-  console.log(`🚀 Scanning codebase at: ${ROOT_DIR}...`);
+  console.log(`🚀 Scanning frontend codebase at: ${ROOT_DIR}...`);
   
   const files = scanDirectory(ROOT_DIR);
-  let content = `PROJECT CODEBASE CONTEXT\nGenerated on: ${new Date().toISOString()}\n\n`;
+  let content = `CLIENT CODEBASE CONTEXT\nGenerated on: ${new Date().toISOString()}\n\n`;
 
-  // 1. Add Directory Structure (Tree) first
   content += `=== FILE STRUCTURE ===\n`;
   files.forEach(f => content += `- ${path.relative(ROOT_DIR, f)}\n`);
   content += `\n======================\n\n`;
 
-  // 2. Add File Contents
   let fileCount = 0;
   for (const file of files) {
     try {
@@ -76,7 +71,7 @@ function generateContext() {
       content += fileContent;
       
       fileCount++;
-      process.stdout.write('.'); // Progress dot
+      process.stdout.write('.');
     } catch (e) {
       console.error(`\n❌ Error reading ${file}`);
     }
@@ -84,7 +79,6 @@ function generateContext() {
 
   fs.writeFileSync(OUTPUT_FILE, content);
   console.log(`\n\n✅ Done! Read ${fileCount} files.`);
-  console.log(`📄 Output saved to: ${OUTPUT_FILE}`);
 }
 
 generateContext();

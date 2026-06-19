@@ -3,35 +3,48 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// ✅ 1. Record an Anonymous or Logged-In Site Visit
+// ==========================================
+// 1. RECORD SITE VISIT
+// ==========================================
 export const recordSiteVisit = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || null;
     const userAgent = req.headers['user-agent'] || 'Unknown';
-    await prisma.siteVisit.create({ data: { userId, userAgent } });
+    
+    await prisma.siteVisit.create({ 
+      data: { userId, userAgent } 
+    });
+    
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false });
   }
 };
 
-// ✅ 2. The Master Log Catcher (Handles Logs & Counters)
+// ==========================================
+// 2. MASTER LOG CATCHER (Audit Trail & Counters)
+// ==========================================
 export const recordUserLog = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
     const { action, details, assetId, duration, metadata } = req.body;
-    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
     
     // Create the master audit log
     await prisma.userLog.create({
       data: { userId, action, details, assetId, duration, metadata }
     });
 
-    // SMART TRIGGER: Automatically increment Asset Counters!
-    if (assetId && action === 'DOWNLOAD') {
-      await prisma.asset.update({ where: { id: assetId }, data: { downloadCount: { increment: 1 } } });
-    } else if (assetId && action === 'VIEW_ASSET') {
-      await prisma.asset.update({ where: { id: assetId }, data: { viewCount: { increment: 1 } } });
+    // SMART TRIGGER: Automatically increment Asset Counters
+    if (assetId) {
+      if (action === 'DOWNLOAD') {
+        await prisma.asset.update({ where: { id: assetId }, data: { downloadCount: { increment: 1 } } });
+      } else if (action === 'VIEW_ASSET') {
+        await prisma.asset.update({ where: { id: assetId }, data: { viewCount: { increment: 1 } } });
+      }
     }
 
     res.json({ success: true });
@@ -41,10 +54,12 @@ export const recordUserLog = async (req: Request, res: Response) => {
   }
 };
 
-// ✅ 3. The Enterprise Command Center Aggregator
+// ==========================================
+// 3. ENTERPRISE COMMAND CENTER AGGREGATOR
+// ==========================================
 export const getSystemAnalytics = async (req: Request, res: Response) => {
   try {
-    // 1. Storage & Assets Breakdown
+    // --- A. Storage & Assets Breakdown ---
     const assets = await prisma.asset.findMany({ select: { size: true, mimeType: true } });
     const totalAssets = assets.length;
     const totalBytes = assets.reduce((sum, asset) => sum + (asset.size || 0), 0);
@@ -58,7 +73,7 @@ export const getSystemAnalytics = async (req: Request, res: Response) => {
     };
     breakdown.others = totalAssets - (breakdown.images + breakdown.videos + breakdown.audio + breakdown.docs);
 
-    // 2. Platform Members Data
+    // --- B. Platform Members Data ---
     const users = await prisma.user.findMany({ select: { role: true, id: true } });
     const userStats = {
       total: users.length,
@@ -67,12 +82,27 @@ export const getSystemAnalytics = async (req: Request, res: Response) => {
       viewers: users.filter(u => u.role.toLowerCase() === 'viewer').length,
     };
 
-    // 3. Platform Velocity & Traffic
     const totalVisits = await prisma.userLog.count({
         where: { action: { in: ['LOGIN', 'SITE_VISIT'] } }
     });
 
-    // 4. Live Audit Trail
+    // --- C. Lifetime Action Totals (For Top HUD) ---
+    const actionGroups = await prisma.userLog.groupBy({
+      by: ['action'],
+      _count: { action: true }
+    });
+    
+    const actionTotals = { UPLOAD: 0, DOWNLOAD: 0, EDIT: 0, DELETE: 0, OPEN_LINK: 0 };
+    actionGroups.forEach(group => {
+       const act = group.action.toUpperCase();
+       if (act.includes('UPLOAD')) actionTotals.UPLOAD += group._count.action;
+       else if (act.includes('DOWNLOAD')) actionTotals.DOWNLOAD += group._count.action;
+       else if (act.includes('DELETE') || act.includes('REMOVE')) actionTotals.DELETE += group._count.action;
+       else if (act.includes('EDIT') || act.includes('UPDATE') || act.includes('RENAME')) actionTotals.EDIT += group._count.action;
+       else if (act.includes('OPEN_LINK')) actionTotals.OPEN_LINK += group._count.action;
+    });
+
+    // --- D. Live Audit Trail & Recent Activity ---
     const recentUserLogs = await prisma.userLog.findMany({
       take: 50,
       orderBy: { createdAt: 'desc' },
@@ -82,14 +112,12 @@ export const getSystemAnalytics = async (req: Request, res: Response) => {
       }
     });
 
-    // 5. Leaderboard
     const topUploaders = await prisma.user.findMany({
       take: 5,
       orderBy: { assets: { _count: 'desc' } },
       select: { id: true, name: true, avatar: true, _count: { select: { assets: true } } }
     });
 
-    // 6. Recent Upload Activity
     const recentUploads = await prisma.asset.findMany({
       take: 10,
       orderBy: { createdAt: 'desc' },
@@ -104,7 +132,7 @@ export const getSystemAnalytics = async (req: Request, res: Response) => {
         uploadedBy: { name: a.uploadedBy?.name || 'Unknown' } 
     }));
 
-    // 7. SMART ENGINE
+    // --- E. Smart Engine (User Roster & Engagement) ---
     const rawUsers = await prisma.user.findMany({
       select: {
           id: true, name: true, email: true, avatar: true, role: true, createdAt: true,
@@ -125,64 +153,86 @@ export const getSystemAnalytics = async (req: Request, res: Response) => {
       lastActive: u.userLogs[0]?.createdAt ? u.userLogs[0].createdAt.toISOString() : null
     }));
 
-    // 8. 🚀 UPGRADED PLATFORM VELOCITY (Weekly, Monthly, Yearly)
+    // --- F. Platform Velocity (Charts Tracking) ---
     const now = new Date();
-    
     const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(now.getDate() - 6); sevenDaysAgo.setHours(0,0,0,0);
     const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(now.getDate() - 29); thirtyDaysAgo.setHours(0,0,0,0);
     const oneYearAgo = new Date(); oneYearAgo.setMonth(now.getMonth() - 11); oneYearAgo.setDate(1); oneYearAgo.setHours(0,0,0,0);
 
-    // Fetch a single bulk log for the last year to save database load
+    // Fetch bulk logs (Includes OPEN_LINK now)
     const velocityLogs = await prisma.userLog.findMany({
       where: {
         createdAt: { gte: oneYearAgo },
-        action: { in: ['UPLOAD', 'DOWNLOAD'] }
+        action: { in: ['UPLOAD', 'DOWNLOAD', 'OPEN_LINK'] }
       },
       select: { action: true, createdAt: true }
     });
 
-    // Generate Blank Maps for perfectly scaled charts
+    // Generate Blank Maps (Includes links: 0)
     const weeklyMap = new Map();
     for (let i = 6; i >= 0; i--) {
       const d = new Date(); d.setDate(d.getDate() - i);
-      weeklyMap.set(d.toLocaleDateString('en-US', { weekday: 'short' }), { name: d.toLocaleDateString('en-US', { weekday: 'short' }), uploads: 0, downloads: 0 });
+      const label = d.toLocaleDateString('en-US', { weekday: 'short' });
+      weeklyMap.set(label, { name: label, uploads: 0, downloads: 0, links: 0 });
     }
 
     const monthlyMap = new Map();
     for (let i = 29; i >= 0; i--) {
       const d = new Date(); d.setDate(d.getDate() - i);
       const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      monthlyMap.set(label, { name: label, uploads: 0, downloads: 0 });
+      monthlyMap.set(label, { name: label, uploads: 0, downloads: 0, links: 0 });
     }
 
     const yearlyMap = new Map();
     for (let i = 11; i >= 0; i--) {
       const d = new Date(); d.setMonth(d.getMonth() - i);
       const label = d.toLocaleDateString('en-US', { month: 'short' });
-      yearlyMap.set(label, { name: label, uploads: 0, downloads: 0 });
+       yearlyMap.set(label, { name: label, uploads: 0, downloads: 0, links: 0 });
     }
 
-    // Populate the maps in a single fast loop
+    // Populate Maps
     velocityLogs.forEach(log => {
       const d = new Date(log.createdAt);
+      const isUpload = log.action === 'UPLOAD';
+      const isDownload = log.action === 'DOWNLOAD';
+      const isLink = log.action === 'OPEN_LINK';
       
+      // Weekly Processing
       if (d >= sevenDaysAgo) {
         const wLabel = d.toLocaleDateString('en-US', { weekday: 'short' });
-        if (weeklyMap.has(wLabel)) { log.action === 'UPLOAD' ? weeklyMap.get(wLabel).uploads++ : weeklyMap.get(wLabel).downloads++; }
+        if (weeklyMap.has(wLabel)) { 
+            if (isUpload) weeklyMap.get(wLabel).uploads++;
+            else if (isDownload) weeklyMap.get(wLabel).downloads++;
+            else if (isLink) weeklyMap.get(wLabel).links++;
+        }
       }
+      
+      // Monthly Processing
       if (d >= thirtyDaysAgo) {
         const mLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        if (monthlyMap.has(mLabel)) { log.action === 'UPLOAD' ? monthlyMap.get(mLabel).uploads++ : monthlyMap.get(mLabel).downloads++; }
+        if (monthlyMap.has(mLabel)) { 
+            if (isUpload) monthlyMap.get(mLabel).uploads++;
+            else if (isDownload) monthlyMap.get(mLabel).downloads++;
+            else if (isLink) monthlyMap.get(mLabel).links++;
+        }
       }
+      
+      // Yearly Processing
       const yLabel = d.toLocaleDateString('en-US', { month: 'short' });
-      if (yearlyMap.has(yLabel)) { log.action === 'UPLOAD' ? yearlyMap.get(yLabel).uploads++ : yearlyMap.get(yLabel).downloads++; }
+      if (yearlyMap.has(yLabel)) { 
+          if (isUpload) yearlyMap.get(yLabel).uploads++;
+          else if (isDownload) yearlyMap.get(yLabel).downloads++;
+          else if (isLink) yearlyMap.get(yLabel).links++;
+      }
     });
 
+    // --- G. Final JSON Assembly ---
     res.json({
       storage: { totalBytes, totalAssets },
       breakdown,
       users: userStats,
       visits: { total: totalVisits },
+      actionTotals,
       recentUserLogs,
       topUploaders,
       recentActivity: formattedRecentActivity, 
@@ -200,7 +250,9 @@ export const getSystemAnalytics = async (req: Request, res: Response) => {
   }
 };
 
-// ✅ 4. Fetch ALL actions for a specific user
+// ==========================================
+// 4. FETCH USER-SPECIFIC LOGS
+// ==========================================
 export const getUserAuditLogs = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;

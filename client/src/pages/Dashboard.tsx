@@ -385,8 +385,13 @@ const Dashboard = () => {
   const handleDownload = useCallback(async (e: React.MouseEvent, asset: Asset) => {
     e.preventDefault(); e.stopPropagation();
     try {
-    // ✅ NEW: Log the download
-    client.post('/analytics/log', { action: 'DOWNLOAD', details: asset.originalName }).catch(() => {});
+    // 🚨 THE FIX: Added `assetId` to the analytics payload!
+    client.post('/analytics/log', { 
+        action: 'DOWNLOAD', 
+        details: `Downloaded asset: ${asset.originalName}`,
+        assetId: asset.id // <-- This allows the "Locate" button to appear!
+    }).catch(() => {});
+    
       toast.info('Downloading...', { autoClose: 1000 });
       const response = await fetch(asset.path);
       const blob = await response.blob();
