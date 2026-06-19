@@ -629,7 +629,7 @@ const AdminAnalytics = () => {
                                      <span className="bg-white/5 text-gray-400 px-2 py-0.5 rounded text-xs">{frequentUsers.length}</span>
                                    </h3>
                                    <div className="space-y-2">
-                                      {frequentUsers.map((u, i) => (
+                                      {frequentUsers.map((u, _i) => (
                                          <div 
                                             key={u.id} 
                                             onClick={() => setSelectedUser(u)}
