@@ -60,7 +60,7 @@ const ITTInventory = () => {
         serialNumber: '',
         type: inventoryCategories[0].id,
         purchaseDate: '',
-        status: 'Active',
+        status: 'Available',
         notes: ''
     });
 
@@ -138,7 +138,7 @@ const ITTInventory = () => {
                 serialNumber: '',
                 type: selectedCategory,
                 purchaseDate: '',
-                status: 'Active',
+                status: 'Available',
                 notes: ''
             });
         }
@@ -170,17 +170,13 @@ const ITTInventory = () => {
                     return a.serialNumber.localeCompare(b.serialNumber);
                 case 'serial-desc':
                     return b.serialNumber.localeCompare(a.serialNumber);
-                case 'status-active': {
-                    const order: Record<string, number> = { 'active': 1, 'available': 2, 'defective': 3 };
-                    return (order[a.status.toLowerCase()] || 4) - (order[b.status.toLowerCase()] || 4);
-                }
                 case 'status-available': {
-                    const order: Record<string, number> = { 'available': 1, 'active': 2, 'defective': 3 };
-                    return (order[a.status.toLowerCase()] || 4) - (order[b.status.toLowerCase()] || 4);
+                    const order: Record<string, number> = { 'available': 1, 'defective': 2 };
+                    return (order[a.status.toLowerCase()] || 3) - (order[b.status.toLowerCase()] || 3);
                 }
                 case 'status-defective': {
-                    const order: Record<string, number> = { 'defective': 1, 'available': 2, 'active': 3 };
-                    return (order[a.status.toLowerCase()] || 4) - (order[b.status.toLowerCase()] || 4);
+                    const order: Record<string, number> = { 'defective': 1, 'available': 2 };
+                    return (order[a.status.toLowerCase()] || 3) - (order[b.status.toLowerCase()] || 3);
                 }
                 case 'date-desc':
                     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -215,7 +211,6 @@ const ITTInventory = () => {
 
     const getStatusColor = (status: string) => {
         switch (status.toLowerCase()) {
-            case 'active': return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400';
             case 'available': return 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400';
             case 'defective': return 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400';
             case 'custom': return 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400';
@@ -294,7 +289,6 @@ const ITTInventory = () => {
                                 { value: 'name-desc', label: 'Name (Z-A)' },
                                 { value: 'serial-asc', label: 'Serial (A-Z)' },
                                 { value: 'serial-desc', label: 'Serial (Z-A)' },
-                                { value: 'status-active', label: 'Status (Active First)' },
                                 { value: 'status-available', label: 'Status (Available First)' },
                                 { value: 'status-defective', label: 'Status (Defective First)' },
                                 { value: 'date-desc', label: 'Newest Added' },
@@ -566,7 +560,6 @@ const ITTInventory = () => {
                                             value={formData.status}
                                             onChange={val => setFormData({ ...formData, status: val })}
                                             options={[
-                                                { value: "Active", label: "Active" },
                                                 { value: "Available", label: "Available" },
                                                 { value: "Defective", label: "Defective" }
                                             ]}

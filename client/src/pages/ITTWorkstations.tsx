@@ -503,7 +503,7 @@ const ITTWorkstations = () => {
                     snMatches.forEach(m => {
                         const sn = m[1].trim();
                         // "Active" or "Available" items need to be deployed
-                        const invItem = stock.find(i => i.serialNumber === sn && (i.status === 'Active' || i.status === 'Available'));
+                        const invItem = stock.find(i => i.serialNumber === sn && i.status === 'Available');
                         if (invItem) deployedItemIdsSet.add(invItem.id);
                     });
                 }
@@ -1078,7 +1078,7 @@ const ITTWorkstations = () => {
 
                                     // Active or Available items of this type that aren't selected elsewhere in the form
                                     const availableStock = stock.filter(
-                                        s => s.type === invType && (s.status === 'Active' || s.status === 'Available') && !usedSns.includes(s.serialNumber)
+                                        s => s.type === invType && s.status === 'Available' && !usedSns.includes(s.serialNumber)
                                     );
 
                                     // Currently-selected item (if any) via matching formData[key] to a stock SN
@@ -1160,7 +1160,7 @@ const ITTWorkstations = () => {
                                             .filter(Boolean) as string[];
 
                                         const availableStorageStock = stock.filter(
-                                            s => s.type === 'STORAGE' && (s.status === 'Active' || s.status === 'Available') && !selectedStorageSns.includes(s.serialNumber)
+                                            s => s.type === 'STORAGE' && s.status === 'Available' && !selectedStorageSns.includes(s.serialNumber)
                                         );
 
                                         const currentSn = val.match(/\(SN:\s*(.+?)\)/)?.[1]?.trim();
@@ -1217,7 +1217,7 @@ const ITTWorkstations = () => {
                                         );
                                     })}
 
-                                    {stock.filter(s => s.type === 'STORAGE' && s.status === 'Active').length === 0 && (
+                                    {stock.filter(s => s.type === 'STORAGE' && s.status === 'Available').length === 0 && (
                                         <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
                                             <AlertCircle size={10} /> Add Storage items to inventory first
                                         </p>
@@ -1247,7 +1247,7 @@ const ITTWorkstations = () => {
                                             .filter(Boolean) as string[];
 
                                         const availableRamStock = stock.filter(
-                                            s => s.type === 'RAM' && (s.status === 'Active' || s.status === 'Available') && !selectedRamSns.includes(s.serialNumber)
+                                            s => s.type === 'RAM' && s.status === 'Available' && !selectedRamSns.includes(s.serialNumber)
                                         );
 
                                         const currentSn = val.match(/\(SN:\s*(.+?)\)/)?.[1]?.trim();
@@ -1304,7 +1304,7 @@ const ITTWorkstations = () => {
                                         );
                                     })}
 
-                                    {stock.filter(s => s.type === 'RAM' && s.status === 'Active').length === 0 && (
+                                    {stock.filter(s => s.type === 'RAM' && s.status === 'Available').length === 0 && (
                                         <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
                                             <AlertCircle size={10} /> Add RAM items to inventory first
                                         </p>
@@ -1334,7 +1334,7 @@ const ITTWorkstations = () => {
                                             .filter(Boolean) as string[];
 
                                         const availableMonitorStock = stock.filter(
-                                            s => s.type === 'MONITOR' && (s.status === 'Active' || s.status === 'Available') && !selectedMonitorSns.includes(s.serialNumber)
+                                            s => s.type === 'MONITOR' && s.status === 'Available' && !selectedMonitorSns.includes(s.serialNumber)
                                         );
 
                                         const currentSn = val.match(/\(SN:\s*(.+?)\)/)?.[1]?.trim();
@@ -1391,7 +1391,7 @@ const ITTWorkstations = () => {
                                         );
                                     })}
 
-                                    {stock.filter(s => s.type === 'MONITOR' && s.status === 'Active').length === 0 && (
+                                    {stock.filter(s => s.type === 'MONITOR' && s.status === 'Available').length === 0 && (
                                         <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
                                             <AlertCircle size={10} /> Add Monitor items to inventory first
                                         </p>

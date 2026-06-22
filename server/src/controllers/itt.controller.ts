@@ -87,8 +87,8 @@ export const updateWorkstation = async (req: Request, res: Response) => {
         for (const item of itemsToRelease) {
           await tx.ittInventory.update({
             where: { id: item.id },
-            // If the part was Defective, keep it Defective. Otherwise return to Active.
-            data: { workstationId: null, status: item.status === 'Defective' ? 'Defective' : 'Active' },
+            // If the part was Defective, keep it Defective. Otherwise return to Available.
+            data: { workstationId: null, status: item.status === 'Defective' ? 'Defective' : 'Available' },
           });
         }
       }
@@ -142,7 +142,7 @@ export const deleteWorkstation = async (req: Request, res: Response) => {
         // Find and free any inventory items assigned to this workstation
         await tx.ittInventory.updateMany({
           where: { workstationId: id },
-          data: { status: 'Active', workstationId: null }
+          data: { status: 'Available', workstationId: null }
         });
       }
 
@@ -499,7 +499,7 @@ export const createInventoryItem = async (req: Request, res: Response) => {
         serialNumber,
         type,
         purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
-        status: status || 'Active',
+        status: status || 'Available',
         notes: notes || null
       },
     });
