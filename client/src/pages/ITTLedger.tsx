@@ -133,15 +133,15 @@ const ITTLedger = () => {
                 ) : filteredLedgers.length === 0 ? (
                     <div className="p-12 text-center text-gray-500 font-mono">No records match your criteria.</div>
                 ) : (
-                    <table className="w-full text-left text-sm border-collapse font-sans">
+                    <table className="w-full text-left text-sm border-collapse font-sans min-w-[1000px]">
                         <thead className="bg-gray-200 dark:bg-[#1A1D21] border-b-2 border-gray-800 dark:border-gray-500 text-xs uppercase font-black text-gray-800 dark:text-gray-300 tracking-widest">
                             <tr>
-                                <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 w-32">Date Logged</th>
-                                <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 w-40">Unit ID</th>
-                                <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600">Issue Description</th>
-                                <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600">Resolution / Action</th>
-                                <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 w-32">Status</th>
-                                <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 w-40">Technician</th>
+                                <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 w-32 whitespace-nowrap">Date Logged</th>
+                                <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 w-48 whitespace-nowrap">Unit ID</th>
+                                <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 min-w-[250px] w-1/3">Issue Description</th>
+                                <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 min-w-[250px] w-1/3">Resolution / Action</th>
+                                <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 w-32 whitespace-nowrap">Status</th>
+                                <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 w-40 whitespace-nowrap">Technician</th>
                                 <th className="px-4 py-3 text-center w-24">Cmds</th>
                             </tr>
                         </thead>
@@ -157,8 +157,11 @@ const ITTLedger = () => {
                                     </td>
                                     
                                     {/* Unit ID */}
-                                    <td className="px-4 py-3 border-r border-gray-300 dark:border-gray-700 font-bold text-gray-900 dark:text-white font-mono flex items-center gap-2 h-full">
-                                        <MonitorIcon size={14} className="text-gray-400" /> {log.workstation?.unitId || 'N/A'}
+                                    <td className="px-4 py-3 border-r border-gray-300 dark:border-gray-700 font-bold text-gray-900 dark:text-white font-mono whitespace-nowrap">
+                                        <div className="flex items-center gap-2">
+                                            <MonitorIcon size={14} className="text-gray-400 shrink-0" /> 
+                                            <span>{log.workstation?.unitId || 'N/A'}</span>
+                                        </div>
                                     </td>
                                     
                                     {/* Issue */}
