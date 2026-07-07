@@ -11,7 +11,7 @@ import {
     Monitor as MonitorIcon, Zap, Plus, Search, Package,
     Edit2, Trash2, Calendar, FileText, Hash, X, Tag, AlertCircle,
     Camera, Headphones, Keyboard, Cable, Plug, Wifi,
-    BarChart2, ListFilter
+    BarChart2, ListFilter, Wand2
 } from 'lucide-react';
 
 // --- TYPES ---
@@ -514,7 +514,19 @@ const ITTInventory = () => {
                                     </div>
 
                                     <div className="col-span-2 sm:col-span-1">
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Serial Number <span className="text-red-500">*</span></label>
+                                        <div className="flex justify-between items-end mb-1">
+                                            <label className="block text-xs font-bold text-gray-500 uppercase">Serial Number <span className="text-red-500">*</span></label>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const prefix = formData.type || 'INV';
+                                                    setFormData({ ...formData, serialNumber: `${prefix}-${Math.random().toString(36).substring(2, 8).toUpperCase()}` });
+                                                }}
+                                                className="text-[10px] flex items-center gap-1 text-blue-500 hover:text-blue-600 font-semibold transition-colors"
+                                            >
+                                                <Wand2 size={10} /> Auto-Generate
+                                            </button>
+                                        </div>
                                         <div className="relative">
                                             <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                                             <input
