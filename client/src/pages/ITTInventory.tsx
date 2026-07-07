@@ -432,9 +432,9 @@ const ITTInventory = () => {
                                             </td>
                                             <td className="px-6 py-4 text-gray-600 dark:text-gray-400">
                                                 {item.workstation ? (
-                                                    <div className="flex items-center gap-2 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-lg border border-indigo-100 dark:border-indigo-800/50 w-fit font-bold">
-                                                        <MonitorIcon size={12} />
-                                                        <span className="text-xs">{item.workstation.unitId}</span>
+                                                    <div className="flex items-center gap-2 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-lg border border-indigo-100 dark:border-indigo-800/50 w-48 font-bold" title={item.workstation.unitId}>
+                                                        <MonitorIcon size={12} className="shrink-0" />
+                                                        <span className="text-xs truncate">{item.workstation.unitId}</span>
                                                     </div>
                                                 ) : (
                                                     <span className="text-[10px] text-gray-400 uppercase font-bold italic">In Storage</span>
