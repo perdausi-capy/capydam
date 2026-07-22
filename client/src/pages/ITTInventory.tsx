@@ -164,12 +164,6 @@ const ITTInventory = () => {
             switch (sortFilter) {
                 case 'name-asc':
                     return a.itemName.localeCompare(b.itemName);
-                case 'name-desc':
-                    return b.itemName.localeCompare(a.itemName);
-                case 'serial-asc':
-                    return a.serialNumber.localeCompare(b.serialNumber);
-                case 'serial-desc':
-                    return b.serialNumber.localeCompare(a.serialNumber);
                 case 'status-available': {
                     const order: Record<string, number> = { 'available': 1, 'defective': 2 };
                     return (order[a.status.toLowerCase()] || 3) - (order[b.status.toLowerCase()] || 3);
@@ -286,9 +280,6 @@ const ITTInventory = () => {
                             onChange={(val) => setSortFilter(val)}
                             options={[
                                 { value: 'name-asc', label: 'Name (A-Z)' },
-                                { value: 'name-desc', label: 'Name (Z-A)' },
-                                { value: 'serial-asc', label: 'Serial (A-Z)' },
-                                { value: 'serial-desc', label: 'Serial (Z-A)' },
                                 { value: 'status-available', label: 'Status (Available First)' },
                                 { value: 'status-defective', label: 'Status (Defective First)' },
                                 { value: 'date-desc', label: 'Newest Added' },
