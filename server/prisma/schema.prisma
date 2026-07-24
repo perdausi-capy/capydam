@@ -349,8 +349,10 @@ model Monitor {
 
 model MaintenanceLedger {
   id            String      @id @default(uuid())
-  workstationId String
-  workstation   Workstation @relation(fields: [workstationId], references: [id], onDelete: Cascade)
+  workstationId String?
+  workstation   Workstation? @relation(fields: [workstationId], references: [id], onDelete: Cascade)
+  otherHardware String?
+
   
   issue         String
   actionTaken   String?

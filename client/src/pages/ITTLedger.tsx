@@ -9,7 +9,8 @@ interface User { id: string; name: string; }
 
 interface Ledger {
     id: string;
-    workstation: Workstation;
+    workstation: Workstation | null;
+    otherHardware?: string;
     issue: string;
     actionTaken: string;
     status: string;
@@ -27,7 +28,7 @@ const ITTLedger = () => {
     const [searchTerm, setSearchTerm] = useState('');
 
     const [formData, setFormData] = useState({
-        workstationId: '', issue: '', actionTaken: '', status: 'open'
+        targetType: 'workstation', workstationId: '', otherHardware: '', issue: '', actionTaken: '', status: 'open'
     });
 
     const fetchData = async () => {
@@ -49,17 +50,35 @@ const ITTLedger = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.workstationId || !formData.issue) {
-            toast.warning("Workstation and Issue are required");
+        
+        const isWorkstation = formData.targetType === 'workstation';
+        if (isWorkstation && !formData.workstationId) {
+            toast.warning("Workstation selection is required");
+            return;
+        }
+        if (!isWorkstation && !formData.otherHardware) {
+            toast.warning("Other Hardware name is required");
+            return;
+        }
+        if (!formData.issue) {
+            toast.warning("Issue description is required");
             return;
         }
 
+        const submitData = {
+            workstationId: isWorkstation ? formData.workstationId : null,
+            otherHardware: !isWorkstation ? formData.otherHardware : null,
+            issue: formData.issue,
+            actionTaken: formData.actionTaken,
+            status: formData.status
+        };
+
         try {
             if (editingId) {
-                await client.put(`/itt/ledgers/${editingId}`, formData);
+                await client.put(`/itt/ledgers/${editingId}`, submitData);
                 toast.success('Ledger entry updated');
             } else {
-                await client.post('/itt/ledgers', formData);
+                await client.post('/itt/ledgers', submitData);
                 toast.success('New ledger entry created');
             }
             setIsModalOpen(false);
@@ -87,14 +106,16 @@ const ITTLedger = () => {
         if (log) {
             setEditingId(log.id);
             setFormData({
-                workstationId: log.workstation.id,
+                targetType: log.workstation ? 'workstation' : 'other',
+                workstationId: log.workstation?.id || '',
+                otherHardware: log.otherHardware || '',
                 issue: log.issue,
                 actionTaken: log.actionTaken || '',
                 status: log.status
             });
         } else {
             setEditingId(null);
-            setFormData({ workstationId: '', issue: '', actionTaken: '', status: 'open' });
+            setFormData({ targetType: 'workstation', workstationId: '', otherHardware: '', issue: '', actionTaken: '', status: 'open' });
         }
         setIsModalOpen(true);
     };
@@ -102,6 +123,7 @@ const ITTLedger = () => {
     // Filter ledgers based on search
     const filteredLedgers = ledgers.filter(log => 
         log.workstation?.unitId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        log.otherHardware?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         log.issue.toLowerCase().includes(searchTerm.toLowerCase()) ||
         log.assignedTech?.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -160,7 +182,7 @@ const ITTLedger = () => {
                                     <td className="px-4 py-3 border-r border-gray-300 dark:border-gray-700 font-bold text-gray-900 dark:text-white font-mono whitespace-nowrap">
                                         <div className="flex items-center gap-2">
                                             <MonitorIcon size={14} className="text-gray-400 shrink-0" /> 
-                                            <span>{log.workstation?.unitId || 'N/A'}</span>
+                                            <span>{log.workstation?.unitId || log.otherHardware || 'N/A'}</span>
                                         </div>
                                     </td>
                                     
@@ -223,14 +245,31 @@ const ITTLedger = () => {
                         <form onSubmit={handleSubmit} className="p-6 space-y-5">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Target Workstation</label>
-                                    <select required value={formData.workstationId} onChange={e => setFormData({ ...formData, workstationId: e.target.value })} className="select-glass">
-                                        <option value="">-- Select Unit ID --</option>
-                                        {workstations.map(ws => (
-                                            <option key={ws.id} value={ws.id}>{ws.unitId}</option>
-                                        ))}
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Target Type</label>
+                                    <select value={formData.targetType} onChange={e => setFormData({ ...formData, targetType: e.target.value })} className="select-glass">
+                                        <option value="workstation">Workstation</option>
+                                        <option value="other">Other Hardware</option>
                                     </select>
                                 </div>
+                                {formData.targetType === 'workstation' ? (
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Target Workstation</label>
+                                        <select required value={formData.workstationId} onChange={e => setFormData({ ...formData, workstationId: e.target.value })} className="select-glass">
+                                            <option value="">-- Select Unit ID --</option>
+                                            {workstations.map(ws => (
+                                                <option key={ws.id} value={ws.id}>{ws.unitId}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Hardware Name</label>
+                                        <input type="text" required value={formData.otherHardware} onChange={e => setFormData({ ...formData, otherHardware: e.target.value })} className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none text-sm text-gray-900 dark:text-white font-mono" placeholder="e.g. CCTV 1, Router, etc." />
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="grid grid-cols-1 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Current Status</label>
                                     <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} className="select-glass">

@@ -179,17 +179,20 @@ export const getLedgers = async (req: Request, res: Response) => {
 
 export const createLedger = async (req: Request, res: Response) => {
   try {
-    const { workstationId, issue, actionTaken, status, assignedTechId } = req.body;
+    const { workstationId, otherHardware, issue, actionTaken, status, assignedTechId } = req.body;
 
-    // Ensure workstation exists
-    const ws = await prisma.workstation.findUnique({ where: { id: workstationId } });
-    if (!ws) {
-      return res.status(404).json({ error: 'Workstation not found' });
+    // Ensure workstation exists if provided
+    if (workstationId) {
+      const ws = await prisma.workstation.findUnique({ where: { id: workstationId } });
+      if (!ws) {
+        return res.status(404).json({ error: 'Workstation not found' });
+      }
     }
 
     const ledger = await prisma.maintenanceLedger.create({
       data: {
-        workstationId,
+        workstationId: workstationId || null,
+        otherHardware: otherHardware || null,
         issue,
         actionTaken,
         status: status || 'open',
@@ -210,12 +213,13 @@ export const createLedger = async (req: Request, res: Response) => {
 export const updateLedger = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { workstationId, issue, actionTaken, status, assignedTechId } = req.body;
+    const { workstationId, otherHardware, issue, actionTaken, status, assignedTechId } = req.body;
 
     const ledger = await prisma.maintenanceLedger.update({
       where: { id },
       data: {
-        workstationId,
+        workstationId: workstationId || null,
+        otherHardware: otherHardware || null,
         issue,
         actionTaken,
         status,
