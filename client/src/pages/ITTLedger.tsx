@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import client from '../api/client';
 import { toast } from 'react-toastify';
-import { Plus, Edit2, Trash2, Monitor as MonitorIcon, Search, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Monitor as MonitorIcon, Search, X, Eye } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface Workstation { id: string; unitId: string; }
@@ -26,6 +26,8 @@ const ITTLedger = () => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [viewingLog, setViewingLog] = useState<Ledger | null>(null);
 
     const [formData, setFormData] = useState({
         targetType: 'workstation', workstationId: '', otherHardware: '', issue: '', actionTaken: '', status: 'open'
@@ -120,28 +122,44 @@ const ITTLedger = () => {
         setIsModalOpen(true);
     };
 
-    // Filter ledgers based on search
-    const filteredLedgers = ledgers.filter(log => 
-        log.workstation?.unitId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.otherHardware?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.issue.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.assignedTech?.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Filter ledgers based on search and status
+    const filteredLedgers = ledgers.filter(log => {
+        const matchesSearch = log.workstation?.unitId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            log.otherHardware?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            log.issue.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            log.assignedTech?.name.toLowerCase().includes(searchTerm.toLowerCase());
+            
+        const matchesStatus = statusFilter === 'all' || log.status === statusFilter;
+        
+        return matchesSearch && matchesStatus;
+    });
 
     return (
         <div className="space-y-6">
             
             {/* ACTION BAR */}
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white dark:bg-[#121418] p-4 rounded-xl border border-gray-300 dark:border-gray-700 shadow-sm">
-                <div className="relative w-full sm:max-w-md">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input 
-                        type="text" 
-                        placeholder="Search ledger entries..." 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-[#1A1D21] border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm text-gray-900 dark:text-white font-mono"
-                    />
+                <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-4">
+                    <div className="relative w-full sm:w-64">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        <input 
+                            type="text" 
+                            placeholder="Search ledger entries..." 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-[#1A1D21] border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm text-gray-900 dark:text-white font-mono"
+                        />
+                    </div>
+                    <select 
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="w-full sm:w-40 px-4 py-2 bg-gray-50 dark:bg-[#1A1D21] border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm text-gray-900 dark:text-white font-bold"
+                    >
+                        <option value="all">All Statuses</option>
+                        <option value="open">Open</option>
+                        <option value="in-progress">In Progress</option>
+                        <option value="resolved">Resolved</option>
+                    </select>
                 </div>
                 <button onClick={() => openModal()} className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 dark:hover:bg-white text-white dark:text-gray-900 font-bold rounded-lg transition-colors shadow-sm uppercase tracking-wider text-xs">
                     <Plus size={16} strokeWidth={3} /> Append Entry
@@ -155,16 +173,16 @@ const ITTLedger = () => {
                 ) : filteredLedgers.length === 0 ? (
                     <div className="p-12 text-center text-gray-500 font-mono">No records match your criteria.</div>
                 ) : (
-                    <table className="w-full text-left text-sm border-collapse font-sans min-w-[1000px]">
+                    <table className="w-full text-left text-sm border-collapse font-sans min-w-[1000px] table-fixed">
                         <thead className="bg-gray-200 dark:bg-[#1A1D21] border-b-2 border-gray-800 dark:border-gray-500 text-xs uppercase font-black text-gray-800 dark:text-gray-300 tracking-widest">
                             <tr>
                                 <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 w-32 whitespace-nowrap">Date Logged</th>
                                 <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 w-48 whitespace-nowrap">Unit ID</th>
-                                <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 min-w-[250px] w-1/3">Issue Description</th>
-                                <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 min-w-[250px] w-1/3">Resolution / Action</th>
+                                <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 w-1/3">Issue Description</th>
+                                <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 w-1/3">Resolution / Action</th>
                                 <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 w-32 whitespace-nowrap">Status</th>
                                 <th className="px-4 py-3 border-r border-gray-300 dark:border-gray-600 w-40 whitespace-nowrap">Technician</th>
-                                <th className="px-4 py-3 text-center w-24">Cmds</th>
+                                <th className="px-4 py-3 text-center w-28">Cmds</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -188,12 +206,16 @@ const ITTLedger = () => {
                                     
                                     {/* Issue */}
                                     <td className="px-4 py-3 border-r border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-200">
-                                        {log.issue}
+                                        <div className="line-clamp-2 whitespace-normal break-words" title={log.issue}>
+                                            {log.issue}
+                                        </div>
                                     </td>
                                     
                                     {/* Action Taken */}
                                     <td className="px-4 py-3 border-r border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-xs italic">
-                                        {log.actionTaken || '-- Pending --'}
+                                        <div className="line-clamp-2 whitespace-normal break-words" title={log.actionTaken}>
+                                            {log.actionTaken || '-- Pending --'}
+                                        </div>
                                     </td>
                                     
                                     {/* Status */}
@@ -215,6 +237,7 @@ const ITTLedger = () => {
                                     {/* Actions */}
                                     <td className="px-4 py-3 text-center align-middle">
                                         <div className="flex gap-2 justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => setViewingLog(log)} className="p-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-500 hover:text-green-600 hover:border-green-400 rounded shadow-sm transition-colors" title="View Details"><Eye size={14} /></button>
                                             <button onClick={() => openModal(log)} className="p-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-500 hover:text-blue-600 hover:border-blue-400 rounded shadow-sm transition-colors" title="Edit Entry"><Edit2 size={14} /></button>
                                             <button onClick={() => setDeleteId(log.id)} className="p-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-500 hover:text-red-600 hover:border-red-400 rounded shadow-sm transition-colors" title="Strike Record"><Trash2 size={14} /></button>
                                         </div>
@@ -295,6 +318,63 @@ const ITTLedger = () => {
                                 <button type="submit" className="px-5 py-2.5 rounded-lg font-bold text-white bg-gray-900 dark:bg-blue-600 hover:bg-gray-800 dark:hover:bg-blue-500 transition-colors shadow-md text-sm">Save to Ledger</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* VIEW DETAILS MODAL */}
+            {viewingLog && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200 dark:border-white/10 flex flex-col max-h-[90vh]">
+                        <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-gray-50 dark:bg-black/20 shrink-0">
+                            <h2 className="text-lg font-black uppercase tracking-widest text-gray-900 dark:text-white flex items-center gap-2">
+                                <MonitorIcon size={18} className="text-blue-500" />
+                                {viewingLog.workstation?.unitId || viewingLog.otherHardware || 'Ledger Entry'}
+                            </h2>
+                            <button 
+                                onClick={() => setViewingLog(null)} 
+                                className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+                        
+                        <div className="p-6 overflow-y-auto space-y-6">
+                            <div className="flex flex-wrap gap-6">
+                                <div>
+                                    <span className="block text-xs font-bold text-gray-500 uppercase mb-1">Date Logged</span>
+                                    <div className="font-mono text-sm dark:text-gray-300">{new Date(viewingLog.createdAt).toISOString().split('T')[0]}</div>
+                                </div>
+                                <div>
+                                    <span className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</span>
+                                    <div className={`inline-flex items-center justify-center text-[10px] uppercase tracking-widest font-black px-2 py-1 rounded border ${
+                                        viewingLog.status === 'resolved' ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800' :
+                                        viewingLog.status === 'in-progress' ? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800' :
+                                        'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800'
+                                    }`}>
+                                        {viewingLog.status}
+                                    </div>
+                                </div>
+                                <div>
+                                    <span className="block text-xs font-bold text-gray-500 uppercase mb-1">Assigned Tech</span>
+                                    <div className="text-sm font-bold uppercase tracking-wide dark:text-gray-300">{viewingLog.assignedTech?.name || 'UNASSIGNED'}</div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <span className="block text-xs font-bold text-gray-500 uppercase mb-2">Issue Description</span>
+                                <div className="p-4 bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-white/5 text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-medium">
+                                    {viewingLog.issue}
+                                </div>
+                            </div>
+
+                            <div>
+                                <span className="block text-xs font-bold text-gray-500 uppercase mb-2">Resolution / Action Taken</span>
+                                <div className="p-4 bg-gray-50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-white/5 text-gray-800 dark:text-gray-200 whitespace-pre-wrap italic">
+                                    {viewingLog.actionTaken || 'No action recorded yet.'}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
