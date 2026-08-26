@@ -36,15 +36,27 @@ const DynamicBulletList = ({ label, items, onChange }: { label: string, items: s
                     </div>
                 ))}
                 <div className="flex gap-2 mt-2">
-                    <input
-                        type="text"
+                    <textarea
                         value={input}
                         onChange={e => setInput(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (input.trim()) { onChange([...items, input.trim()]); setInput(''); } } }}
-                        placeholder="Type task and press Enter..."
-                        className="flex-1 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-sm placeholder:text-gray-400"
+                        onKeyDown={e => { 
+                            if (e.key === 'Enter' && !e.shiftKey) { 
+                                e.preventDefault(); 
+                                if (input.trim()) { 
+                                    onChange([...items, input.trim()]); 
+                                    setInput(''); 
+                                } 
+                            } 
+                        }}
+                        placeholder="Type task and press Enter (Shift+Enter for new line)..."
+                        rows={2}
+                        className="flex-1 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-sm placeholder:text-gray-400 resize-y min-h-[44px]"
                     />
-                    <button type="button" onClick={() => { if (input.trim()) { onChange([...items, input.trim()]); setInput(''); } }} className="px-4 py-2 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-500/30 font-bold transition-colors text-sm shadow-sm">
+                    <button 
+                        type="button" 
+                        onClick={() => { if (input.trim()) { onChange([...items, input.trim()]); setInput(''); } }} 
+                        className="px-4 py-2 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl hover:bg-blue-200 dark:hover:bg-blue-500/30 font-bold transition-colors text-sm shadow-sm h-fit self-end"
+                    >
                         Add
                     </button>
                 </div>
@@ -374,7 +386,7 @@ const ITTReports = () => {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4 pt-2">
+                                <div className="grid grid-cols-1 gap-6 pt-2">
                                     <DynamicBulletList
                                         label="Reactive Tickets (Fixes)"
                                         items={formData.reactiveTickets}

@@ -19,6 +19,7 @@ model User {
   role      String   @default("viewer") 
   status    String   @default("PENDING") 
   avatar    String?
+  sopAccepted Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   

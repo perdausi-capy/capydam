@@ -20,6 +20,7 @@ interface User {
   role: string;
   status: string;
   avatar: string | null;
+  sopAccepted: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -110,6 +111,15 @@ const UsersPage = () => {
     finally { setIsCreating(false); }
   };
 
+  const resetSOPMutation = useMutation({
+    mutationFn: async () => client.post('/users/reset-sop'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.success('SOP status reset for all users');
+    },
+    onError: () => toast.error('Failed to reset SOP status'),
+  });
+
   // --- UI COMPONENTS ---
   const RoleBadge = ({ role }: { role: string }) => {
     return (
@@ -144,12 +154,25 @@ const UsersPage = () => {
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Team</h1>
             <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Manage members and their access to this workspace.</p>
           </div>
-          <button 
-              onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-2 bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 text-white dark:text-black px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm"
-          >
-              <Plus size={16} /> Invite Member
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+                onClick={() => {
+                  if(confirm('Are you sure you want to reset the SOP status for all users? They will be required to re-accept it.')) {
+                    resetSOPMutation.mutate();
+                  }
+                }}
+                disabled={resetSOPMutation.isPending}
+                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-50"
+            >
+                <Shield size={16} /> Reset SOP Status
+            </button>
+            <button 
+                onClick={() => setIsAddModalOpen(true)}
+                className="flex items-center gap-2 bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 text-white dark:text-black px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm"
+            >
+                <Plus size={16} /> Invite Member
+            </button>
+          </div>
         </div>
 
         {/* MAIN UNIFIED PANE */}
@@ -201,6 +224,7 @@ const UsersPage = () => {
                             <th className="px-6 py-3 text-xs font-medium text-gray-500 dark:text-gray-400">User</th>
                             <th className="px-6 py-3 text-xs font-medium text-gray-500 dark:text-gray-400">Role</th>
                             <th className="px-6 py-3 text-xs font-medium text-gray-500 dark:text-gray-400">Status</th>
+                            <th className="px-6 py-3 text-xs font-medium text-gray-500 dark:text-gray-400">SOP Status</th>
                             <th className="px-6 py-3 text-xs font-medium text-gray-500 dark:text-gray-400">Joined</th>
                             <th className="px-6 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 text-right"></th>
                         </tr>
@@ -211,6 +235,7 @@ const UsersPage = () => {
                                 <tr key={i} className="animate-pulse">
                                     <td className="px-6 py-4"><div className="flex items-center gap-3"><div className="h-9 w-9 rounded-full bg-gray-200 dark:bg-white/5" /><div className="space-y-2"><div className="h-3 w-24 bg-gray-200 dark:bg-white/5 rounded" /><div className="h-2 w-32 bg-gray-200 dark:bg-white/5 rounded" /></div></div></td>
                                     <td className="px-6 py-4"><div className="h-6 w-16 bg-gray-200 dark:bg-white/5 rounded-md" /></td>
+                                    <td className="px-6 py-4"><div className="h-4 w-20 bg-gray-200 dark:bg-white/5 rounded" /></td>
                                     <td className="px-6 py-4"><div className="h-4 w-20 bg-gray-200 dark:bg-white/5 rounded" /></td>
                                     <td className="px-6 py-4"><div className="h-4 w-24 bg-gray-200 dark:bg-white/5 rounded" /></td>
                                     <td className="px-6 py-4 text-right"><div className="h-6 w-6 bg-gray-200 dark:bg-white/5 rounded ml-auto" /></td>
@@ -274,6 +299,19 @@ const UsersPage = () => {
                                     {/* Status */}
                                     <td className="px-6 py-3">
                                         <StatusDot status={user.status} />
+                                    </td>
+
+                                    {/* SOP Status */}
+                                    <td className="px-6 py-3">
+                                        {user.sopAccepted ? (
+                                          <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-xs font-medium bg-emerald-50 dark:bg-emerald-500/10 px-2 py-1 rounded-md w-fit border border-emerald-200 dark:border-emerald-500/20">
+                                            <Shield size={12} /> Accepted
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 text-xs font-medium bg-amber-50 dark:bg-amber-500/10 px-2 py-1 rounded-md w-fit border border-amber-200 dark:border-amber-500/20">
+                                            <X size={12} /> Pending
+                                          </div>
+                                        )}
                                     </td>
 
                                     {/* Joined */}

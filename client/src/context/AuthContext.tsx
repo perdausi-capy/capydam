@@ -9,6 +9,7 @@ export interface User {
   role: string;
   avatar?: string;
   streak?: number; // ✅ ADDED: Gamification Field
+  sopAccepted?: boolean;
 }
 
 interface AuthContextType {

@@ -8,7 +8,10 @@ import {
   createUser,
   updateProfile,
   getUserById, 
-  deleteUser   
+  deleteUser,
+  acceptSOP,
+  resetSOPForAll,
+  getSOPUpdateDate
 } from '../controllers/user.controller';
 import multer from 'multer';
 import path from 'path';
@@ -46,6 +49,11 @@ router.post('/', createUser);
 // 6. Update Profile
 // Note: This must come BEFORE /:id so "profile" isn't treated as an ID
 router.patch('/profile', upload.single('avatar'), updateProfile);
+router.patch('/profile/sop', acceptSOP);
+
+// 6.5. SOP Admin Routes
+router.post('/reset-sop', resetSOPForAll);
+router.get('/sop-update-date', getSOPUpdateDate);
 
 // 7. Get Specific User
 router.get('/:id', getUserById);

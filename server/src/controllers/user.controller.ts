@@ -44,7 +44,8 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
           status: true,
           createdAt: true,
           updatedAt: true,
-          avatar: true
+          avatar: true,
+          sopAccepted: true
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -226,6 +227,67 @@ export const getUserById = async (req: Request, res: Response): Promise<void> =>
     res.json(userData);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching user details' });
+  }
+};
+
+// 7.5. Accept SOP
+export const acceptSOP = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      res.status(401).json({ message: 'User not authenticated' });
+      return;
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { sopAccepted: true }
+    });
+
+    res.json({ message: 'SOP accepted', sopAccepted: updatedUser.sopAccepted });
+  } catch (error) {
+    console.error("Accept SOP Error:", error);
+    res.status(500).json({ message: 'Error accepting SOP' });
+  }
+};
+
+// 7.6. Reset SOP for All Users
+export const resetSOPForAll = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== 'admin') {
+      res.status(403).json({ message: 'Forbidden' });
+      return;
+    }
+
+    await prisma.$transaction([
+      prisma.user.updateMany({
+        data: { sopAccepted: false }
+      }),
+      prisma.systemConfig.upsert({
+        where: { key: 'SOP_UPDATE_DATE' },
+        update: { value: new Date().toISOString() },
+        create: { key: 'SOP_UPDATE_DATE', value: new Date().toISOString() }
+      })
+    ]);
+
+    res.json({ message: 'SOP status reset for all users.' });
+  } catch (error) {
+    console.error("Reset SOP Error:", error);
+    res.status(500).json({ message: 'Error resetting SOP' });
+  }
+};
+
+// 7.7. Get SOP Update Date
+export const getSOPUpdateDate = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const config = await prisma.systemConfig.findUnique({
+      where: { key: 'SOP_UPDATE_DATE' }
+    });
+    res.json({ date: config?.value || null });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching SOP update date' });
   }
 };
 
