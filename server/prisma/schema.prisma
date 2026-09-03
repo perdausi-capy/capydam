@@ -321,6 +321,7 @@ model Workstation {
   webcam       String?
   headset      String?
   keyboard     String?
+  mouse        String?
   lanCable     String?
   cableAdaptor String?
   wifiAdaptor  String?
@@ -389,7 +390,7 @@ model IttInventory {
   id           String    @id @default(uuid())
   itemName     String    // ✅ NEW: e.g., "Intel Core i7-13700K"
   serialNumber String    @unique
-  type         String    // MOBO, CPU, GPU, RAM, STORAGE, MONITOR, PSU
+  type         String    // MOBO, CPU, GPU, RAM, STORAGE, MONITOR, PSU, MOUSE
   purchaseDate DateTime?
   status       String    @default("Active") // Active, Defective, Custom
   notes        String?   @db.Text

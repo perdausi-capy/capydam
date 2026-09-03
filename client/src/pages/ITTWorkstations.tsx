@@ -8,7 +8,7 @@ import {
     Eye, X, MessageSquare, Send, Clock, CheckCircle, RefreshCw,
     AlertCircle, FileText, Loader2, Check, ChevronUp, ChevronDown, ChevronRight,
     Settings, Package, Wrench, XCircle, List, Grid,
-    Camera, Headphones, Keyboard, Cable, Plug, Wifi
+    Camera, Headphones, Keyboard, Mouse, Cable, Plug, Wifi
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmModal from '../components/ConfirmModal';
@@ -55,6 +55,7 @@ interface Workstation extends FloorPlanWorkstation {
     monitor?: string;
     webcam?: string;
     headset?: string;
+    mouse?: string;
     keyboard?: string;
     lanCable?: string;
     cableAdaptor?: string;
@@ -114,7 +115,7 @@ const WorkstationSpecs = ({
 
     // Sort into primary/extended simply for layout consistency
     const primaryTypes = ['MOBO', 'CPU', 'GPU', 'RAM', 'STORAGE'];
-    const extendedOrder = ['MONITOR', 'PSU', 'WEBCAM', 'HEADSET', 'KEYBOARD', 'LAN_CABLE', 'CABLE_ADAPTOR', 'WIFI_ADAPTOR'];
+    const extendedOrder = ['MONITOR', 'PSU', 'WEBCAM', 'HEADSET', 'MOUSE', 'KEYBOARD', 'LAN_CABLE', 'CABLE_ADAPTOR', 'WIFI_ADAPTOR'];
     const primaryParts = parts.filter(p => primaryTypes.includes(p.type));
     const extendedParts = parts.filter(p => !primaryTypes.includes(p.type));
 
@@ -195,6 +196,7 @@ const WorkstationSpecs = ({
                                         type === 'WEBCAM' ? <Camera size={14} /> :
                                         type === 'HEADSET' ? <Headphones size={14} /> :
                                         type === 'KEYBOARD' ? <Keyboard size={14} /> :
+                                        type === 'MOUSE' ? <Mouse size={14} /> :
                                         type === 'LAN_CABLE' ? <Cable size={14} /> :
                                         type === 'CABLE_ADAPTOR' ? <Plug size={14} /> :
                                         type === 'WIFI_ADAPTOR' ? <Wifi size={14} /> :
@@ -350,7 +352,7 @@ const ITTWorkstations = () => {
     const [isSavingNotes, setIsSavingNotes] = useState(false);
 
     const [formData, setFormData] = useState({
-        unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', webcam: '', headset: '', keyboard: '', lanCable: '', cableAdaptor: '', wifiAdaptor: '', status: 'active', assignedUserIds: [] as string[]
+        unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', webcam: '', headset: '', mouse: '', keyboard: '', lanCable: '', cableAdaptor: '', wifiAdaptor: '', status: 'active', assignedUserIds: [] as string[]
     });
 
     const selectedUsers = users.filter(u => formData.assignedUserIds.includes(u.id));
@@ -493,7 +495,7 @@ const ITTWorkstations = () => {
             // Calculate newly deployed items by dynamically scanning the final submitted strings
             const allHardwareStrings = [
                 formData.mobo, formData.cpu, formData.gpu, formData.psu,
-                formData.webcam, formData.headset, formData.keyboard, formData.lanCable, formData.cableAdaptor, formData.wifiAdaptor,
+                formData.webcam, formData.headset, formData.mouse, formData.keyboard, formData.lanCable, formData.cableAdaptor, formData.wifiAdaptor,
                 ...storageItems, ...ramItems, ...monitorItems
             ];
 
@@ -510,7 +512,7 @@ const ITTWorkstations = () => {
             });
 
             if (editingId) {
-                const hardwareKeys = ['mobo', 'cpu', 'gpu', 'psu', 'webcam', 'headset', 'keyboard', 'lanCable', 'cableAdaptor', 'wifiAdaptor'];
+                const hardwareKeys = ['mobo', 'cpu', 'gpu', 'psu', 'webcam', 'headset', 'mouse', 'keyboard', 'lanCable', 'cableAdaptor', 'wifiAdaptor'];
                 
                 // Compare standard singular fields
                 hardwareKeys.forEach(key => {
@@ -630,6 +632,7 @@ const ITTWorkstations = () => {
                 monitor: ws.monitor || '',
                 webcam: ws.webcam || '',
                 headset: ws.headset || '',
+                mouse: ws.mouse || '',
                 keyboard: ws.keyboard || '',
                 lanCable: ws.lanCable || '',
                 cableAdaptor: ws.cableAdaptor || '',
@@ -640,7 +643,7 @@ const ITTWorkstations = () => {
             setInitialHardware({
                 mobo: ws.mobo || '', cpu: ws.cpu || '', ram: ws.ram || '',
                 gpu: ws.gpu || '', psu: ws.psu || '', storage: ws.storage || '', monitor: ws.monitor || '',
-                webcam: ws.webcam || '', headset: ws.headset || '', keyboard: ws.keyboard || '',
+                webcam: ws.webcam || '', headset: ws.headset || '', mouse: ws.mouse || '', keyboard: ws.keyboard || '',
                 lanCable: ws.lanCable || '', cableAdaptor: ws.cableAdaptor || '', wifiAdaptor: ws.wifiAdaptor || ''
             });
             setStorageItems(ws.storage ? ws.storage.split(' | ') : ['']);
@@ -648,7 +651,7 @@ const ITTWorkstations = () => {
             setMonitorItems(ws.monitor ? ws.monitor.split(' | ') : ['']);
         } else {
             setEditingId(null);
-            setFormData({ unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', webcam: '', headset: '', keyboard: '', lanCable: '', cableAdaptor: '', wifiAdaptor: '', status: 'active', assignedUserIds: [] });
+            setFormData({ unitId: '', mobo: '', cpu: '', ram: '', gpu: '', psu: '', storage: '', monitor: '', webcam: '', headset: '', mouse: '', keyboard: '', lanCable: '', cableAdaptor: '', wifiAdaptor: '', status: 'active', assignedUserIds: [] });
             setInitialHardware({});
             setStorageItems(['']);
             setRamItems(['']);
@@ -1055,6 +1058,7 @@ const ITTWorkstations = () => {
                                     { label: 'PSU', key: 'psu', icon: <Zap size={16} />, invType: 'PSU' },
                                     { label: 'Webcam', key: 'webcam', icon: <Camera size={16} />, invType: 'WEBCAM' },
                                     { label: 'Headset', key: 'headset', icon: <Headphones size={16} />, invType: 'HEADSET' },
+                                    { label: 'Mouse', key: 'mouse', icon: <Mouse size={16} />, invType: 'MOUSE' },
                                     { label: 'Keyboard', key: 'keyboard', icon: <Keyboard size={16} />, invType: 'KEYBOARD' },
                                     { label: 'LAN Cable', key: 'lanCable', icon: <Cable size={16} />, invType: 'LAN_CABLE' },
                                     { label: 'Cable Adaptor', key: 'cableAdaptor', icon: <Plug size={16} />, invType: 'CABLE_ADAPTOR' },
@@ -1064,7 +1068,7 @@ const ITTWorkstations = () => {
                                     const usedSns = [
                                         formData.mobo, formData.cpu,
                                         formData.gpu, formData.psu,
-                                        formData.webcam, formData.headset, formData.keyboard,
+                                        formData.webcam, formData.headset, formData.mouse, formData.keyboard,
                                         formData.lanCable, formData.cableAdaptor, formData.wifiAdaptor,
                                         ...storageItems, ...ramItems, ...monitorItems
                                     ]
