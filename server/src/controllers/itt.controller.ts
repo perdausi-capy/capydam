@@ -27,7 +27,7 @@ export const getWorkstations = async (req: Request, res: Response) => {
 
 export const createWorkstation = async (req: Request, res: Response) => {
   try {
-    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, mouse, keyboard, lanCable, cableAdaptor, wifiAdaptor, monitors, status, assignedUserIds, notes, deployedItemIds } = req.body;
+    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, monitors, status, assignedUserIds, notes, deployedItemIds } = req.body;
 
     // Check if unitId already exists
     const existing = await prisma.workstation.findUnique({ where: { unitId } });
@@ -38,7 +38,7 @@ export const createWorkstation = async (req: Request, res: Response) => {
     const workstation = await prisma.$transaction(async (tx) => {
       const ws = await tx.workstation.create({
         data: {
-          unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, mouse, keyboard, lanCable, cableAdaptor, wifiAdaptor, status, notes,
+          unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, status, notes,
           assignedUsers: {
             connect: (assignedUserIds || []).map((id: string) => ({ id }))
           },
@@ -74,7 +74,7 @@ export const createWorkstation = async (req: Request, res: Response) => {
 export const updateWorkstation = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, mouse, keyboard, lanCable, cableAdaptor, wifiAdaptor, monitors, status, assignedUserIds, notes, deployedItemIds, releasedItemIds } = req.body;
+    const { unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, monitors, status, assignedUserIds, notes, deployedItemIds, releasedItemIds } = req.body;
 
     const workstation = await prisma.$transaction(async (tx) => {
       // 1. Release any items being swapped out (unlink from workstation, restore status)
@@ -105,7 +105,7 @@ export const updateWorkstation = async (req: Request, res: Response) => {
       return tx.workstation.update({
         where: { id },
         data: {
-          unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, mouse, keyboard, lanCable, cableAdaptor, wifiAdaptor, status, notes,
+          unitId, mobo, cpu, ram, gpu, psu, storage, monitor, webcam, headset, keyboard, lanCable, cableAdaptor, wifiAdaptor, status, notes,
           assignedUsers: {
             set: (assignedUserIds || []).map((id: string) => ({ id }))
           },
