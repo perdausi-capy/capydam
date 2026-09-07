@@ -11,7 +11,7 @@ import {
     Monitor as MonitorIcon, Zap, Plus, Search, Package,
     Edit2, Trash2, Calendar, FileText, Hash, X, Tag, AlertCircle,
     Camera, Headphones, Keyboard, Cable, Plug, Wifi,
-    BarChart2, ListFilter, Wand2
+    BarChart2, ListFilter, Wand2, Mouse, Battery
 } from 'lucide-react';
 
 // --- TYPES ---
@@ -40,6 +40,8 @@ const inventoryCategories = [
     { id: 'WEBCAM', label: 'Webcams', icon: Camera },
     { id: 'HEADSET', label: 'Headsets', icon: Headphones },
     { id: 'KEYBOARD', label: 'Keyboards', icon: Keyboard },
+    { id: 'MOUSE', label: 'Mice', icon: Mouse },
+    { id: 'UPS', label: 'UPS', icon: Battery },
     { id: 'LAN_CABLE', label: 'LAN Cables', icon: Cable },
     { id: 'CABLE_ADAPTOR', label: 'Cable Adaptors', icon: Plug },
     { id: 'WIFI_ADAPTOR', label: 'Wifi Adaptors', icon: Wifi },
