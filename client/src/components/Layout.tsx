@@ -153,50 +153,22 @@ const PCSopModal = ({ onClose, sidebarCollapsed, onAccept, isAccepted, onLogout 
       `}</style>
 
       {/* Glass backdrop scrim */}
-      <div style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 44,
-        left: sidebarW,
-        backdropFilter: 'blur(12px) saturate(160%)',
-        WebkitBackdropFilter: 'blur(12px) saturate(160%)',
-        background: 'rgba(10, 12, 20, 0.65)',
-      }} onClick={onClose} />
+      <div
+        className="fixed inset-0 z-44 backdrop-blur-md backdrop-saturate-150 bg-gray-900/30 dark:bg-[#0a0c14]/65"
+        style={{ left: sidebarW, zIndex: 44 }}
+        onClick={onClose}
+      />
 
       {/* Panel */}
       <div
-        className="pc-sop-panel"
-        style={{
-          position: 'fixed',
-          top: '4%',
-          bottom: '4%',
-          left: sidebarW + 32,
-          right: 32,
-          zIndex: 45,
-          background: 'rgba(20, 24, 35, 0.92)',
-          backdropFilter: 'blur(28px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(28px) saturate(180%)',
-          border: '1px solid rgba(255,255,255,0.12)',
-          borderRadius: '20px',
-          boxShadow: '0 32px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
+        className="pc-sop-panel fixed top-[4%] bottom-[4%] right-8 flex flex-col overflow-hidden rounded-[20px] bg-white/90 dark:bg-[#141823]/90 backdrop-blur-[28px] backdrop-saturate-[180%] border border-gray-200 dark:border-white/10 shadow-[0_32px_80px_rgba(0,0,0,0.15)] dark:shadow-[0_32px_80px_rgba(0,0,0,0.6)]"
+        style={{ left: sidebarW + 32, zIndex: 45 }}
       >
         {/* Animated rainbow top bar */}
         <div className="pc-sop-rainbow-bar" />
 
         {/* Header */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '14px 20px',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          background: 'rgba(255,255,255,0.04)',
-          flexShrink: 0,
-        }}>
+        <div className="flex items-center justify-between px-5 py-3.5 shrink-0 border-b border-gray-200/80 dark:border-white/10 bg-gray-50/80 dark:bg-white/5">
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{
               width: 36, height: 36, borderRadius: 10,
@@ -208,7 +180,7 @@ const PCSopModal = ({ onClose, sidebarCollapsed, onAccept, isAccepted, onLogout 
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ color: '#fff', fontWeight: 700, fontSize: '15px', letterSpacing: '0.04em' }}>WORKSTATION SOP</span>
+                <span className="font-bold text-[15px] tracking-[0.04em] text-gray-900 dark:text-white">WORKSTATION SOP</span>
                 {isAccepted ? (
                   <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
                     <ShieldCheck size={12} /> Accepted
@@ -219,7 +191,7 @@ const PCSopModal = ({ onClose, sidebarCollapsed, onAccept, isAccepted, onLogout 
                   </span>
                 )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'rgba(255,255,255,0.45)', fontSize: '12px' }}>
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-white/45 mt-0.5">
                 <span>Standard Operating Procedure & Safety Compliance</span>
                 {sopUpdateDate && (
                   <>
@@ -233,28 +205,7 @@ const PCSopModal = ({ onClose, sidebarCollapsed, onAccept, isAccepted, onLogout 
 
           <button
             onClick={onClose}
-            style={{
-              background: 'rgba(255,255,255,0.07)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              cursor: 'pointer',
-              color: 'rgba(255,255,255,0.6)',
-              borderRadius: '9px',
-              padding: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.2)';
-              (e.currentTarget as HTMLButtonElement).style.color = '#ef4444';
-              (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(239,68,68,0.3)';
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.07)';
-              (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.6)';
-              (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.1)';
-            }}
+            className="p-2 rounded-[9px] border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-white/60 hover:bg-red-50 hover:text-red-500 hover:border-red-200 dark:hover:bg-red-500/20 dark:hover:text-red-400 dark:hover:border-red-500/30 transition-all flex items-center justify-center"
           >
             <X size={18} />
           </button>
@@ -285,16 +236,7 @@ const PCSopModal = ({ onClose, sidebarCollapsed, onAccept, isAccepted, onLogout 
           )}
 
           {/* Embedded Google Document Frame */}
-          <div style={{
-            height: '520px',
-            minHeight: '420px',
-            borderRadius: '12px',
-            overflow: 'hidden',
-            border: '1px solid rgba(255,255,255,0.1)',
-            boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.5)',
-            background: '#ffffff',
-            flexShrink: 0,
-          }}>
+          <div className="h-[520px] min-h-[420px] shrink-0 rounded-xl overflow-hidden border border-gray-300 dark:border-white/10 shadow-[inset_0_2px_10px_rgba(0,0,0,0.05)] dark:shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)] bg-white">
             <iframe
               src="https://drive.google.com/file/d/19Q0_Jmen7-8tlgUGEUJWsm18GejBXCtx/preview"
               style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
@@ -304,33 +246,24 @@ const PCSopModal = ({ onClose, sidebarCollapsed, onAccept, isAccepted, onLogout 
           </div>
 
           {/* Guidelines Summary & Agreement Declaration */}
-          <div className="bg-white/5 border border-white/10 rounded-xl p-5 text-gray-300 text-sm space-y-3 shrink-0">
-            <h4 className="text-white font-bold text-base flex items-center gap-2">
-              <ShieldCheck size={18} className="text-blue-400" /> Key Standard Operating Principles
+          <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-5 text-gray-600 dark:text-gray-300 text-sm space-y-3 shrink-0">
+            <h4 className="text-gray-900 dark:text-white font-bold text-base flex items-center gap-2">
+              <ShieldCheck size={18} className="text-blue-600 dark:text-blue-400" /> Key Standard Operating Principles
             </h4>
-            <ul className="list-disc list-inside space-y-1.5 text-xs text-gray-300/90 leading-relaxed">
+            <ul className="list-disc list-inside space-y-1.5 text-xs text-gray-600 dark:text-gray-300/90 leading-relaxed">
               <li>Adhere to workstation clean desk and security compliance protocols at all times.</li>
               <li>Ensure all assets and confidential data accessed within CAPYDAM are properly authorized.</li>
               <li>Report hardware or network anomalies immediately to system administrators.</li>
               <li>Log off or lock your station when leaving the workstation unattended.</li>
             </ul>
-            <div className="pt-2 border-t border-white/10 text-xs text-gray-400 italic">
+            <div className="pt-2 border-t border-gray-200 dark:border-white/10 text-xs text-gray-500 dark:text-gray-400 italic">
               By clicking "I Accept the Workstation SOP", you confirm that you have read, understood, and agreed to adhere to these operating procedures.
             </div>
           </div>
         </div>
 
         {/* Footer Acceptance Bar */}
-        <div style={{
-          padding: '14px 20px',
-          borderTop: '1px solid rgba(255,255,255,0.1)',
-          background: 'rgba(15, 18, 28, 0.85)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '16px',
-          flexShrink: 0,
-        }}>
+        <div className="flex items-center justify-between gap-4 px-5 py-3.5 shrink-0 border-t border-gray-200 dark:border-white/10 bg-white/90 dark:bg-[#0f121c]/90">
           {!hasScrolledToBottom && !isAccepted ? (
             <div className="flex items-center gap-2 text-amber-400 text-xs font-medium animate-pulse">
               <ArrowDown size={16} />
@@ -361,7 +294,7 @@ const PCSopModal = ({ onClose, sidebarCollapsed, onAccept, isAccepted, onLogout 
                     px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all duration-300 shadow-lg
                     ${hasScrolledToBottom
                       ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-emerald-900/40 cursor-pointer scale-100'
-                      : 'bg-gray-800 text-gray-500 border border-gray-700/50 cursor-not-allowed opacity-60'
+                      : 'bg-gray-200 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-300 dark:border-gray-700/50 cursor-not-allowed opacity-60'
                     }
                   `}
                 >
@@ -719,8 +652,8 @@ const PCSopNavButton = ({ isCollapsed, onClick, isAccepted }: { isCollapsed: boo
           height: 40px;
           border: none;
           outline: none;
-          color: #fff;
-          background: #111;
+          color: #4b5563;
+          background: transparent;
           cursor: pointer;
           position: relative;
           z-index: 10;
@@ -733,7 +666,16 @@ const PCSopNavButton = ({ isCollapsed, onClick, isAccepted }: { isCollapsed: boo
           gap: 10px;
           padding: 0 12px;
           margin-bottom: 4px;
-          transition: transform 0.2s;
+          transition: transform 0.2s, color 0.2s;
+        }
+        .pc-sop-btn:hover {
+          color: #111827;
+        }
+        .dark .pc-sop-btn {
+          color: #9ca3af;
+        }
+        .dark .pc-sop-btn:hover {
+          color: #fff;
         }
         .pc-sop-btn.unaccepted:before {
           content: '';
@@ -757,12 +699,23 @@ const PCSopNavButton = ({ isCollapsed, onClick, isAccepted }: { isCollapsed: boo
           position: absolute;
           width: 100%;
           height: 100%;
-          background: #111;
+          background: #fff;
           left: 0;
           top: 0;
           border-radius: 10px;
+          transition: background-color 0.2s;
+        }
+        .pc-sop-btn:hover:after {
+          background: #f3f4f6;
+        }
+        .dark .pc-sop-btn:after {
+          background: #111;
+        }
+        .dark .pc-sop-btn:hover:after {
+          background: rgba(255,255,255,0.05);
         }
         .pc-sop-btn:active { color: #000; }
+        .dark .pc-sop-btn:active { color: #fff; }
         .pc-sop-btn:active:after { background: transparent; }
         .pc-sop-btn-icon { flex-shrink: 0; }
         .pc-sop-btn-collapsed {
