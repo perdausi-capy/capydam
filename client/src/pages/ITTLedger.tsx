@@ -4,6 +4,7 @@ import client from '../api/client';
 import { toast } from 'react-toastify';
 import { Plus, Edit2, Trash2, Monitor as MonitorIcon, Search, X, Eye } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
+import CustomSelect from '../components/CustomSelect';
 
 interface Workstation { id: string; unitId: string; }
 interface User { id: string; name: string; }
@@ -151,16 +152,18 @@ const ITTLedger = () => {
                             className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-[#1A1D21] border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm text-gray-900 dark:text-white font-mono"
                         />
                     </div>
-                    <select 
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="w-full sm:w-40 px-4 py-2 bg-gray-50 dark:bg-[#1A1D21] border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm text-gray-900 dark:text-white font-bold"
-                    >
-                        <option value="all">All Statuses</option>
-                        <option value="open">Open</option>
-                        <option value="in-progress">In Progress</option>
-                        <option value="resolved">Resolved</option>
-                    </select>
+                    <div className="w-full sm:w-40">
+                        <CustomSelect 
+                            value={statusFilter}
+                            onChange={(val) => setStatusFilter(val)}
+                            options={[
+                                { value: 'all', label: 'All Statuses' },
+                                { value: 'open', label: 'Open' },
+                                { value: 'in-progress', label: 'In Progress' },
+                                { value: 'resolved', label: 'Resolved' }
+                            ]}
+                        />
+                    </div>
                 </div>
                 <button onClick={() => openModal()} className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 dark:hover:bg-white text-white dark:text-gray-900 font-bold rounded-lg transition-colors shadow-sm uppercase tracking-wider text-xs">
                     <Plus size={16} strokeWidth={3} /> Append Entry
@@ -284,20 +287,25 @@ const ITTLedger = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Target Type</label>
-                                    <select value={formData.targetType} onChange={e => setFormData({ ...formData, targetType: e.target.value })} className="select-glass">
-                                        <option value="workstation">Workstation</option>
-                                        <option value="other">Other Hardware</option>
-                                    </select>
+                                    <CustomSelect 
+                                        value={formData.targetType} 
+                                        onChange={val => setFormData({ ...formData, targetType: val })} 
+                                        options={[
+                                            { value: 'workstation', label: 'Workstation' },
+                                            { value: 'other', label: 'Other Hardware' }
+                                        ]}
+                                    />
                                 </div>
                                 {formData.targetType === 'workstation' ? (
                                     <div>
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Target Workstation</label>
-                                        <select required value={formData.workstationId} onChange={e => setFormData({ ...formData, workstationId: e.target.value })} className="select-glass">
-                                            <option value="">-- Select Unit ID --</option>
-                                            {workstations.map(ws => (
-                                                <option key={ws.id} value={ws.id}>{ws.unitId}</option>
-                                            ))}
-                                        </select>
+                                        <CustomSelect 
+                                            required 
+                                            value={formData.workstationId} 
+                                            onChange={val => setFormData({ ...formData, workstationId: val })} 
+                                            placeholder="-- Select Unit ID --"
+                                            options={workstations.map(ws => ({ value: ws.id, label: ws.unitId }))}
+                                        />
                                     </div>
                                 ) : (
                                     <div>
@@ -310,11 +318,15 @@ const ITTLedger = () => {
                             <div className="grid grid-cols-1 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Current Status</label>
-                                    <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} className="select-glass">
-                                        <option value="open">Open / Unresolved</option>
-                                        <option value="in-progress">In Progress</option>
-                                        <option value="resolved">Resolved</option>
-                                    </select>
+                                    <CustomSelect 
+                                        value={formData.status} 
+                                        onChange={val => setFormData({ ...formData, status: val })} 
+                                        options={[
+                                            { value: 'open', label: 'Open / Unresolved' },
+                                            { value: 'in-progress', label: 'In Progress' },
+                                            { value: 'resolved', label: 'Resolved' }
+                                        ]}
+                                    />
                                 </div>
                             </div>
 
