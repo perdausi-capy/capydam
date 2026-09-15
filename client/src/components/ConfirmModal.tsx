@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, X } from 'lucide-react';
 
 interface ConfirmModalProps {
@@ -26,8 +27,6 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   isLoading = false,
   confirmColor,
 }) => {
-  if (!isOpen) return null;
-
   const buttonClass = confirmColor 
     ? `${confirmColor} text-white`
     : isDangerous 
@@ -35,16 +34,26 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
       : 'bg-blue-600 hover:bg-blue-700 text-white';
 
   return (
-    // ✅ FIX: Changed z-50 to z-[2000] to ensure it appears above all other modals
-    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" 
-        onClick={onClose}
-      />
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <motion.div 
+            initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+            animate={{ opacity: 1, backdropFilter: 'blur(4px)' }}
+            exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+            className="fixed inset-0 bg-black/60" 
+            onClick={onClose}
+          />
 
-      {/* Modal Card */}
-      <div className="relative z-10 w-full max-w-md scale-100 transform overflow-hidden rounded-xl bg-white dark:bg-[#1A1D21] shadow-2xl transition-all border border-gray-100 dark:border-white/10">
+          {/* Modal Card */}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ type: "spring", duration: 0.25, bounce: 0.2 }}
+            className="relative z-10 w-full max-w-md transform overflow-hidden rounded-xl bg-white dark:bg-[#1A1D21] shadow-2xl border border-gray-100 dark:border-white/10"
+          >
         
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/10 px-6 py-4">
@@ -84,8 +93,10 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
             {isLoading ? 'Processing...' : confirmText}
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
   );
 };
 

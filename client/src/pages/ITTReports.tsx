@@ -71,7 +71,14 @@ const ReportDetailModal = ({ report, onClose }: { report: Report | null; onClose
     if (!report) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+            <motion.div 
+                initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+                animate={{ opacity: 1, backdropFilter: 'blur(4px)' }}
+                exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+                className="fixed inset-0 bg-gray-900/70"
+                onClick={onClose}
+            />
             <motion.div
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
@@ -358,10 +365,24 @@ const ITTReports = () => {
             </div>
 
             {/* Form Modal */}
-            {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/70 animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden border border-gray-200 dark:border-white/10 flex flex-col max-h-[90vh]">
-                        <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center">
+            <AnimatePresence>
+                {isModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <motion.div 
+                            initial={{ opacity: 0, backdropFilter: 'blur(0px)' }} 
+                            animate={{ opacity: 1, backdropFilter: 'blur(4px)' }} 
+                            exit={{ opacity: 0, backdropFilter: 'blur(0px)' }} 
+                            className="fixed inset-0 bg-gray-900/70" 
+                            onClick={() => setIsModalOpen(false)} 
+                        />
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+                            animate={{ opacity: 1, scale: 1, y: 0 }} 
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }} 
+                            transition={{ type: "spring", duration: 0.25, bounce: 0.2 }} 
+                            className="relative z-10 bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden border border-gray-200 dark:border-white/10 flex flex-col max-h-[90vh]"
+                        >
+                            <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center">
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                                 {editingId ? 'Edit Report' : 'Daily Shift Report'}
                             </h2>
@@ -417,9 +438,10 @@ const ITTReports = () => {
                                 <button type="submit" className="px-5 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm">Submit Report</button>
                             </div>
                         </form>
+                        </motion.div>
                     </div>
-                </div>
-            )}
+                )}
+            </AnimatePresence>
 
             {/* Detail Modal */}
             <AnimatePresence>

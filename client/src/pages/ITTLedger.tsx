@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import client from '../api/client';
 import { toast } from 'react-toastify';
 import { Plus, Edit2, Trash2, Monitor as MonitorIcon, Search, X, Eye } from 'lucide-react';
@@ -250,10 +251,24 @@ const ITTLedger = () => {
             </div>
 
             {/* FORM MODAL (Kept consistent with your Glassmorphism UI) */}
-            {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden border border-gray-200 dark:border-white/10">
-                        <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-gray-50 dark:bg-black/20">
+            <AnimatePresence>
+                {isModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <motion.div 
+                            initial={{ opacity: 0, backdropFilter: 'blur(0px)' }} 
+                            animate={{ opacity: 1, backdropFilter: 'blur(4px)' }} 
+                            exit={{ opacity: 0, backdropFilter: 'blur(0px)' }} 
+                            className="fixed inset-0 bg-gray-900/70" 
+                            onClick={() => setIsModalOpen(false)} 
+                        />
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+                            animate={{ opacity: 1, scale: 1, y: 0 }} 
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }} 
+                            transition={{ type: "spring", duration: 0.25, bounce: 0.2 }} 
+                            className="relative z-10 bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden border border-gray-200 dark:border-white/10"
+                        >
+                            <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-gray-50 dark:bg-black/20">
                             <h2 className="text-lg font-black uppercase tracking-widest text-gray-900 dark:text-white">
                                 {editingId ? 'Amend Ledger Entry' : 'New Ledger Entry'}
                             </h2>
@@ -318,15 +333,30 @@ const ITTLedger = () => {
                                 <button type="submit" className="px-5 py-2.5 rounded-lg font-bold text-white bg-gray-900 dark:bg-blue-600 hover:bg-gray-800 dark:hover:bg-blue-500 transition-colors shadow-md text-sm">Save to Ledger</button>
                             </div>
                         </form>
+                        </motion.div>
                     </div>
-                </div>
-            )}
+                )}
+            </AnimatePresence>
 
             {/* VIEW DETAILS MODAL */}
-            {viewingLog && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200 dark:border-white/10 flex flex-col max-h-[90vh]">
-                        <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-gray-50 dark:bg-black/20 shrink-0">
+            <AnimatePresence>
+                {viewingLog && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <motion.div 
+                            initial={{ opacity: 0, backdropFilter: 'blur(0px)' }} 
+                            animate={{ opacity: 1, backdropFilter: 'blur(4px)' }} 
+                            exit={{ opacity: 0, backdropFilter: 'blur(0px)' }} 
+                            className="fixed inset-0 bg-gray-900/70" 
+                            onClick={() => setViewingLog(null)} 
+                        />
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+                            animate={{ opacity: 1, scale: 1, y: 0 }} 
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }} 
+                            transition={{ type: "spring", duration: 0.25, bounce: 0.2 }} 
+                            className="relative z-10 bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200 dark:border-white/10 flex flex-col max-h-[90vh]"
+                        >
+                            <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-gray-50 dark:bg-black/20 shrink-0">
                             <h2 className="text-lg font-black uppercase tracking-widest text-gray-900 dark:text-white flex items-center gap-2">
                                 <MonitorIcon size={18} className="text-blue-500" />
                                 {viewingLog.workstation?.unitId || viewingLog.otherHardware || 'Ledger Entry'}
@@ -375,9 +405,10 @@ const ITTLedger = () => {
                                 </div>
                             </div>
                         </div>
+                        </motion.div>
                     </div>
-                </div>
-            )}
+                )}
+            </AnimatePresence>
 
             {/* Delete Confirmation Modal */}
             <ConfirmModal 

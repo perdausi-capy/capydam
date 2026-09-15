@@ -1026,14 +1026,29 @@ const ITTWorkstations = () => {
             )}
 
             {/* ── Form Modal ── */}
-            {isModalOpen && (
-                <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-gray-900/70 animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl w-full max-w-4xl border border-gray-200 dark:border-white/10 max-h-[90vh] overflow-y-auto custom-scrollbar">
-                        <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center rounded-t-2xl overflow-hidden sticky top-0 bg-white dark:bg-[#1A1D21] z-50">
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">{editingId ? 'Edit Workstation' : 'Add Workstation'}</h2>
-                            <button onClick={closeModal} className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"><X size={20} /></button>
-                        </div>
-                        <form onSubmit={handleSubmit} className="p-6">
+            <AnimatePresence>
+                {isModalOpen && (
+                    <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+                        <motion.div 
+                            initial={{ opacity: 0, backdropFilter: 'blur(0px)' }} 
+                            animate={{ opacity: 1, backdropFilter: 'blur(4px)' }} 
+                            exit={{ opacity: 0, backdropFilter: 'blur(0px)' }} 
+                            className="fixed inset-0 bg-gray-900/70" 
+                            onClick={closeModal} 
+                        />
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+                            animate={{ opacity: 1, scale: 1, y: 0 }} 
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }} 
+                            transition={{ type: "spring", duration: 0.25, bounce: 0.2 }} 
+                            className="relative z-10 bg-white dark:bg-[#1A1D21] rounded-2xl shadow-xl w-full max-w-4xl border border-gray-200 dark:border-white/10 max-h-[90vh] overflow-hidden flex flex-col"
+                        >
+                            <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-white dark:bg-[#1A1D21] z-50 shrink-0">
+                                <h2 className="text-xl font-bold text-gray-900 dark:text-white">{editingId ? 'Edit Workstation' : 'Add Workstation'}</h2>
+                                <button onClick={closeModal} className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"><X size={20} /></button>
+                            </div>
+                            <div className="overflow-y-auto custom-scrollbar flex-1">
+                                <form onSubmit={handleSubmit} className="p-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
 
                                 {/* ── Unit ID: only free-text field ── */}
@@ -1541,9 +1556,11 @@ const ITTWorkstations = () => {
                                 <button type="submit" className="px-5 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm">Save Workstation</button>
                             </div>
                         </form>
+                            </div>
+                        </motion.div>
                     </div>
-                </div>
-            )}
+                )}
+            </AnimatePresence>
 
             {/* ── Workstation Detail + Tickets Modal ── */}
             <AnimatePresence>
@@ -1551,11 +1568,11 @@ const ITTWorkstations = () => {
                     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 sm:p-6 lg:p-8 overflow-hidden">
 
                         <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
+                            initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+                            animate={{ opacity: 1, backdropFilter: 'blur(4px)' }}
+                            exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
                             onClick={() => setViewingWs(null)}
-                            className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm transition-all duration-500"
+                            className="absolute inset-0 bg-gray-900/80"
                         />
 
                         <motion.div

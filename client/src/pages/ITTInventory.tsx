@@ -457,8 +457,21 @@ const ITTInventory = () => {
             {/* Modal */}
             <AnimatePresence>
                 {isModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/70 backdrop-blur-sm">
-                        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-200 dark:border-white/10">
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <motion.div 
+                            initial={{ opacity: 0, backdropFilter: 'blur(0px)' }} 
+                            animate={{ opacity: 1, backdropFilter: 'blur(4px)' }} 
+                            exit={{ opacity: 0, backdropFilter: 'blur(0px)' }} 
+                            className="fixed inset-0 bg-gray-900/70" 
+                            onClick={closeModal} 
+                        />
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+                            animate={{ opacity: 1, scale: 1, y: 0 }} 
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }} 
+                            transition={{ type: "spring", duration: 0.25, bounce: 0.2 }} 
+                            className="relative z-10 bg-white dark:bg-[#1A1D21] rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-200 dark:border-white/10"
+                        >
                             <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-center bg-gray-50/50 dark:bg-white/[0.02]">
                                 <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                     <Package size={20} className="text-blue-500" />

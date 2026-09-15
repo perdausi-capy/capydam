@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Monitor, Wrench, FileText, ArrowLeft, Package } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ITTWorkstations from './ITTWorkstations';
@@ -72,11 +73,21 @@ const ITTDashboard = () => {
                 </div>
 
                 {/* --- CONTENT AREA --- */}
-                <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
-                    {activeTab === 'workstations' && <ITTWorkstations />}
-                    {activeTab === 'inventory' && <ITTInventory />}
-                    {activeTab === 'ledger' && <ITTLedger />}
-                    {activeTab === 'reports' && <ITTReports />}
+                <div className="relative">
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={activeTab}
+                            initial={{ opacity: 0, y: 15 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -15 }}
+                            transition={{ duration: 0.2, ease: 'easeOut' }}
+                        >
+                            {activeTab === 'workstations' && <ITTWorkstations />}
+                            {activeTab === 'inventory' && <ITTInventory />}
+                            {activeTab === 'ledger' && <ITTLedger />}
+                            {activeTab === 'reports' && <ITTReports />}
+                        </motion.div>
+                    </AnimatePresence>
                 </div>
 
             </div>
