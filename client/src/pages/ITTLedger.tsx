@@ -201,10 +201,10 @@ const ITTLedger = () => {
                                     </td>
                                     
                                     {/* Unit ID */}
-                                    <td className="px-4 py-3 border-r border-gray-300 dark:border-gray-700 font-bold text-gray-900 dark:text-white font-mono whitespace-nowrap">
-                                        <div className="flex items-center gap-2">
+                                    <td className="px-4 py-3 border-r border-gray-300 dark:border-gray-700 font-bold text-gray-900 dark:text-white font-mono max-w-[12rem]">
+                                        <div className="flex items-center gap-2 overflow-hidden w-full" title={log.workstation?.unitId || log.otherHardware || 'N/A'}>
                                             <MonitorIcon size={14} className="text-gray-400 shrink-0" /> 
-                                            <span>{log.workstation?.unitId || log.otherHardware || 'N/A'}</span>
+                                            <span className="truncate">{log.workstation?.unitId || log.otherHardware || 'N/A'}</span>
                                         </div>
                                     </td>
                                     
