@@ -13,6 +13,14 @@ export interface AuthRequest extends Request {
 const JWT_SECRET = process.env.JWT_SECRET || 'secret'; 
 
 export const verifyJWT = (req: Request, res: Response, next: NextFunction) => {
+  // ✅ NEW: Allow MCP Server to bypass JWT if it provides the correct API Key
+  const apiKey = req.headers['x-api-key'];
+  if (apiKey && apiKey === process.env.MCP_API_KEY) {
+    // Mock an MCP admin user for the request
+    (req as AuthRequest).user = { id: 'mcp-server', email: 'mcp@capydam.com', role: 'admin' };
+    return next();
+  }
+
   const token = req.headers.authorization?.split(' ')[1]; // "Bearer <token>"
 
   if (!token) {

@@ -26,8 +26,14 @@ export const getCollections = async (req: Request, res: Response): Promise<void>
     };
 
     // ✅ LOGIC: Admin view vs User view
-    if (userRole === 'admin' && targetUserId) {
-        whereClause.userId = targetUserId;
+    if (userRole === 'admin') {
+        if (targetUserId === 'all') {
+            // Admin fetching all collections (e.g., for MCP server)
+        } else if (targetUserId) {
+            whereClause.userId = targetUserId;
+        } else {
+            whereClause.userId = userId;
+        }
     } else {
         whereClause.userId = userId;
     }
@@ -43,6 +49,8 @@ export const getCollections = async (req: Request, res: Response): Promise<void>
         name: true,
         createdAt: true,
         coverImage: true, // Direct column access (Fast!)
+        userId: true, // ✅ NEW: For MCP Server to know owner
+        owner: { select: { name: true, email: true } }, // ✅ NEW: For MCP Server
         _count: {
           select: { assets: true }
         }
