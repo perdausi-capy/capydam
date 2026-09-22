@@ -148,7 +148,7 @@ const WorkstationSpecs = ({
     });
 
     return (
-        <div className="w-72 shrink-0 border-r border-white/5 overflow-y-auto p-6 space-y-5 bg-black/10 custom-scrollbar">
+        <div className="w-72 shrink-0 border-r border-gray-200 dark:border-white/5 overflow-y-auto p-6 space-y-5 bg-gray-50 dark:bg-black/10 custom-scrollbar">
             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
                 <View size={14} className="text-blue-500" />
                 Relational Specs
@@ -187,7 +187,7 @@ const WorkstationSpecs = ({
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        className="space-y-5 overflow-hidden pt-5 border-t border-white/5"
+                        className="space-y-5 overflow-hidden pt-5 border-t border-gray-200 dark:border-white/5"
                     >
                         {sortedExtendedEntries.map(([type, partsOfType]) => (
                             <div key={type}>
@@ -245,7 +245,7 @@ const WorkstationSpecs = ({
             </button>
 
             {/* Internal Notes */}
-            <div className="pt-6 border-t border-white/5">
+            <div className="pt-6 border-t border-gray-200 dark:border-white/5">
                 <div className="flex items-center justify-between mb-3">
                     <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
                         <FileText size={12} /> Internal Notes
@@ -260,7 +260,7 @@ const WorkstationSpecs = ({
                     value={localNotes}
                     onChange={(e) => setLocalNotes(e.target.value)}
                     placeholder="Add private IT notes..."
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-xs text-gray-300 focus:ring-1 focus:ring-blue-500/50 outline-none resize-none h-32 custom-scrollbar placeholder:text-gray-600 shadow-inner hover:bg-white/[0.07] transition-all"
+                    className="w-full bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-4 text-xs text-gray-800 dark:text-gray-300 focus:ring-1 focus:ring-blue-500/50 outline-none resize-none h-32 custom-scrollbar placeholder:text-gray-400 dark:placeholder:text-gray-600 shadow-sm dark:shadow-inner hover:bg-gray-50 dark:hover:bg-white/[0.07] transition-all"
                 />
             </div>
 
@@ -269,12 +269,12 @@ const WorkstationSpecs = ({
                 {viewingWs.assignedUsers && viewingWs.assignedUsers.length > 0 ? (
                     <div className="flex flex-col gap-2">
                         {viewingWs.assignedUsers.map(u => (
-                            <div key={u.id} className="flex items-center gap-3 bg-white/5 p-2.5 rounded-xl border border-white/5">
+                            <div key={u.id} className="flex items-center gap-3 bg-gray-50 dark:bg-white/5 p-2.5 rounded-xl border border-gray-200 dark:border-white/5">
                                 <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black shadow-lg overflow-hidden shrink-0 text-xs">
                                     {u.avatar ? <img src={u.avatar} alt="avatar" className="w-full h-full object-cover" /> : u.name.charAt(0)}
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-white font-bold text-xs truncate">{u.name}</p>
+                                    <p className="text-gray-900 dark:text-white font-bold text-xs truncate">{u.name}</p>
                                     <p className="text-gray-500 text-[10px] truncate">{u.email}</p>
                                 </div>
                             </div>
@@ -1579,17 +1579,17 @@ const ITTWorkstations = () => {
                             initial={{ scale: 0.95, opacity: 0, y: 20 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
                             exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                            className="relative bg-[#1A1D21] rounded-[2.5rem] shadow-[0_0_100px_rgba(0,0,0,0.5)] w-full max-w-6xl max-h-[85vh] flex flex-col overflow-hidden border border-white/10 z-10"
+                            className="relative bg-white dark:bg-[#1A1D21] rounded-[2.5rem] shadow-2xl dark:shadow-[0_0_100px_rgba(0,0,0,0.5)] w-full max-w-6xl max-h-[85vh] flex flex-col overflow-hidden border border-gray-200 dark:border-white/10 z-10"
                         >
 
                             {/* Modal Header */}
-                            <div className="flex items-center justify-between px-8 py-6 border-b border-white/5 bg-black/20 shrink-0">
+                            <div className="flex items-center justify-between px-8 py-6 border-b border-gray-200 dark:border-white/5 bg-gray-50/50 dark:bg-black/20 shrink-0">
                                 <div className="flex items-center gap-4">
-                                    <div className="p-3 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20 shadow-inner">
+                                    <div className="p-3 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-2xl border border-blue-500/20 shadow-inner">
                                         <MonitorIcon size={26} />
                                     </div>
                                     <div>
-                                        <h2 className="text-2xl font-black text-white tracking-tight leading-none mb-1.5">{viewingWs.unitId}</h2>
+                                        <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight leading-none mb-1.5">{viewingWs.unitId}</h2>
                                         <div className="flex items-center gap-2">
                                             <span className={`text-[10px] uppercase tracking-widest font-black px-3 py-0.5 rounded-full inline-flex items-center gap-1.5 ${statusColors[viewingWs.status] ?? 'bg-gray-500/20 text-gray-400'}`}>
                                                 <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
@@ -1604,10 +1604,10 @@ const ITTWorkstations = () => {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <button onClick={() => { setViewingWs(null); openModal(viewingWs); }} className="px-4 py-2 text-xs rounded-xl font-bold text-gray-200 border border-white/10 hover:bg-white/5 transition-all flex items-center gap-2">
+                                    <button onClick={() => { setViewingWs(null); openModal(viewingWs); }} className="px-4 py-2 text-xs rounded-xl font-bold text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 transition-all flex items-center gap-2">
                                         <Edit2 size={14} /> Edit Hardware
                                     </button>
-                                    <button onClick={() => setViewingWs(null)} className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors"><X size={24} /></button>
+                                    <button onClick={() => setViewingWs(null)} className="p-2 text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"><X size={24} /></button>
                                 </div>
                             </div>
 
@@ -1624,8 +1624,8 @@ const ITTWorkstations = () => {
                                 />
 
                                 {/* COLUMN 2: Support Tickets List */}
-                                <div className="w-72 shrink-0 border-r border-white/5 flex flex-col bg-[#1A1D21] custom-scrollbar">
-                                    <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between sticky top-0 bg-[#1A1D21]/80 backdrop-blur-md z-10">
+                                <div className="w-72 shrink-0 border-r border-gray-200 dark:border-white/5 flex flex-col bg-gray-50/30 dark:bg-[#1A1D21] custom-scrollbar">
+                                    <div className="px-6 py-5 border-b border-gray-200 dark:border-white/5 flex items-center justify-between sticky top-0 bg-gray-50/80 dark:bg-[#1A1D21]/80 backdrop-blur-md z-10">
                                         <div className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest">
                                             <MessageSquare size={14} className="text-blue-500" /> Support Tickets
                                         </div>
@@ -1643,12 +1643,12 @@ const ITTWorkstations = () => {
                                                 <span className="text-xs font-bold uppercase tracking-widest">No Tickets Found</span>
                                             </div>
                                         ) : (
-                                            <div className="divide-y divide-white/5">
+                                            <div className="divide-y divide-gray-100 dark:divide-white/5">
                                                 {tickets.map(t => (
                                                     <button
                                                         key={t.id}
                                                         onClick={() => { setActiveTicket(t); setReplyText(t.adminReply ?? ''); }}
-                                                        className={`w-full text-left px-4 py-3 transition-colors group flex items-start gap-2 ${activeTicket?.id === t.id ? 'bg-blue-500/15' : 'hover:bg-white/5'}`}
+                                                        className={`w-full text-left px-4 py-3 transition-colors group flex items-start gap-2 ${activeTicket?.id === t.id ? 'bg-blue-500/10 dark:bg-blue-500/15' : 'hover:bg-gray-100 dark:hover:bg-white/5'}`}
                                                     >
                                                         <div className="flex-1 min-w-0">
                                                             <div className="flex items-center gap-1.5 mb-0.5">
@@ -1672,11 +1672,11 @@ const ITTWorkstations = () => {
                                 </div>
 
                                 {/* COLUMN 3: Interaction Panel */}
-                                <div className="flex-1 flex flex-col bg-black/20 overflow-hidden custom-scrollbar">
+                                <div className="flex-1 flex flex-col bg-white dark:bg-black/20 overflow-hidden custom-scrollbar">
                                     {activeTicket ? (
                                         <>
                                             {/* Ticket Header */}
-                                            <div className="px-5 py-4 border-b border-white/5 shrink-0">
+                                            <div className="px-5 py-4 border-b border-gray-200 dark:border-white/5 shrink-0">
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div>
                                                         <h3 className="font-bold text-gray-900 dark:text-white text-base">{activeTicket.subject}</h3>
@@ -1708,27 +1708,27 @@ const ITTWorkstations = () => {
                                             <div className="p-8 flex-1 overflow-y-auto custom-scrollbar space-y-6">
                                                 {/* Subject and Date removed as they are now in the static header */}
 
-                                                <div className="bg-white/5 rounded-3xl p-6 border border-white/5 shadow-inner">
+                                                <div className="bg-gray-50 dark:bg-white/5 rounded-3xl p-6 border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-inner">
                                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2"><User size={12} /> User Message</p>
-                                                    <p className="text-sm text-gray-300 leading-relaxed">{activeTicket.message}</p>
+                                                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{activeTicket.message}</p>
                                                 </div>
 
                                                 {activeTicket.adminReply && (
                                                     <div className="bg-blue-500/5 rounded-3xl p-6 border border-blue-500/10">
-                                                        <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3 flex items-center gap-2"><CheckCircle size={12} /> System Resolution</p>
-                                                        <p className="text-sm text-blue-100/80 leading-relaxed italic">"{activeTicket.adminReply}"</p>
+                                                        <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3 flex items-center gap-2"><CheckCircle size={12} /> System Resolution</p>
+                                                        <p className="text-sm text-blue-900 dark:text-blue-100/80 leading-relaxed italic">"{activeTicket.adminReply}"</p>
                                                     </div>
                                                 )}
                                             </div>
 
-                                            <div className="p-6 bg-black/40 border-t border-white/5">
+                                            <div className="p-6 bg-gray-50 dark:bg-black/40 border-t border-gray-200 dark:border-white/5">
                                                 <div className="flex gap-3">
                                                     <textarea
                                                         rows={2}
                                                         value={replyText}
                                                         onChange={e => setReplyText(e.target.value)}
                                                         placeholder="Type resolution message..."
-                                                        className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-sm text-white resize-none focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-gray-600"
+                                                        className="flex-1 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl px-5 py-3 text-sm text-gray-900 dark:text-white resize-none focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-gray-600 shadow-sm dark:shadow-none"
                                                     />
                                                     <button
                                                         onClick={handleReply}
