@@ -5,7 +5,8 @@ import { verifyJWT } from '../middleware/auth.middleware';
 import { 
     uploadAsset, 
     getAssets, 
-    getAssetById, 
+    getAssetById,
+    viewAsset, 
     updateAsset, 
     deleteAsset, 
     getRelatedAssets, 
@@ -62,6 +63,7 @@ router.post('/:id/restore', verifyJWT, restoreAsset);    // POST /api/assets/:id
 router.delete('/:id/force', verifyJWT, forceDeleteAsset); // DELETE /api/assets/:id/force
 
 // 5. GENERIC ID ROUTES (Catch-all for IDs)
+router.get('/view/:id/:filename', viewAsset); // Must be before /:id but NO JWT needed so ClickUp can see it
 router.get('/:id', verifyJWT, getAssetById);
 router.patch('/:id', verifyJWT, updateAsset);
 router.delete('/:id', verifyJWT, deleteAsset); // Soft Delete

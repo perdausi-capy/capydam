@@ -177,7 +177,63 @@ cron.schedule('0 4 * * *', async () => {
     await checkAndEndSeason();
   });
 
-  console.log('✅ Cron jobs initialized (Simple Auto-Pilot Mode)');
+  // 4. REAL-TIME CHAT POLLER: Runs every 5 seconds to listen for !capydam in Chat Views
+  let lastCheckedTime = Date.now(); // Only process messages sent AFTER server starts
+  const CHAT_VIEW_ID = process.env.CLICKUP_CHAT_VIEW_ID || '4-90186542711-8'; // The specific channel
+
+  cron.schedule('*/5 * * * * *', async () => {
+    try {
+      const token = process.env.CLICKUP_API_TOKEN;
+      if (!token) return;
+
+      const res = await axios.get(`https://api.clickup.com/api/v2/view/${CHAT_VIEW_ID}/comment`, {
+        headers: { 'Authorization': token }
+      });
+
+      const comments = res.data.comments || [];
+      // Comments are usually sorted newest first. Let's process ones newer than lastCheckedTime
+      const newComments = comments.filter((c: any) => parseInt(c.date) > lastCheckedTime);
+
+      if (newComments.length > 0) {
+        // Update lastCheckedTime to the newest comment's date so we don't process them again
+        lastCheckedTime = Math.max(...newComments.map((c: any) => parseInt(c.date)));
+
+        // Process each new comment
+        const { handleSearchCommand, handleInfoCommand, handleDownloadCommand, handleUploadCommand, postClickupComment } = require('./clickup.service');
+
+        for (const comment of newComments) {
+          const textContent = (comment.comment_text || '').trim();
+          const args = textContent.split(/\s+/);
+          
+          if (args[0].toLowerCase() === '!capydam') {
+            console.log(`💬 [CHAT POLLER] Found command: ${textContent}`);
+            const commandName = args[1]?.toLowerCase();
+            const commandArgs = args.slice(2).join(' ');
+
+            if (!commandName) {
+              await postClickupComment(CHAT_VIEW_ID, 'view', '**Capydam Chat Bot Active!**\nUse `!capydam search <query>`');
+              continue;
+            }
+
+            switch (commandName) {
+              case 'search':
+                if (commandArgs) await handleSearchCommand(CHAT_VIEW_ID, 'view', commandArgs);
+                break;
+              case 'info':
+                if (commandArgs) await handleInfoCommand(CHAT_VIEW_ID, 'view', commandArgs);
+                break;
+              default:
+                await postClickupComment(CHAT_VIEW_ID, 'view', `Unknown command: ${commandName}`);
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      // Silently fail to avoid spamming console on network errors
+    }
+  });
+
+  console.log('✅ Cron jobs initialized (Simple Auto-Pilot Mode) + Chat Poller 🤖');
 };
 
 // --- TRASH CLEANUP ---

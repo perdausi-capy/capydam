@@ -68,3 +68,24 @@ export const deleteFromSupabase = async (pathUrl: string): Promise<void> => {
     // even if the file was already missing.
   }
 };
+
+/**
+ * FETCHES a file stream securely from MinIO.
+ */
+export const getStreamFromSupabase = async (pathUrl: string) => {
+  let fileKey = pathUrl;
+  if (pathUrl.includes(`${BUCKET_NAME}/`)) {
+    const parts = pathUrl.split(`${BUCKET_NAME}/`);
+    if (parts.length > 1) {
+      fileKey = parts[1];
+    }
+  }
+
+  const { GetObjectCommand } = require('@aws-sdk/client-s3');
+  const response: any = await storageClient.send(new GetObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: fileKey,
+  }));
+  
+  return (response as any).Body; // This is a Readable stream
+};

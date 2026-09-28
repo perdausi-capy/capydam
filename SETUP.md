@@ -91,7 +91,25 @@ npm run dev
 
 ---
 
-## 🎉 5. Login and Access
+## 🌐 5. Set Up ngrok (For ClickUp Integration)
+
+For ClickUp to properly load images and interact with the server locally, you must expose the backend (port 5000) using ngrok.
+
+1. **Install ngrok:** Download from [ngrok.com](https://ngrok.com/) and follow the installation instructions for your OS.
+2. **Start ngrok tunnel:** Open a **new** terminal and run:
+   ```bash
+   ngrok http 5000
+   ```
+3. **Update `.env`:** Copy the public HTTPS forwarding URL provided in the ngrok console (e.g., `https://marvelous-recovery-enlisted.ngrok-free.dev`).
+4. Update the `SERVER_URL` variable in your `server/.env` file:
+   ```env
+   SERVER_URL="https://YOUR_NEW_NGROK_URL"
+   ```
+   *Make sure to restart your server (`npm run dev`) if you change the `.env` file.*
+
+---
+
+## 🎉 6. Login and Access
 
 Open your browser and navigate to **[http://localhost:5173](http://localhost:5173)**.
 

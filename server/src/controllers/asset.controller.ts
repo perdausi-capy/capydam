@@ -413,6 +413,33 @@ export const getAssetById = async (req: Request, res: Response): Promise<void> =
 };
 
 // ==========================================
+// 4.5 VIEW/STREAM ASSET (Proxy for ClickUp Preview)
+// ==========================================
+export const viewAsset = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const asset = await prisma.asset.findUnique({ where: { id } });
+
+    if (!asset || !asset.path) {
+      res.status(404).send('Not found');
+      return;
+    }
+
+    const { getStreamFromSupabase } = require('../services/storage.service');
+    const stream = await getStreamFromSupabase(asset.path);
+    
+    // Set headers and pipe the image data
+    res.setHeader('Content-Type', asset.mimeType);
+    res.setHeader('Content-Disposition', 'inline');
+    
+    stream.pipe(res);
+  } catch (error) {
+    console.error("View Asset Error:", error);
+    res.status(500).send('Server error');
+  }
+};
+
+// ==========================================
 // 5. GET RELATED ASSETS (Recommendations)
 // ==========================================
 export const getRelatedAssets = async (req: Request, res: Response): Promise<void> => {
