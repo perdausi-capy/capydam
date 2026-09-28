@@ -4536,3 +4536,457 @@ Payload: {
   "team_id": "90181119211",
   "webhook_id": "aa3a5867-dac2-410d-af1c-0e46cae008b1"
 }
+
+--- NEW WEBHOOK ---
+Event: taskCommentPosted
+Payload: {
+  "event": "taskCommentPosted",
+  "history_items": [
+    {
+      "id": "5276894174612401933",
+      "type": 1,
+      "date": "1790323542425",
+      "field": "comment",
+      "parent_id": "901808520354",
+      "data": {},
+      "source": null,
+      "user": {
+        "id": 107576099,
+        "username": "Mohammad Rasheed Heding (ITKSS)",
+        "email": "rasheed.heding@capytech.com",
+        "color": "#5f55ee",
+        "initials": "M(",
+        "profilePicture": "https://attachments.clickup.com/profilePictures/107576099_jHS.jpg",
+        "role": 3,
+        "role_subtype": 0
+      },
+      "before": null,
+      "after": "1100540000013930",
+      "comment": {
+        "id": "1100540000013930",
+        "date": "1790323542425",
+        "parent": "86eyh4de8",
+        "type": 1,
+        "comment": [
+          {
+            "text": "!capydam",
+            "attributes": {}
+          },
+          {
+            "text": "\n",
+            "attributes": {
+              "block-id": "block-TDAuCQP1Uc"
+            }
+          }
+        ],
+        "text_content": "!capydam\n",
+        "x": null,
+        "y": null,
+        "image_y": null,
+        "image_x": null,
+        "page": null,
+        "comment_number": null,
+        "comment_time": null,
+        "referenced_content": "",
+        "_version_vector": {
+          "workspace_id": 90181119211,
+          "object_type": "comment",
+          "object_id": "1100540000013930",
+          "vector": [
+            {
+              "master_id": 112,
+              "version": 1790323542446000,
+              "deleted": false
+            }
+          ]
+        },
+        "comment_type": null,
+        "date_updated": null,
+        "root_parent_id": "86eyh4de8",
+        "root_parent_type": 1,
+        "extra": null,
+        "page_id": null,
+        "page_name": null,
+        "view_id": null,
+        "view_name": null,
+        "team": null,
+        "view_parent_id": null,
+        "view_parent_type": null,
+        "view_parent_avatar_source": null,
+        "view_parent_avatar_value": null,
+        "view_parent_avatar_key": null,
+        "view_parent_color": null,
+        "view_type": null,
+        "user": {
+          "id": 107576099,
+          "username": "Mohammad Rasheed Heding (ITKSS)",
+          "email": "rasheed.heding@capytech.com",
+          "color": "#5f55ee",
+          "initials": "M(",
+          "profilePicture": "https://attachments.clickup.com/profilePictures/107576099_jHS.jpg"
+        },
+        "new_thread_count": 0,
+        "new_mentioned_thread_count": 0,
+        "email_attachments": [],
+        "threaded_users": [],
+        "threaded_replies": 0,
+        "threaded_assignees": 0,
+        "threaded_assignees_members": [],
+        "threaded_unresolved_count": 0,
+        "thread_followers": [
+          {
+            "id": 107576099,
+            "username": "Mohammad Rasheed Heding (ITKSS)",
+            "email": "rasheed.heding@capytech.com",
+            "color": "#5f55ee",
+            "initials": "M(",
+            "profilePicture": "https://attachments.clickup.com/profilePictures/107576099_jHS.jpg"
+          }
+        ],
+        "group_thread_followers": [],
+        "reactions": [],
+        "emails": []
+      }
+    }
+  ],
+  "task_id": "86eyh4de8",
+  "team_id": "90181119211",
+  "webhook_id": "b539c31d-ea2c-42f2-a19f-73fb5ac371db"
+}
+
+--- NEW WEBHOOK ---
+Event: taskCommentPosted
+Payload: {
+  "event": "taskCommentPosted",
+  "history_items": [
+    {
+      "id": "5276894197160980249",
+      "type": 1,
+      "date": "1790323543709",
+      "field": "comment",
+      "parent_id": "901808520354",
+      "data": {},
+      "source": null,
+      "user": {
+        "id": 107576099,
+        "username": "Mohammad Rasheed Heding (ITKSS)",
+        "email": "rasheed.heding@capytech.com",
+        "color": "#5f55ee",
+        "initials": "M(",
+        "profilePicture": "https://attachments.clickup.com/profilePictures/107576099_jHS.jpg",
+        "role": 3,
+        "role_subtype": 0
+      },
+      "before": null,
+      "after": "1100540000013931",
+      "comment": {
+        "id": "1100540000013931",
+        "date": "1790323543709",
+        "parent": "86eyh4de8",
+        "type": 1,
+        "comment": [
+          {
+            "text": "**Capydam Available Commands:**\n\n🔍 `!capydam search <query>` - Search for assets by name\nℹ️ `!capydam info <asset-id>` - Get details about an asset\n📥 `!capydam download <asset-id>` - Get a download link for an asset\n☁️ `!capydam upload <url>` - Upload an asset from a URL"
+          }
+        ],
+        "text_content": "**Capydam Available Commands:**\n\n🔍 `!capydam search <query>` - Search for assets by name\nℹ️ `!capydam info <asset-id>` - Get details about an asset\n📥 `!capydam download <asset-id>` - Get a download link for an asset\n☁️ `!capydam upload <url>` - Upload an asset from a URL",
+        "x": null,
+        "y": null,
+        "image_y": null,
+        "image_x": null,
+        "page": null,
+        "comment_number": null,
+        "comment_time": null,
+        "referenced_content": null,
+        "_version_vector": {
+          "workspace_id": 90181119211,
+          "object_type": "comment",
+          "object_id": "1100540000013931",
+          "vector": [
+            {
+              "master_id": 112,
+              "version": 1790323543781000,
+              "deleted": false
+            }
+          ]
+        },
+        "comment_type": null,
+        "date_updated": null,
+        "root_parent_id": "86eyh4de8",
+        "root_parent_type": 1,
+        "extra": null,
+        "page_id": null,
+        "page_name": null,
+        "view_id": null,
+        "view_name": null,
+        "team": null,
+        "view_parent_id": null,
+        "view_parent_type": null,
+        "view_parent_avatar_source": null,
+        "view_parent_avatar_value": null,
+        "view_parent_avatar_key": null,
+        "view_parent_color": null,
+        "view_type": null,
+        "user": {
+          "id": 107576099,
+          "username": "Mohammad Rasheed Heding (ITKSS)",
+          "email": "rasheed.heding@capytech.com",
+          "color": "#5f55ee",
+          "initials": "M(",
+          "profilePicture": "https://attachments.clickup.com/profilePictures/107576099_jHS.jpg"
+        },
+        "new_thread_count": 0,
+        "new_mentioned_thread_count": 0,
+        "email_attachments": [],
+        "threaded_users": [],
+        "threaded_replies": 0,
+        "threaded_assignees": 0,
+        "threaded_assignees_members": [],
+        "threaded_unresolved_count": 0,
+        "thread_followers": [
+          {
+            "id": 107576099,
+            "username": "Mohammad Rasheed Heding (ITKSS)",
+            "email": "rasheed.heding@capytech.com",
+            "color": "#5f55ee",
+            "initials": "M(",
+            "profilePicture": "https://attachments.clickup.com/profilePictures/107576099_jHS.jpg"
+          }
+        ],
+        "group_thread_followers": [],
+        "reactions": [],
+        "emails": []
+      }
+    }
+  ],
+  "task_id": "86eyh4de8",
+  "team_id": "90181119211",
+  "webhook_id": "b539c31d-ea2c-42f2-a19f-73fb5ac371db"
+}
+
+--- NEW WEBHOOK ---
+Event: taskCommentPosted
+Payload: {
+  "event": "taskCommentPosted",
+  "history_items": [
+    {
+      "id": "5276894514988560308",
+      "type": 1,
+      "date": "1790323562692",
+      "field": "comment",
+      "parent_id": "901808520354",
+      "data": {},
+      "source": null,
+      "user": {
+        "id": 107576099,
+        "username": "Mohammad Rasheed Heding (ITKSS)",
+        "email": "rasheed.heding@capytech.com",
+        "color": "#5f55ee",
+        "initials": "M(",
+        "profilePicture": "https://attachments.clickup.com/profilePictures/107576099_jHS.jpg",
+        "role": 3,
+        "role_subtype": 0
+      },
+      "before": null,
+      "after": "1100540000013932",
+      "comment": {
+        "id": "1100540000013932",
+        "date": "1790323562692",
+        "parent": "86eyh4de8",
+        "type": 1,
+        "comment": [
+          {
+            "text": "!capydam search dpworld",
+            "attributes": {}
+          },
+          {
+            "text": "\n",
+            "attributes": {
+              "block-id": "block-ShJa4zeXru"
+            }
+          }
+        ],
+        "text_content": "!capydam search dpworld\n",
+        "x": null,
+        "y": null,
+        "image_y": null,
+        "image_x": null,
+        "page": null,
+        "comment_number": null,
+        "comment_time": null,
+        "referenced_content": "",
+        "_version_vector": {
+          "workspace_id": 90181119211,
+          "object_type": "comment",
+          "object_id": "1100540000013932",
+          "vector": [
+            {
+              "master_id": 112,
+              "version": 1790323562731000,
+              "deleted": false
+            }
+          ]
+        },
+        "comment_type": null,
+        "date_updated": null,
+        "root_parent_id": "86eyh4de8",
+        "root_parent_type": 1,
+        "extra": null,
+        "page_id": null,
+        "page_name": null,
+        "view_id": null,
+        "view_name": null,
+        "team": null,
+        "view_parent_id": null,
+        "view_parent_type": null,
+        "view_parent_avatar_source": null,
+        "view_parent_avatar_value": null,
+        "view_parent_avatar_key": null,
+        "view_parent_color": null,
+        "view_type": null,
+        "user": {
+          "id": 107576099,
+          "username": "Mohammad Rasheed Heding (ITKSS)",
+          "email": "rasheed.heding@capytech.com",
+          "color": "#5f55ee",
+          "initials": "M(",
+          "profilePicture": "https://attachments.clickup.com/profilePictures/107576099_jHS.jpg"
+        },
+        "new_thread_count": 0,
+        "new_mentioned_thread_count": 0,
+        "email_attachments": [],
+        "threaded_users": [],
+        "threaded_replies": 0,
+        "threaded_assignees": 0,
+        "threaded_assignees_members": [],
+        "threaded_unresolved_count": 0,
+        "thread_followers": [
+          {
+            "id": 107576099,
+            "username": "Mohammad Rasheed Heding (ITKSS)",
+            "email": "rasheed.heding@capytech.com",
+            "color": "#5f55ee",
+            "initials": "M(",
+            "profilePicture": "https://attachments.clickup.com/profilePictures/107576099_jHS.jpg"
+          }
+        ],
+        "group_thread_followers": [],
+        "reactions": [],
+        "emails": []
+      }
+    }
+  ],
+  "task_id": "86eyh4de8",
+  "team_id": "90181119211",
+  "webhook_id": "b539c31d-ea2c-42f2-a19f-73fb5ac371db"
+}
+
+--- NEW WEBHOOK ---
+Event: taskCommentPosted
+Payload: {
+  "event": "taskCommentPosted",
+  "history_items": [
+    {
+      "id": "5276894540758364088",
+      "type": 1,
+      "date": "1790323564189",
+      "field": "comment",
+      "parent_id": "901808520354",
+      "data": {},
+      "source": null,
+      "user": {
+        "id": 107576099,
+        "username": "Mohammad Rasheed Heding (ITKSS)",
+        "email": "rasheed.heding@capytech.com",
+        "color": "#5f55ee",
+        "initials": "M(",
+        "profilePicture": "https://attachments.clickup.com/profilePictures/107576099_jHS.jpg",
+        "role": 3,
+        "role_subtype": 0
+      },
+      "before": null,
+      "after": "1100540000013933",
+      "comment": {
+        "id": "1100540000013933",
+        "date": "1790323564189",
+        "parent": "86eyh4de8",
+        "type": 1,
+        "comment": [
+          {
+            "text": "Found 0 assets for \"dpworld\":\n\n"
+          }
+        ],
+        "text_content": "Found 0 assets for \"dpworld\":\n\n",
+        "x": null,
+        "y": null,
+        "image_y": null,
+        "image_x": null,
+        "page": null,
+        "comment_number": null,
+        "comment_time": null,
+        "referenced_content": null,
+        "_version_vector": {
+          "workspace_id": 90181119211,
+          "object_type": "comment",
+          "object_id": "1100540000013933",
+          "vector": [
+            {
+              "master_id": 112,
+              "version": 1790323564250000,
+              "deleted": false
+            }
+          ]
+        },
+        "comment_type": null,
+        "date_updated": null,
+        "root_parent_id": "86eyh4de8",
+        "root_parent_type": 1,
+        "extra": null,
+        "page_id": null,
+        "page_name": null,
+        "view_id": null,
+        "view_name": null,
+        "team": null,
+        "view_parent_id": null,
+        "view_parent_type": null,
+        "view_parent_avatar_source": null,
+        "view_parent_avatar_value": null,
+        "view_parent_avatar_key": null,
+        "view_parent_color": null,
+        "view_type": null,
+        "user": {
+          "id": 107576099,
+          "username": "Mohammad Rasheed Heding (ITKSS)",
+          "email": "rasheed.heding@capytech.com",
+          "color": "#5f55ee",
+          "initials": "M(",
+          "profilePicture": "https://attachments.clickup.com/profilePictures/107576099_jHS.jpg"
+        },
+        "new_thread_count": 0,
+        "new_mentioned_thread_count": 0,
+        "email_attachments": [],
+        "threaded_users": [],
+        "threaded_replies": 0,
+        "threaded_assignees": 0,
+        "threaded_assignees_members": [],
+        "threaded_unresolved_count": 0,
+        "thread_followers": [
+          {
+            "id": 107576099,
+            "username": "Mohammad Rasheed Heding (ITKSS)",
+            "email": "rasheed.heding@capytech.com",
+            "color": "#5f55ee",
+            "initials": "M(",
+            "profilePicture": "https://attachments.clickup.com/profilePictures/107576099_jHS.jpg"
+          }
+        ],
+        "group_thread_followers": [],
+        "reactions": [],
+        "emails": []
+      }
+    }
+  ],
+  "task_id": "86eyh4de8",
+  "team_id": "90181119211",
+  "webhook_id": "b539c31d-ea2c-42f2-a19f-73fb5ac371db"
+}

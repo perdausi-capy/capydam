@@ -87,5 +87,5 @@ export const getStreamFromSupabase = async (pathUrl: string) => {
     Key: fileKey,
   }));
   
-  return response.Body; // This is a Readable stream
+  return (response as any).Body; // This is a Readable stream
 };

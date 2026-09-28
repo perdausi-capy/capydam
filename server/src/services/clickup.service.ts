@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const prisma = new PrismaClient();
 
-export const postClickupComment = async (targetId: string, targetType: 'task' | 'view', message: string) => {
+export const postClickupComment = async (targetId: string, targetType: 'task' | 'view', messagePayload: any) => {
   const token = process.env.CLICKUP_API_TOKEN?.trim();
   if (!token) {
     console.error("CLICKUP_API_TOKEN is missing");
@@ -16,9 +16,13 @@ export const postClickupComment = async (targetId: string, targetType: 'task' | 
       : `https://api.clickup.com/api/v2/view/${targetId}/comment`;
 
     console.log(`[ClickUp] Posting reply to ${endpoint}`);
+    
+    // If it's a string, wrap it in comment_text. Otherwise, it's a rich payload.
+    const body = typeof messagePayload === 'string' ? { comment_text: messagePayload } : messagePayload;
+
     const response = await axios.post(
       endpoint,
-      { comment_text: message },
+      body,
       {
         headers: {
           'Authorization': token,
@@ -49,17 +53,38 @@ export const handleSearchCommand = async (targetId: string, targetType: 'task' |
   });
 
   const serverUrl = process.env.SERVER_URL || 'http://localhost:5000';
-  let msg = `Found ${assets.length} assets for "${query}":\n\n`;
   
+  const comment: any[] = [
+      { type: "emoticon", emoticon: { code: "1f50d", name: "mag", type: "default" }, text: "🔍" },
+      { text: `  Capydam Search Results  `, attributes: { bold: true } },
+      {
+          text: "\n",
+          attributes: { "advanced-banner": "8b461d23-f294-4683-8826-2cb9bf991071", "advanced-banner-color": "purple", header: 3 }
+      },
+      { text: "\n", attributes: {} },
+      { text: `Found ${assets.length} assets for `, attributes: { italic: true } },
+      { text: `"${query}"`, attributes: { bold: true } },
+      { text: "\n", attributes: {} },
+      { text: "\n", attributes: {} }
+  ];
+
   assets.forEach((a, i) => {
-    msg += `**${i + 1}. ${a.originalName}** (ID: ${a.id})\n\n`; // Changed from \n to \n\n
-    if (a.mimeType.startsWith('image/')) {
-       const imageUrl = `${serverUrl}/api/assets/view/${a.id}/image.png`;
-       msg += `![${a.originalName}](${imageUrl})\n\n`;
-    }
+      comment.push({ type: "emoticon", emoticon: { code: "1f4c1", name: "file_folder", type: "default" }, text: "📁" });
+      comment.push({ text: ` ${i + 1}. ${a.originalName} `, attributes: { bold: true } });
+      comment.push({ text: `(ID: ${a.id})`, attributes: { code: true } });
+      comment.push({ text: "\n", attributes: {} });
+      
+      if (a.mimeType.startsWith('image/')) {
+         const imageUrl = `${serverUrl}/api/assets/view/${a.id}/image.png`;
+         comment.push({ type: "image", image: { url: imageUrl } });
+         comment.push({ text: "\n\n", attributes: {} });
+      } else {
+         comment.push({ text: "\n", attributes: {} });
+      }
   });
-  
-  await postClickupComment(targetId, targetType, msg);
+
+  const payload = { notify_all: true, comment: comment };
+  await postClickupComment(targetId, targetType, payload);
 };
 
 export const handleInfoCommand = async (targetId: string, targetType: 'task' | 'view', assetId: string) => {
@@ -73,15 +98,36 @@ export const handleInfoCommand = async (targetId: string, targetType: 'task' | '
     }
 
     const serverUrl = process.env.SERVER_URL || 'http://localhost:5000';
-    let msg = `Asset Info:\nName: ${asset.originalName}\nType: ${asset.mimeType}\nSize: ${(asset.size / 1024 / 1024).toFixed(2)} MB\nUploaded: ${asset.createdAt.toISOString()}`;
+    
+    const comment: any[] = [
+        { type: "emoticon", emoticon: { code: "1f4e6", name: "package", type: "default" }, text: "📦" },
+        { text: `  Capydam Asset Info  `, attributes: { bold: true } },
+        {
+            text: "\n",
+            attributes: { "advanced-banner": "8b461d23-f294-4683-8826-2cb9bf991071", "advanced-banner-color": "blue-strong", header: 3 }
+        },
+        { text: "\n", attributes: {} },
+        { text: `Name: `, attributes: { bold: true } },
+        { text: `${asset.originalName}\n`, attributes: {} },
+        { text: `Type: `, attributes: { bold: true } },
+        { text: `${asset.mimeType}\n`, attributes: {} },
+        { text: `Size: `, attributes: { bold: true } },
+        { text: `${(asset.size / 1024 / 1024).toFixed(2)} MB\n`, attributes: {} },
+        { text: `Uploaded: `, attributes: { bold: true } },
+        { text: `${asset.createdAt.toISOString()}\n\n`, attributes: {} },
+    ];
     
     // Auto-preview for images
     if (asset.mimeType.startsWith('image/')) {
        const imageUrl = `${serverUrl}/api/assets/view/${asset.id}/image.png`;
-       msg += `\n\nPreview:\n![${asset.originalName}](${imageUrl})`;
+       comment.push({ type: "emoticon", emoticon: { code: "1f5bc", name: "frame_with_picture", type: "default" }, text: "🖼️" });
+       comment.push({ text: `  Preview:\n\n`, attributes: { bold: true } });
+       comment.push({ type: "image", image: { url: imageUrl } });
+       comment.push({ text: "\n", attributes: {} });
     }
 
-    await postClickupComment(targetId, targetType, msg);
+    const payload = { notify_all: true, comment: comment };
+    await postClickupComment(targetId, targetType, payload);
   } catch(e) {
     await postClickupComment(targetId, targetType, `Error finding asset: ${assetId}`);
   }
