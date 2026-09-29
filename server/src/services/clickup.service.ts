@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
+import { extractSearchKeywords } from './ai.service';
 
 const prisma = new PrismaClient();
 
@@ -40,13 +41,25 @@ export const postClickupComment = async (targetId: string, targetType: 'task' | 
 };
 
 export const handleSearchCommand = async (targetId: string, targetType: 'task' | 'view', query: string) => {
+  const keywords = await extractSearchKeywords(query);
+
+  if (keywords.length === 0) {
+    await postClickupComment(targetId, targetType, "Could not extract valid search terms from your query. Please try again.");
+    return;
+  }
+
+  // Build an OR array for each keyword
+  const keywordConditions = keywords.map(kw => ({
+    OR: [
+      { originalName: { contains: kw, mode: 'insensitive' } },
+      { filename: { contains: kw, mode: 'insensitive' } },
+      { description: { contains: kw, mode: 'insensitive' } }
+    ]
+  }));
+
   const assets = await prisma.asset.findMany({
     where: {
-      OR: [
-        { originalName: { contains: query, mode: 'insensitive' } },
-        { filename: { contains: query, mode: 'insensitive' } },
-        { description: { contains: query, mode: 'insensitive' } }
-      ],
+      OR: keywordConditions as any, // "Match ANY of the words" (OR logic)
       deletedAt: null
     },
     take: 5
