@@ -417,10 +417,17 @@ export const extractSearchKeywords = async (query: string): Promise<string[]> =>
       messages: [
         { 
           role: "system", 
-          content: `Extract the core search keywords from the user's sentence.
-          Ignore filler words (e.g., "do we have", "where is", "the", "for").
-          Return ONLY a comma-separated list of the core nouns/keywords.
-          Example: "do we have the source files for the Dubai Holding procurement module" -> "Dubai, Holding, procurement, module"`
+          content: `Extract ONLY the core, unique Project or Brand Name from the user's sentence.
+          CRITICAL RULES:
+          1. Drop ALL generic asset words (e.g., "module", "sample", "images", "files", "video", "source", "procurement", "training").
+          2. Drop ALL conversational filler (e.g., "do we have", "where is", "can you find").
+          3. Group proper nouns together instead of splitting them.
+          4. Return ONLY a comma-separated list of the core concepts.
+          
+          Examples: 
+          "do we have the source files for the Dubai Holding procurement module" -> "Dubai Holding"
+          "can you give me sample module of DPW fraud awareness?" -> "DPW, fraud awareness"
+          "cartier module sample" -> "cartier"`
         },
         { role: "user", content: query }
       ]
@@ -429,8 +436,8 @@ export const extractSearchKeywords = async (query: string): Promise<string[]> =>
     return result.split(',').map(s => s.trim()).filter(Boolean);
   } catch (error) {
     console.error("AI Keyword Extraction Error:", error);
-    // Basic Fallback: strip common words manually
-    const stopWords = ['do','we','have','the','for','source','files','where','is','can','you','find','show','me'];
+    // Basic Fallback: aggressively strip common words manually
+    const stopWords = ['do','we','have','the','for','source','files','where','is','can','you','find','show','me','module','sample','images','video','of','a','an'];
     const words = query.split(/\\s+/);
     return words.filter(w => !stopWords.includes(w.toLowerCase())).filter(Boolean);
   }
