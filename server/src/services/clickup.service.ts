@@ -83,7 +83,8 @@ export const handleSearchCommand = async (targetId: string, targetType: 'task' |
 
   assets.forEach((a, i) => {
       comment.push({ type: "emoticon", emoticon: { code: "1f4c1", name: "file_folder", type: "default" }, text: "📁" });
-      comment.push({ text: ` ${i + 1}. ${a.originalName} `, attributes: { bold: true } });
+      const downloadUrl = `${serverUrl}/api/assets/download/${a.id}`;
+      comment.push({ text: ` ${i + 1}. ${a.originalName} `, attributes: { bold: true, link: downloadUrl } });
       comment.push({ text: `(ID: ${a.id})`, attributes: { code: true } });
       comment.push({ text: "\n", attributes: {} });
       
