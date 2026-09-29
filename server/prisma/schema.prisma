@@ -113,6 +113,7 @@ model Asset {
   updatedAt      DateTime @updatedAt
   collections    AssetOnCollection[]
   previewFrames String[]  @default([])
+  isCReel       Boolean   @default(false)
 
   deletedAt      DateTime?
   @@index([deletedAt])

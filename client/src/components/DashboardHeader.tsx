@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Search, Image as ImageIcon, Film, Grid, Sparkles, X, Palette, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export type FilterType = 'all' | 'image' | 'video';
+export type FilterType = 'all' | 'image' | 'video' | 'creel';
 
 interface DashboardHeaderProps {
   assetsCount: number;
@@ -65,6 +65,9 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = React.memo(({
       </button>
       <button onClick={() => setFilterType('video')} className={`flex-1 lg:flex-none flex items-center justify-center gap-1.5 px-4 py-2 lg:py-1.5 rounded-lg text-xs font-bold transition-all ${filterType === 'video' ? 'bg-white dark:bg-[#2C3035] text-pink-600 dark:text-pink-400 shadow-sm' : 'text-gray-500 hover:text-pink-600 dark:text-gray-400 dark:hover:text-pink-400'}`}>
         <Film size={14} /> Videos
+      </button>
+      <button onClick={() => setFilterType('creel')} className={`flex-1 lg:flex-none flex items-center justify-center gap-1.5 px-4 py-2 lg:py-1.5 rounded-lg text-xs font-bold transition-all ${filterType === 'creel' ? 'bg-white dark:bg-[#2C3035] text-cyan-600 dark:text-cyan-400 shadow-sm' : 'text-gray-500 hover:text-cyan-600 dark:text-gray-400 dark:hover:text-cyan-400'}`}>
+        <Sparkles size={14} /> C-REEL
       </button>
     </>
   );

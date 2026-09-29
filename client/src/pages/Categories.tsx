@@ -13,7 +13,8 @@ import {
     Edit2,
     Sparkles,
     UploadCloud,
-    ExternalLink // ✅ Added Icon
+    ExternalLink, // ✅ Added Icon
+    PlayCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -310,11 +311,16 @@ const Categories = () => {
                   </p>
               </div>
               
-              {canManage && (
-                <button onClick={openCreate} className="flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-black px-6 py-3 rounded-2xl font-bold shadow-lg hover:scale-105 transition-transform">
-                    <Plus size={20} /> New Topic
-                </button>
-              )}
+              <div className="flex gap-4">
+                  <Link to="/library?type=creel" className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-6 py-3 rounded-2xl font-bold shadow-lg hover:scale-105 transition-transform">
+                      <PlayCircle size={20} /> Explore Microlearning
+                  </Link>
+                  {canManage && (
+                    <button onClick={openCreate} className="flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-black px-6 py-3 rounded-2xl font-bold shadow-lg hover:scale-105 transition-transform">
+                        <Plus size={20} /> New Topic
+                    </button>
+                  )}
+              </div>
           </div>
       </div>
 

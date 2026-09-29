@@ -110,6 +110,7 @@ const Upload = () => {
   // Modals & Filters
   const [isRecentModalOpen, setIsRecentModalOpen] = useState(false);
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false); 
+  const [uploadAsCReel, setUploadAsCReel] = useState(false);
   
   const [modalSearchQuery, setModalSearchQuery] = useState('');
   const [dateStart, setDateStart] = useState<string>(''); 
@@ -300,6 +301,7 @@ const Upload = () => {
       formData.append('originalName', currentQueue[i].newName);
       formData.append('creativity', creativity.toString());
       formData.append('specificity', specificity);
+      formData.append('isCReel', String(uploadAsCReel));
       
       const validLinks = currentQueue[i].externalLinks.filter(link => link.trim() !== '');
       const aiDataObj: any = {};
@@ -688,8 +690,19 @@ const Upload = () => {
                       <div className="p-4 md:px-6 md:py-5 border-t border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-[#1A1D21] shrink-0 flex flex-col sm:flex-row items-center justify-between gap-4 z-10">
                           <button onClick={() => setIsQueueModalOpen(false)} className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">Close / Add More</button>
                           
-                          <button
-                              onClick={startUpload}
+                          <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                              <label className="flex items-center gap-2 text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                                  <input 
+                                      type="checkbox" 
+                                      checked={uploadAsCReel}
+                                      onChange={(e) => setUploadAsCReel(e.target.checked)}
+                                      className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-black/20 dark:border-white/10"
+                                  />
+                                  Upload as C-REEL
+                              </label>
+
+                              <button
+                                  onClick={startUpload}
                               disabled={isProcessing || isRedirecting || queue.length === 0}
                               className={`
                                   relative overflow-hidden w-full sm:w-auto px-10 py-3 rounded-xl font-bold shadow-md transition-all duration-300 flex justify-center items-center gap-2
@@ -702,10 +715,11 @@ const Upload = () => {
                               {(isProcessing || isRedirecting) && (
                                   <div className={`absolute left-0 top-0 bottom-0 bg-gradient-to-r from-indigo-600 via-purple-500 to-indigo-600 bg-[length:200%_100%] animate-shimmer z-0`} style={{ width: isRedirecting ? '100%' : `${overallProgress}%` }} />
                               )}
-                              <span className="relative z-10 flex items-center gap-2">
-                                  {getButtonContent()}
-                              </span>
-                          </button>
+                                  <span className="relative z-10 flex items-center gap-2">
+                                      {getButtonContent()}
+                                  </span>
+                              </button>
+                          </div>
                       </div>
                   </motion.div>
               </div>

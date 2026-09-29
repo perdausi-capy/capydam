@@ -137,6 +137,7 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
         previewFrames: previewFrames, // ✅ Save the frames array
         userId: userId!, 
         aiData: JSON.stringify(initialAiData),
+        isCReel: req.body.isCReel === 'true',
       },
     });
 
@@ -247,6 +248,7 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
             if (type === 'image') filters.mimeType = { startsWith: 'image/' };
             else if (type === 'video') filters.mimeType = { startsWith: 'video/' };
             else if (type === 'document') filters.mimeType = 'application/pdf';
+            else if (type === 'creel') filters.isCReel = true;
         }
         if (color) {
             filters.aiData = { contains: String(color), mode: 'insensitive' };
@@ -256,7 +258,6 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
 
     const activeFilters = buildFilters();
 
-    // B. Lightweight Select (Include previewFrames)
     const lightweightSelect = {
         id: true,
         filename: true,
@@ -266,6 +267,7 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
         thumbnailPath: true,
         previewFrames: true, // ✅ Return frames to frontend
         aiData: true,
+        isCReel: true,
         createdAt: true,
         uploadedBy: { select: { name: true } }
     };
