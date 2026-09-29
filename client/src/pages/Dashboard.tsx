@@ -190,11 +190,12 @@ const Dashboard = () => {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlSearch = searchParams.get('search') || '';
+  const urlType = (searchParams.get('type') as FilterType) || 'all';
 
   const [searchQuery, setSearchQuery] = useState(urlSearch);
   const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
-  const [filterType, setFilterType] = useState<FilterType>('all');
+  const [filterType, setFilterType] = useState<FilterType>(urlType);
 
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
@@ -208,9 +209,13 @@ const Dashboard = () => {
 
   useEffect(() => {
     const currentUrlSearch = searchParams.get('search') || '';
+    const currentUrlType = (searchParams.get('type') as FilterType) || 'all';
     if (currentUrlSearch !== searchQuery) {
         setSearchQuery(currentUrlSearch);
         setDebouncedSearch(currentUrlSearch); 
+    }
+    if (currentUrlType !== filterType) {
+        setFilterType(currentUrlType);
     }
   }, [searchParams]);
 
