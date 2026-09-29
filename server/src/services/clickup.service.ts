@@ -59,7 +59,7 @@ export const handleSearchCommand = async (targetId: string, targetType: 'task' |
 
   const assets = await prisma.asset.findMany({
     where: {
-      OR: keywordConditions as any, // "Match ANY of the words" (OR logic)
+      AND: keywordConditions as any, // "Match ALL of the words" (AND logic)
       deletedAt: null
     },
     take: 5
