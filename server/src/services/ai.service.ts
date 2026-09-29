@@ -408,3 +408,30 @@ export const parseQuestionsWithAI = async (rawText: string) => {
     return null;
   }
 };
+
+export const extractSearchKeywords = async (query: string): Promise<string[]> => {
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini", // Fast and cheap for keyword extraction
+      temperature: 0,
+      messages: [
+        { 
+          role: "system", 
+          content: `Extract the core search keywords from the user's sentence.
+          Ignore filler words (e.g., "do we have", "where is", "the", "for").
+          Return ONLY a comma-separated list of the core nouns/keywords.
+          Example: "do we have the source files for the Dubai Holding procurement module" -> "Dubai, Holding, procurement, module"`
+        },
+        { role: "user", content: query }
+      ]
+    });
+    const result = response.choices[0].message.content || '';
+    return result.split(',').map(s => s.trim()).filter(Boolean);
+  } catch (error) {
+    console.error("AI Keyword Extraction Error:", error);
+    // Basic Fallback: strip common words manually
+    const stopWords = ['do','we','have','the','for','source','files','where','is','can','you','find','show','me'];
+    const words = query.split(/\\s+/);
+    return words.filter(w => !stopWords.includes(w.toLowerCase())).filter(Boolean);
+  }
+};
