@@ -209,7 +209,7 @@ cron.schedule('0 4 * * *', async () => {
             console.log(`💬 [CHAT POLLER] Found command: ${textContent}`);
             // Check for secret limit command (e.g. +10)
             let searchLimit = 5;
-            const limitIndex = args.findIndex(arg => /^\+\d+$/.test(arg));
+            const limitIndex = args.findIndex((arg: string) => /^\+\d+$/.test(arg));
             if (limitIndex !== -1) {
               searchLimit = parseInt(args[limitIndex].substring(1), 10);
               args.splice(limitIndex, 1); // Remove it from args so it doesn't affect parsing
