@@ -207,6 +207,14 @@ cron.schedule('0 4 * * *', async () => {
           
           if (args[0].toLowerCase() === '!capydam') {
             console.log(`💬 [CHAT POLLER] Found command: ${textContent}`);
+            // Check for secret limit command (e.g. +10)
+            let searchLimit = 5;
+            const limitIndex = args.findIndex(arg => /^\+\d+$/.test(arg));
+            if (limitIndex !== -1) {
+              searchLimit = parseInt(args[limitIndex].substring(1), 10);
+              args.splice(limitIndex, 1); // Remove it from args so it doesn't affect parsing
+            }
+
             const possibleCommand = args[1]?.toLowerCase();
             
             if (!possibleCommand) {
@@ -220,11 +228,11 @@ cron.schedule('0 4 * * *', async () => {
             } else if (possibleCommand === 'search') {
                // Support legacy '!capydam search <query>'
               const searchArg = args.slice(2).join(' ');
-              if (searchArg) await handleSearchCommand(CHAT_VIEW_ID, 'view', searchArg);
+              if (searchArg) await handleSearchCommand(CHAT_VIEW_ID, 'view', searchArg, searchLimit);
             } else {
               // DEFAULT BEHAVIOR: Treat the entire string after !capydam as a search query
               const searchQuery = args.slice(1).join(' ');
-              await handleSearchCommand(CHAT_VIEW_ID, 'view', searchQuery);
+              await handleSearchCommand(CHAT_VIEW_ID, 'view', searchQuery, searchLimit);
             }
           }
         }
