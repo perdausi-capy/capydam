@@ -40,7 +40,7 @@ export const postClickupComment = async (targetId: string, targetType: 'task' | 
   }
 };
 
-export const handleSearchCommand = async (targetId: string, targetType: 'task' | 'view', query: string) => {
+export const handleSearchCommand = async (targetId: string, targetType: 'task' | 'view', query: string, limit: number = 5) => {
   const keywords = await extractSearchKeywords(query);
 
   if (keywords.length === 0) {
@@ -62,7 +62,7 @@ export const handleSearchCommand = async (targetId: string, targetType: 'task' |
       OR: keywordConditions as any, // "Match ANY of the words" (OR logic)
       deletedAt: null
     },
-    take: 5
+    take: limit
   });
 
   const serverUrl = process.env.SERVER_URL || 'http://localhost:5000';
