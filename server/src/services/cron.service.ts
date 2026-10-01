@@ -207,23 +207,24 @@ cron.schedule('0 4 * * *', async () => {
           
           if (args[0].toLowerCase() === '!capydam') {
             console.log(`💬 [CHAT POLLER] Found command: ${textContent}`);
-            const commandName = args[1]?.toLowerCase();
-            const commandArgs = args.slice(2).join(' ');
-
-            if (!commandName) {
-              await postClickupComment(CHAT_VIEW_ID, 'view', '**Capydam Chat Bot Active!**\nUse `!capydam search <query>`');
+            const possibleCommand = args[1]?.toLowerCase();
+            
+            if (!possibleCommand) {
+              await postClickupComment(CHAT_VIEW_ID, 'view', '**Capydam Chat Bot Active!**\nUse `!capydam <search query>` or `!capydam info <id>`');
               continue;
             }
 
-            switch (commandName) {
-              case 'search':
-                if (commandArgs) await handleSearchCommand(CHAT_VIEW_ID, 'view', commandArgs);
-                break;
-              case 'info':
-                if (commandArgs) await handleInfoCommand(CHAT_VIEW_ID, 'view', commandArgs);
-                break;
-              default:
-                await postClickupComment(CHAT_VIEW_ID, 'view', `Unknown command: ${commandName}`);
+            if (possibleCommand === 'info') {
+              const infoArg = args.slice(2).join(' ');
+              if (infoArg) await handleInfoCommand(CHAT_VIEW_ID, 'view', infoArg);
+            } else if (possibleCommand === 'search') {
+               // Support legacy '!capydam search <query>'
+              const searchArg = args.slice(2).join(' ');
+              if (searchArg) await handleSearchCommand(CHAT_VIEW_ID, 'view', searchArg);
+            } else {
+              // DEFAULT BEHAVIOR: Treat the entire string after !capydam as a search query
+              const searchQuery = args.slice(1).join(' ');
+              await handleSearchCommand(CHAT_VIEW_ID, 'view', searchQuery);
             }
           }
         }

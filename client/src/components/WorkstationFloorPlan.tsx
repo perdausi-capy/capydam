@@ -293,8 +293,8 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                                 className={`absolute select-none rounded-xl border backdrop-blur-md shadow-lg p-2.5 flex flex-col overflow-hidden
                                 ${isLocked ? 'cursor-default' : 'cursor-grab'}
                                 ${isFiltered ? 'opacity-100 z-10' : 'opacity-30 z-0 grayscale'}
-                                ${statusBorderColors[ws.status] || 'border-white/10'}
-                                ${statusBgColors[ws.status] || 'bg-white/5'}
+                                ${statusBorderColors[ws.status] || 'border-gray-200 dark:border-white/10'}
+                                ${statusBgColors[ws.status] || 'bg-white dark:bg-white/5'}
                             `}
                             >
                                 <div className="absolute -top-1 -right-1 flex gap-1 z-10">
@@ -310,21 +310,21 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                                     className="flex flex-col items-center flex-1 h-full w-full"
                                     onDoubleClick={() => onOpenDetail(ws)}
                                 >
-                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-white/10 dark:to-white/5 border border-white/10 flex items-center justify-center shadow-inner text-gray-700 dark:text-gray-300 shrink-0 mb-1.5">
+                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-white/10 dark:to-white/5 border border-gray-200 dark:border-white/10 flex items-center justify-center shadow-inner text-gray-700 dark:text-gray-300 shrink-0 mb-1.5">
                                         <Monitor size={20} />
                                     </div>
                                     <div className="flex-1 flex items-center justify-center w-full">
-                                        <h4 className="text-white font-black text-[11px] leading-tight tracking-wide text-center uppercase line-clamp-3">
+                                        <h4 className="text-gray-800 dark:text-white font-black text-[11px] leading-tight tracking-wide text-center uppercase line-clamp-3">
                                             {ws.unitId}
                                         </h4>
                                     </div>
 
-                                    <div className="w-full bg-black/20 rounded-lg p-1.5 mt-auto border border-white/5 flex items-center justify-center gap-2 shrink-0">
+                                    <div className="w-full bg-black/5 dark:bg-black/20 rounded-lg p-1.5 mt-auto border border-black/5 dark:border-white/5 flex items-center justify-center gap-2 shrink-0">
                                         {ws.assignedUsers && ws.assignedUsers.length > 0 ? (
                                             <>
                                                 <div className="flex -space-x-1 shrink-0">
                                                     {ws.assignedUsers.slice(0, 2).map((user) => (
-                                                        <div key={user.id} className="w-4 h-4 rounded-full overflow-hidden bg-blue-500 flex items-center justify-center text-[8px] font-bold text-white ring-1 ring-black">
+                                                        <div key={user.id} className="w-4 h-4 rounded-full overflow-hidden bg-blue-500 flex items-center justify-center text-[8px] font-bold text-white ring-1 ring-white dark:ring-black">
                                                             {user.avatar ? (
                                                                 <img src={user.avatar} alt="avatar" className="w-full h-full object-cover" />
                                                             ) : (
@@ -333,7 +333,7 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                                                         </div>
                                                     ))}
                                                 </div>
-                                                <span className="text-[9px] text-gray-300 font-medium truncate">
+                                                <span className="text-[9px] text-gray-700 dark:text-gray-300 font-medium truncate">
                                                     {ws.assignedUsers.length === 1 
                                                         ? ws.assignedUsers[0].name.split(' ')[0] 
                                                         : `${ws.assignedUsers[0].name.split(' ')[0]} +${ws.assignedUsers.length - 1}`
@@ -341,7 +341,7 @@ export const WorkstationFloorPlan: React.FC<WorkstationFloorPlanProps> = ({
                                                 </span>
                                             </>
                                         ) : (
-                                            <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">
+                                            <span className="text-[9px] text-gray-600 dark:text-gray-400 font-bold uppercase tracking-widest">
                                                 Empty
                                             </span>
                                         )}
