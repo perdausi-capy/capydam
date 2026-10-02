@@ -21,6 +21,7 @@ import uploadRoutes from './routes/uploadRoutes'; // ✅ Imported
 import ittRoutes from './routes/itt.routes'; // ✅ ITT System
 import infrastructureRoutes from './routes/infrastructure.routes';
 import clickupRoutes from './routes/clickup.routes'; // ✅ ClickUp Webhook
+import webhookRoutes from './routes/webhook.routes'; // ✅ Automated Drive Webhook
 
 // Import Services
 import { initCronJobs } from './services/cron.service';
@@ -74,6 +75,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/infrastructure', infrastructureRoutes);
 app.use('/api/clickup', clickupRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 // ✅ NEW ITT ROUTES
 app.use('/api/itt', ittRoutes);
