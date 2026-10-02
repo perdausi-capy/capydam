@@ -62,6 +62,9 @@ export const handleSearchCommand = async (targetId: string, targetType: 'task' |
       OR: keywordConditions as any, // "Match ANY of the words" (OR logic)
       deletedAt: null
     },
+    orderBy: {
+      mimeType: 'asc' // image/* comes before video/* alphabetically
+    },
     take: limit
   });
 
