@@ -86,7 +86,6 @@ export const handleSearchCommand = async (targetId: string, targetType: 'task' |
       // Route users to the Capydam Web Dashboard for this specific asset
       const assetUrl = `${serverUrl}/assets/${a.id}`;
       comment.push({ text: ` ${i + 1}. ${a.originalName} `, attributes: { bold: true, link: assetUrl } });
-      comment.push({ text: `(ID: ${a.id})`, attributes: { code: true } });
       comment.push({ text: "\n", attributes: {} });
       
       if (a.mimeType.startsWith('image/')) {
