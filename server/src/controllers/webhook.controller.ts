@@ -140,6 +140,7 @@ export const handleDriveUpload = async (req: Request, res: Response): Promise<vo
         userId: adminUser.id, 
         aiData: JSON.stringify(initialAiData),
         isCReel: true, // Marked as CReel automatically
+        creelFolder: project_name, // Organizes the asset into the correct folder automatically
       },
     });
 

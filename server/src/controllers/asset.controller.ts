@@ -138,6 +138,7 @@ export const uploadAsset = async (req: Request, res: Response): Promise<void> =>
         userId: userId!, 
         aiData: JSON.stringify(initialAiData),
         isCReel: req.body.isCReel === 'true',
+        creelFolder: req.body.creelFolder || null,
       },
     });
 
@@ -268,6 +269,7 @@ export const getAssets = async (req: Request, res: Response): Promise<void> => {
         previewFrames: true, // ✅ Return frames to frontend
         aiData: true,
         isCReel: true,
+        creelFolder: true,
         createdAt: true,
         uploadedBy: { select: { name: true } }
     };
@@ -621,5 +623,20 @@ export const deleteAsset = async (req: Request, res: Response): Promise<void> =>
   } catch (error) {
     console.error("🔥 SOFT DELETE ERROR:", error);
     res.status(500).json({ message: 'Server error', error: String(error) });
+  }
+};
+
+export const getCreelFolders = async (req: Request, res: Response) => {
+  try {
+    const folders = await prisma.asset.findMany({
+      where: { isCReel: true, creelFolder: { not: null } },
+      select: { creelFolder: true },
+      distinct: ['creelFolder']
+    });
+    const folderNames = folders.map((f: any) => f.creelFolder).filter((f: any) => f);
+    res.json(folderNames);
+  } catch (error) {
+    console.error('Error fetching creel folders:', error);
+    res.status(500).json({ error: 'Failed to fetch folders' });
   }
 };

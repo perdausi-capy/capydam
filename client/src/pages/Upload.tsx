@@ -110,7 +110,7 @@ const Upload = () => {
   // Modals & Filters
   const [isRecentModalOpen, setIsRecentModalOpen] = useState(false);
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false); 
-  const [uploadAsCReel, setUploadAsCReel] = useState(false);
+
   
   const [modalSearchQuery, setModalSearchQuery] = useState('');
   const [dateStart, setDateStart] = useState<string>(''); 
@@ -301,7 +301,7 @@ const Upload = () => {
       formData.append('originalName', currentQueue[i].newName);
       formData.append('creativity', creativity.toString());
       formData.append('specificity', specificity);
-      formData.append('isCReel', String(uploadAsCReel));
+
       
       const validLinks = currentQueue[i].externalLinks.filter(link => link.trim() !== '');
       const aiDataObj: any = {};
@@ -691,15 +691,7 @@ const Upload = () => {
                           <button onClick={() => setIsQueueModalOpen(false)} className="w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">Close / Add More</button>
                           
                           <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
-                              <label className="flex items-center gap-2 text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer select-none">
-                                  <input 
-                                      type="checkbox" 
-                                      checked={uploadAsCReel}
-                                      onChange={(e) => setUploadAsCReel(e.target.checked)}
-                                      className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-black/20 dark:border-white/10"
-                                  />
-                                  Upload as C-REEL
-                              </label>
+
 
                               <button
                                   onClick={startUpload}

@@ -10,7 +10,8 @@ import {
     updateAsset, 
     deleteAsset, 
     getRelatedAssets, 
-    trackAssetClick 
+    trackAssetClick,
+    getCreelFolders
 } from '../controllers/asset.controller';
 
 // ✅ IMPORT TRASH CONTROLLERS
@@ -54,6 +55,7 @@ router.post('/track-click', verifyJWT, trackAssetClick);
 
 // 3. SEARCH / BROWSE
 router.get('/', verifyJWT, getAssets);
+router.get('/creel/folders', verifyJWT, getCreelFolders);
 
 // 4. SPECIFIC ID ROUTES (Must come BEFORE generic /:id)
 router.get('/:id/related', verifyJWT, getRelatedAssets);
