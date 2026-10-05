@@ -6,6 +6,9 @@ import {
   X, 
   Download, 
   FolderPlus, 
+  Folder,
+  ChevronDown,
+  ChevronRight,
   Plus, 
   ExternalLink,
   Loader2
@@ -31,6 +34,7 @@ interface Asset {
   aiData?: string;
   previewFrames?: string[];
   isSkeleton?: boolean;
+  creelFolder?: string | null;
 }
 
 interface CollectionSimple { id: string; name: string; }
@@ -200,6 +204,16 @@ const Dashboard = () => {
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [modalSearch, setModalSearch] = useState('');
+
+  // 📂 C-REEL FOLDERS STATE
+  const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
+
+  const toggleFolder = useCallback((folderName: string) => {
+      setCollapsedFolders(prev => ({
+          ...prev,
+          [folderName]: !prev[folderName]
+      }));
+  }, []);
 
   // 🐹 GOLDEN CAPY STATE
   const [luckyIndex, setLuckyIndex] = useState<number | null>(null);
@@ -440,6 +454,52 @@ const Dashboard = () => {
 
   const breakpointColumnsObj = { default: 5, 1536: 4, 1280: 3, 1024: 3, 768: 2, 640: 1 };
 
+  const groupedAssets = useMemo(() => {
+    if (filterType !== 'creel') return null;
+    const groups: Record<string, Asset[]> = {};
+    assets.forEach(a => {
+        const folder = a.creelFolder || 'Uncategorized';
+        if (!groups[folder]) groups[folder] = [];
+        groups[folder].push(a);
+    });
+    return groups;
+  }, [assets, filterType]);
+
+  const renderAsset = (asset: Asset) => {
+    const index = assets.indexOf(asset);
+    if (asset.isSkeleton) {
+        return <SkeletonCard key={asset.id} />;
+    }
+    
+    if (index === assets.length - 11) {
+        return (
+            <div ref={lastAssetRef} key={asset.id}>
+                <AssetCard 
+                    asset={asset} 
+                    index={index} 
+                    onClick={handleAssetClick} 
+                    onDownload={handleDownload} 
+                    onAddToCollection={openCollectionModal}
+                    isGolden={index === luckyIndex}
+                    onClaimBonus={handleClaimBonus}
+                />
+            </div>
+        );
+    }
+    return (
+        <AssetCard 
+            key={asset.id} 
+            asset={asset} 
+            index={index} 
+            onClick={handleAssetClick} 
+            onDownload={handleDownload} 
+            onAddToCollection={openCollectionModal}
+            isGolden={index === luckyIndex}
+            onClaimBonus={handleClaimBonus}
+        />
+    );
+  };
+
   return (
     <div className="min-h-screen pb-20 bg-[#F3F4F6] dark:bg-[#0B0D0F] transition-colors duration-500">
       <DashboardHeader 
@@ -467,47 +527,50 @@ const Dashboard = () => {
             </div>
         ) : (
             <div className="w-full overflow-hidden">
-                <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-6" columnClassName="pl-6 bg-clip-padding">
-                    
-                    {/* ✅ SYNC LOADER: Shows only when refreshing existing data (like after an upload) */}
-                    {isRefetching && !isFetchingNextPage && <ProcessingAssetCard />}
-
-                    {assets.map((asset, index) => {
-                        if (asset.isSkeleton) {
-                            return <SkeletonCard key={asset.id} />;
-                        }
-
-                        if (index === assets.length - 11) {
-                            return (
-                                <div ref={lastAssetRef} key={asset.id}>
-                                    <AssetCard 
-                                        asset={asset} 
-                                        index={index} 
-                                        onClick={handleAssetClick} 
-                                        onDownload={handleDownload} 
-                                        onAddToCollection={openCollectionModal}
-                                        // 🐹 Props for Golden Capy
-                                        isGolden={index === luckyIndex}
-                                        onClaimBonus={handleClaimBonus}
-                                    />
+                {filterType === 'creel' && groupedAssets ? (
+                    <div className="w-full flex flex-col gap-8">
+                        {isRefetching && !isFetchingNextPage && <ProcessingAssetCard />}
+                        {Object.entries(groupedAssets).map(([folder, folderAssets]) => (
+                            <div key={folder} className="w-full relative">
+                                <div 
+                                    onClick={() => toggleFolder(folder)}
+                                    className="sticky top-0 z-20 bg-[#F3F4F6] dark:bg-[#0B0D0F] py-4 mb-4 border-b border-gray-200 dark:border-white/10 flex items-center gap-3 cursor-pointer select-none group"
+                                >
+                                    <div className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-200 transition-colors">
+                                        {collapsedFolders[folder] ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
+                                    </div>
+                                    <Folder className="text-indigo-500 fill-indigo-100 dark:fill-indigo-900/50" size={24} />
+                                    <h2 className="text-xl font-bold text-gray-800 dark:text-white capitalize">{folder}</h2>
+                                    <span className="text-sm font-medium text-gray-400 bg-gray-200 dark:bg-white/10 px-2.5 py-0.5 rounded-full ml-2">
+                                        {folderAssets.length}
+                                    </span>
                                 </div>
-                            );
-                        }
-                        return (
-                            <AssetCard 
-                                key={asset.id} 
-                                asset={asset} 
-                                index={index} 
-                                onClick={handleAssetClick} 
-                                onDownload={handleDownload} 
-                                onAddToCollection={openCollectionModal}
-                                // 🐹 Props for Golden Capy
-                                isGolden={index === luckyIndex}
-                                onClaimBonus={handleClaimBonus}
-                            />
-                        );
-                    })}
-                </Masonry>
+                                <AnimatePresence initial={false}>
+                                    {!collapsedFolders[folder] && (
+                                        <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: 'auto', opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.3, ease: 'easeInOut' }}
+                                            className="overflow-hidden"
+                                        >
+                                            <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-6" columnClassName="pl-6 bg-clip-padding">
+                                                {folderAssets.map(asset => renderAsset(asset))}
+                                            </Masonry>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-6" columnClassName="pl-6 bg-clip-padding">
+                        {/* ✅ SYNC LOADER: Shows only when refreshing existing data (like after an upload) */}
+                        {isRefetching && !isFetchingNextPage && <ProcessingAssetCard />}
+
+                        {assets.map(asset => renderAsset(asset))}
+                    </Masonry>
+                )}
             </div>
         )}
       </div>

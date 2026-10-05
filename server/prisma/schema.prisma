@@ -114,6 +114,7 @@ model Asset {
   collections    AssetOnCollection[]
   previewFrames String[]  @default([])
   isCReel       Boolean   @default(false)
+  creelFolder   String?
 
   deletedAt      DateTime?
   @@index([deletedAt])
