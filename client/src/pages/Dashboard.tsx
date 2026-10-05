@@ -11,7 +11,8 @@ import {
   ChevronRight,
   Plus, 
   ExternalLink,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Masonry from 'react-masonry-css';
@@ -21,6 +22,7 @@ import { toast } from 'react-toastify';
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti'; // ✅ Added for the Golden Capy celebration
+import { useAuth } from '../context/AuthContext';
 
 // --- TYPES ---
 interface Asset {
@@ -191,6 +193,7 @@ const AssetCard = React.memo(({
 
 // --- DASHBOARD COMPONENT ---
 const Dashboard = () => {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlSearch = searchParams.get('search') || '';
@@ -205,11 +208,11 @@ const Dashboard = () => {
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [modalSearch, setModalSearch] = useState('');
 
-  // 📂 C-REEL FOLDERS STATE
-  const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
+  // 📂 C-REEL FOLDERS STATE (Closed by default)
+  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
 
   const toggleFolder = useCallback((folderName: string) => {
-      setCollapsedFolders(prev => ({
+      setOpenFolders(prev => ({
           ...prev,
           [folderName]: !prev[folderName]
       }));
@@ -431,6 +434,21 @@ const Dashboard = () => {
       setIsCollectionModalOpen(true);
   }, []);
 
+  const handleDeleteFolder = async (e: React.MouseEvent, folderName: string) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!window.confirm(`Are you sure you want to completely delete the folder "${folderName}" and all its assets? This cannot be undone.`)) {
+          return;
+      }
+      try {
+          toast.info('Deleting folder...', { autoClose: false, toastId: 'del-folder' });
+          await client.delete(`/assets/creel/folders/${folderName}`);
+          toast.update('del-folder', { render: 'Folder deleted completely!', type: 'success', autoClose: 3000 });
+          queryClient.invalidateQueries({ queryKey: ['assets'] });
+      } catch (error) {
+          toast.update('del-folder', { render: 'Failed to delete folder.', type: 'error', autoClose: 3000 });
+      }
+  };
+
   const addToCollection = async (collectionId: string, collectionName: string) => {
     if (!selectedAssetId) return;
     setIsCollectionModalOpen(false);
@@ -534,19 +552,31 @@ const Dashboard = () => {
                             <div key={folder} className="w-full relative">
                                 <div 
                                     onClick={() => toggleFolder(folder)}
-                                    className="sticky top-0 z-20 bg-[#F3F4F6] dark:bg-[#0B0D0F] py-4 mb-4 border-b border-gray-200 dark:border-white/10 flex items-center gap-3 cursor-pointer select-none group"
+                                    className="sticky top-0 z-20 bg-[#F3F4F6] dark:bg-[#0B0D0F] py-4 mb-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between cursor-pointer select-none group"
                                 >
-                                    <div className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-200 transition-colors">
-                                        {collapsedFolders[folder] ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
+                                    <div className="flex items-center gap-3">
+                                        <div className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-200 transition-colors">
+                                            {openFolders[folder] ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                                        </div>
+                                        <Folder className="text-indigo-500 fill-indigo-100 dark:fill-indigo-900/50" size={24} />
+                                        <h2 className="text-xl font-bold text-gray-800 dark:text-white capitalize">{folder}</h2>
+                                        <span className="text-sm font-medium text-gray-400 bg-gray-200 dark:bg-white/10 px-2.5 py-0.5 rounded-full ml-2">
+                                            {folderAssets.length}
+                                        </span>
                                     </div>
-                                    <Folder className="text-indigo-500 fill-indigo-100 dark:fill-indigo-900/50" size={24} />
-                                    <h2 className="text-xl font-bold text-gray-800 dark:text-white capitalize">{folder}</h2>
-                                    <span className="text-sm font-medium text-gray-400 bg-gray-200 dark:bg-white/10 px-2.5 py-0.5 rounded-full ml-2">
-                                        {folderAssets.length}
-                                    </span>
+                                    
+                                    {user?.role === 'admin' && (
+                                        <button 
+                                            onClick={(e) => handleDeleteFolder(e, folder)}
+                                            className="text-red-500 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                                            title="Permanently Delete Folder"
+                                        >
+                                            <Trash2 size={20} />
+                                        </button>
+                                    )}
                                 </div>
                                 <AnimatePresence initial={false}>
-                                    {!collapsedFolders[folder] && (
+                                    {openFolders[folder] && (
                                         <motion.div
                                             initial={{ height: 0, opacity: 0 }}
                                             animate={{ height: 'auto', opacity: 1 }}

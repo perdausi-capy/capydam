@@ -11,7 +11,8 @@ import {
     deleteAsset, 
     getRelatedAssets, 
     trackAssetClick,
-    getCreelFolders
+    getCreelFolders,
+    deleteCreelFolder
 } from '../controllers/asset.controller';
 
 // ✅ IMPORT TRASH CONTROLLERS
@@ -56,6 +57,7 @@ router.post('/track-click', verifyJWT, trackAssetClick);
 // 3. SEARCH / BROWSE
 router.get('/', verifyJWT, getAssets);
 router.get('/creel/folders', verifyJWT, getCreelFolders);
+router.delete('/creel/folders/:folder', verifyJWT, deleteCreelFolder);
 
 // 4. SPECIFIC ID ROUTES (Must come BEFORE generic /:id)
 router.get('/:id/related', verifyJWT, getRelatedAssets);
