@@ -14,6 +14,29 @@ import {
   analyzeAudioVideo 
 } from '../services/ai.service';
 
+// --- In-Memory Queue to prevent server overload ---
+const uploadQueue: (() => Promise<void>)[] = [];
+let isProcessingQueue = false;
+
+const processUploadQueue = async () => {
+  if (isProcessingQueue) return;
+  isProcessingQueue = true;
+  
+  while (uploadQueue.length > 0) {
+    const task = uploadQueue.shift();
+    if (task) {
+      try {
+        await task();
+      } catch (err) {
+        console.error('[Webhook Queue] Task failed:', err);
+      }
+    }
+  }
+  
+  isProcessingQueue = false;
+};
+// --------------------------------------------------
+
 export const handleDriveUpload = async (req: Request, res: Response): Promise<void> => {
   try {
     const {
@@ -48,126 +71,143 @@ export const handleDriveUpload = async (req: Request, res: Response): Promise<vo
        return;
     }
 
-    // 1. Download file from Google Drive
-    const tempDir = path.join(__dirname, '../../uploads');
-    await fs.ensureDir(tempDir);
-    const tempFilename = `webhook-${Date.now()}.mp4`;
-    const tempPath = path.join(tempDir, tempFilename);
+    // Acknowledge receipt immediately to avoid client timeout!
+    res.status(202).json({ success: true, message: 'Processing queued in background' });
 
-    console.log(`[Webhook] Downloading from Google Drive to ${tempPath}...`);
-    const writer = fs.createWriteStream(tempPath);
-    const response = await axios({
-      url: gdrive_download_url,
-      method: 'GET',
-      responseType: 'stream'
-    });
+    // Enqueue the heavy lifting so we don't overload the server
+    uploadQueue.push(async () => {
+      try {
+        // 1. Download file from Google Drive
+        const tempDir = path.join(__dirname, '../../uploads');
+        await fs.ensureDir(tempDir);
+        const tempFilename = `webhook-${Date.now()}.mp4`;
+        const tempPath = path.join(tempDir, tempFilename);
 
-    response.data.pipe(writer);
+        console.log(`[Webhook Queue] Starting processing for: ${clip_title}`);
+        console.log(`[Webhook Queue] Downloading from Google Drive to ${tempPath}...`);
+        
+        const writer = fs.createWriteStream(tempPath);
+        const gdriveResponse = await axios({
+          url: gdrive_download_url,
+          method: 'GET',
+          responseType: 'stream'
+        });
 
-    await new Promise((resolve, reject) => {
-      writer.on('finish', () => resolve(true));
-      writer.on('error', reject);
-    });
+        gdriveResponse.data.pipe(writer);
 
-    console.log(`[Webhook] Download complete. Processing file...`);
+        await new Promise((resolve, reject) => {
+          writer.on('finish', () => resolve(true));
+          writer.on('error', reject);
+        });
 
-    const stats = await fs.stat(tempPath);
-    const size = stats.size;
-    const mimetype = 'video/mp4';
-    const finalOriginalName = `${clip_title}.mp4`;
+        console.log(`[Webhook Queue] Download complete. Generating thumbnails...`);
 
-    // 2. Generate Thumbnails and Previews
-    const thumbnailDir = path.join(__dirname, '../../uploads/thumbnails');
-    await fs.ensureDir(thumbnailDir);
-    
-    let thumbnailRelativePath: string | null = null;
-    let previewFrames: string[] = [];
+        const stats = await fs.stat(tempPath);
+        const size = stats.size;
+        const mimetype = 'video/mp4';
+        const finalOriginalName = `${clip_title}.mp4`;
 
-    try {
-      thumbnailRelativePath = await generateVideoThumbnail(tempPath, thumbnailDir);
-      const previewFiles = await generateVideoPreviews(tempPath, thumbnailDir, tempFilename);
-      
-      for (const pFile of previewFiles) {
-          const localPPath = path.join(thumbnailDir, pFile);
-          const cloudPPath = await uploadToSupabase(
-              localPPath, 
-              `previews/${pFile}`, 
-              'image/jpeg'
-          );
-          previewFrames.push(cloudPPath);
-          await fs.remove(localPPath); // Cleanup local frame
-      }
-    } catch (err) {
-      console.warn("[Webhook] Thumbnail generation failed:", err);
-    }
+        // 2. Generate Thumbnails and Previews
+        const thumbnailDir = path.join(__dirname, '../../uploads/thumbnails');
+        await fs.ensureDir(thumbnailDir);
+        
+        let thumbnailRelativePath: string | null = null;
+        let previewFrames: string[] = [];
 
-    // 3. Upload to Supabase
-    const cloudOriginalPath = await uploadToSupabase(
-      tempPath, 
-      `originals/${tempFilename}`, 
-      mimetype
-    );
-
-    let cloudThumbnailPath = null;
-    if (thumbnailRelativePath) {
-       const localThumbPath = path.join(__dirname, '../../uploads/', thumbnailRelativePath);
-       cloudThumbnailPath = await uploadToSupabase(
-         localThumbPath,
-         thumbnailRelativePath, 
-         'image/jpeg'
-       );
-       await fs.remove(localThumbPath);
-    }
-
-    // 4. Save to Database
-    const description = `Project: ${project_name}\nGDrive URL: ${gdrive_url}\nStart Text: ${start_text}`;
-    const initialAiData = {
-        description: 'Processing video...',
-        tags: [project_name, "automated_upload", clip_slug],
-        colors: [accent_color]
-    };
-
-    const asset = await prisma.asset.create({
-      data: {
-        filename: tempFilename,
-        originalName: finalOriginalName,
-        mimeType: mimetype,
-        size,
-        path: cloudOriginalPath,
-        thumbnailPath: cloudThumbnailPath,
-        previewFrames: previewFrames,
-        description: description,
-        userId: adminUser.id, 
-        aiData: JSON.stringify(initialAiData),
-        isCReel: true, // Marked as CReel automatically
-        creelFolder: project_name, // Organizes the asset into the correct folder automatically
-      },
-    });
-
-    // 5. Trigger AI Analysis
-    console.log(`[Webhook] Triggering AI Analysis for ${asset.id}...`);
-    // Run async so we don't block the webhook response
-    analyzeAudioVideo(asset.id, tempPath, { creativity: 0.3, specificity: 'high' })
-      .catch(err => {
-        console.error(`[Webhook] AI analysis failed for ${asset.id}:`, err);
-      })
-      .finally(async () => {
-        // Cleanup temp file after analysis
         try {
-          if (await fs.pathExists(tempPath)) {
-            await fs.remove(tempPath);
-            console.log(`[Webhook] Cleaned up ${tempPath}`);
+          thumbnailRelativePath = await generateVideoThumbnail(tempPath, thumbnailDir);
+          const previewFiles = await generateVideoPreviews(tempPath, thumbnailDir, tempFilename);
+          
+          for (const pFile of previewFiles) {
+              const localPPath = path.join(thumbnailDir, pFile);
+              const cloudPPath = await uploadToSupabase(
+                  localPPath, 
+                  `previews/${pFile}`, 
+                  'image/jpeg'
+              );
+              previewFrames.push(cloudPPath);
+              await fs.remove(localPPath); // Cleanup local frame
           }
-        } catch(e) {
-          console.error(`[Webhook] Error cleaning up ${tempPath}:`, e);
+        } catch (err) {
+          console.warn("[Webhook Queue] Thumbnail generation failed:", err);
         }
-      });
 
-    console.log(`✅ [Webhook] Asset created successfully: ${asset.id}`);
-    res.status(200).json({ success: true, assetId: asset.id });
+        // 3. Upload to Supabase
+        const cloudOriginalPath = await uploadToSupabase(
+          tempPath, 
+          `originals/${tempFilename}`, 
+          mimetype
+        );
+
+        let cloudThumbnailPath = null;
+        if (thumbnailRelativePath) {
+           const localThumbPath = path.join(__dirname, '../../uploads/', thumbnailRelativePath);
+           cloudThumbnailPath = await uploadToSupabase(
+             localThumbPath,
+             thumbnailRelativePath, 
+             'image/jpeg'
+           );
+           await fs.remove(localThumbPath);
+        }
+
+        // 4. Save to Database
+        const description = `Project: ${project_name}\nGDrive URL: ${gdrive_url}\nStart Text: ${start_text}`;
+        const initialAiData = {
+            description: 'Processing video...',
+            tags: [project_name, "automated_upload", clip_slug],
+            colors: [accent_color]
+        };
+
+        const asset = await prisma.asset.create({
+          data: {
+            filename: tempFilename,
+            originalName: finalOriginalName,
+            mimeType: mimetype,
+            size,
+            path: cloudOriginalPath,
+            thumbnailPath: cloudThumbnailPath,
+            previewFrames: previewFrames,
+            description: description,
+            userId: adminUser.id, 
+            aiData: JSON.stringify(initialAiData),
+            isCReel: true, // Marked as CReel automatically
+            creelFolder: project_name, // Organizes the asset into the correct folder automatically
+          },
+        });
+
+        // 5. Trigger AI Analysis
+        console.log(`[Webhook Queue] Triggering AI Analysis for ${asset.id}...`);
+        
+        analyzeAudioVideo(asset.id, tempPath, { creativity: 0.3, specificity: 'high' })
+          .catch(err => {
+            console.error(`[Webhook Queue] AI analysis failed for ${asset.id}:`, err);
+          })
+          .finally(async () => {
+            // Cleanup temp file after analysis
+            try {
+              if (await fs.pathExists(tempPath)) {
+                await fs.remove(tempPath);
+                console.log(`[Webhook Queue] Cleaned up ${tempPath}`);
+              }
+            } catch(e) {
+              console.error(`[Webhook Queue] Error cleaning up ${tempPath}:`, e);
+            }
+          });
+
+        console.log(`✅ [Webhook Queue] Asset created and analysis triggered successfully: ${asset.id}`);
+
+      } catch (error) {
+        console.error("[Webhook Queue] Task processing failed:", error);
+      }
+    });
+
+    // Start the queue processor if it's not already running
+    processUploadQueue();
 
   } catch (error) {
     console.error("[Webhook] Handle Drive Upload Exception:", error);
-    res.status(500).json({ error: 'Webhook processing failed' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Webhook initialization failed' });
+    }
   }
 };

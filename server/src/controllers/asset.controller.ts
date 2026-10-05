@@ -640,3 +640,62 @@ export const getCreelFolders = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to fetch folders' });
   }
 };
+
+export const deleteCreelFolder = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { folder } = req.params;
+    const userRole = (req as any).user?.role;
+    
+    if (userRole !== 'admin') {
+      res.status(403).json({ message: 'Access denied: Admins only' });
+      return;
+    }
+
+    if (!folder) {
+      res.status(400).json({ message: 'Folder name is required' });
+      return;
+    }
+
+    console.log(`\n🔥 [FORCE DELETE] Deleting C-REEL Folder: ${folder}`);
+
+    // 1. Find all assets in this folder
+    const assets = await prisma.asset.findMany({ 
+      where: { creelFolder: folder, isCReel: true } 
+    });
+
+    if (assets.length === 0) {
+      res.status(404).json({ message: 'No assets found in this folder' });
+      return;
+    }
+
+    // 2. Delete physical files from Supabase
+    for (const asset of assets) {
+      try {
+        if (asset.path) await deleteFromSupabase(asset.path);
+        if (asset.thumbnailPath) await deleteFromSupabase(asset.thumbnailPath);
+        
+        if (asset.previewFrames && asset.previewFrames.length > 0) {
+            await Promise.all(asset.previewFrames.map(frame => deleteFromSupabase(frame)));
+        }
+      } catch (storageError) {
+        console.warn(`⚠️ Storage delete warning for ${asset.id}:`, storageError);
+      }
+    }
+
+    // 3. Delete DB records
+    const assetIds = assets.map(a => a.id);
+    
+    await prisma.$transaction([
+        prisma.assetOnCollection.deleteMany({ where: { assetId: { in: assetIds } } }),
+        prisma.assetOnCategory.deleteMany({ where: { assetId: { in: assetIds } } }),
+        prisma.assetClick.deleteMany({ where: { assetId: { in: assetIds } } }),
+        prisma.asset.deleteMany({ where: { id: { in: assetIds } } })
+    ]);
+
+    res.json({ message: `Successfully deleted folder ${folder} and ${assets.length} assets.` });
+
+  } catch (error) {
+    console.error("🔥 C-REEL FOLDER DELETE ERROR:", error);
+    res.status(500).json({ message: 'Server error', error: String(error) });
+  }
+};
