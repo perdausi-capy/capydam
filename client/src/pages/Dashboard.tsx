@@ -532,7 +532,11 @@ const Dashboard = () => {
             <div className="w-full overflow-hidden">
                 {filterType === 'creel' && groupedAssets ? (
                     <div className="w-full flex flex-col gap-8">
-                        {isRefetching && !isFetchingNextPage && <ProcessingAssetCard />}
+                        {isRefetching && !isFetchingNextPage && (
+                            <Masonry breakpointCols={breakpointColumnsObj} className="flex w-auto -ml-6" columnClassName="pl-6 bg-clip-padding">
+                                <ProcessingAssetCard />
+                            </Masonry>
+                        )}
                         {Object.entries(groupedAssets).map(([folder, folderAssets]) => (
                             <div key={folder} className="w-full relative">
                                 <div 
