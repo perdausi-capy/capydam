@@ -489,21 +489,6 @@ const Dashboard = () => {
         return <SkeletonCard key={asset.id} />;
     }
     
-    if (index === assets.length - 11) {
-        return (
-            <div ref={lastAssetRef} key={asset.id}>
-                <AssetCard 
-                    asset={asset} 
-                    index={index} 
-                    onClick={handleAssetClick} 
-                    onDownload={handleDownload} 
-                    onAddToCollection={openCollectionModal}
-                    isGolden={index === luckyIndex}
-                    onClaimBonus={handleClaimBonus}
-                />
-            </div>
-        );
-    }
     return (
         <AssetCard 
             key={asset.id} 
@@ -600,6 +585,13 @@ const Dashboard = () => {
 
                         {assets.map(asset => renderAsset(asset))}
                     </Masonry>
+                )}
+
+                {/* Infinite Scroll Trigger - Placed outside of closed folders so it's always reachable */}
+                {hasNextPage && (
+                    <div ref={lastAssetRef} className="h-24 w-full flex items-center justify-center mt-4">
+                        {isFetchingNextPage && <Loader2 className="animate-spin text-indigo-500" size={32} />}
+                    </div>
                 )}
             </div>
         )}
