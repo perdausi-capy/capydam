@@ -178,23 +178,23 @@ export const handleDriveUpload = async (req: Request, res: Response): Promise<vo
         // 5. Trigger AI Analysis
         console.log(`[Webhook Queue] Triggering AI Analysis for ${asset.id}...`);
         
-        analyzeAudioVideo(asset.id, tempPath, { creativity: 0.3, specificity: 'high' })
-          .catch(err => {
-            console.error(`[Webhook Queue] AI analysis failed for ${asset.id}:`, err);
-          })
-          .finally(async () => {
-            // Cleanup temp file after analysis
-            try {
-              if (await fs.pathExists(tempPath)) {
-                await fs.remove(tempPath);
-                console.log(`[Webhook Queue] Cleaned up ${tempPath}`);
-              }
-            } catch(e) {
-              console.error(`[Webhook Queue] Error cleaning up ${tempPath}:`, e);
+        try {
+          await analyzeAudioVideo(asset.id, tempPath, { creativity: 0.3, specificity: 'high' });
+          console.log(`✅ [Webhook Queue] AI Analysis Finished for ${asset.id}`);
+        } catch (err) {
+          console.error(`[Webhook Queue] AI analysis failed for ${asset.id}:`, err);
+        } finally {
+          // Cleanup temp file after analysis
+          try {
+            await new Promise(resolve => setTimeout(resolve, 500));
+            if (await fs.pathExists(tempPath)) {
+              await fs.remove(tempPath);
+              console.log(`[Webhook Queue] Cleaned up ${tempPath}`);
             }
-          });
-
-        console.log(`✅ [Webhook Queue] Asset created and analysis triggered successfully: ${asset.id}`);
+          } catch(e) {
+            console.error(`[Webhook Queue] Error cleaning up ${tempPath}:`, e);
+          }
+        }
 
       } catch (error) {
         console.error("[Webhook Queue] Task processing failed:", error);
