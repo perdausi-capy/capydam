@@ -7,6 +7,10 @@ const router = Router();
 // Protect all ITT routes - require authentication and admin role
 router.use(verifyJWT, requireAdmin);
 
+// Export Data
+router.get('/export', ittController.exportIttData);
+
+
 // Workstations
 router.get('/workstations', ittController.getWorkstations);
 router.post('/workstations', ittController.createWorkstation);
