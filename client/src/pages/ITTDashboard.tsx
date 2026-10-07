@@ -1,14 +1,42 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Monitor, Wrench, FileText, ArrowLeft, Package } from 'lucide-react';
+import { Shield, Monitor, Wrench, FileText, ArrowLeft, Package, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import ITTWorkstations from './ITTWorkstations';
 import ITTLedger from './ITTLedger';
 import ITTReports from './ITTReports';
 import ITTInventory from './ITTInventory';
+import client from '../api/client';
 
 const ITTDashboard = () => {
     const [activeTab, setActiveTab] = useState<'workstations' | 'ledger' | 'reports' | 'inventory'>('workstations');
+    const { user } = useAuth();
+    const [isExporting, setIsExporting] = useState(false);
+
+    const handleExport = async () => {
+        try {
+            setIsExporting(true);
+            const response = await client.get('/itt/export', {
+                responseType: 'blob'
+            });
+            
+            const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ITT_Data_Export_${new Date().toISOString().split('T')[0]}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error('Export Error:', error);
+            alert('Failed to export data');
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
     return (
         <div className="min-h-screen bg-[#F8F9FC] dark:bg-[#0B0D0F] text-gray-900 dark:text-white p-6 lg:p-12 transition-colors duration-500 relative overflow-hidden font-sans">
@@ -38,6 +66,15 @@ const ITTDashboard = () => {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        {user?.role === 'admin' && (
+                            <button
+                                onClick={handleExport}
+                                disabled={isExporting}
+                                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white border border-transparent rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                            >
+                                <Download size={16} /> {isExporting ? 'Exporting...' : 'Export ITT Data'}
+                            </button>
+                        )}
                         <Link
                             to="/"
                             className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-sm font-bold hover:bg-gray-50 dark:hover:bg-white/10 transition-colors shadow-sm"

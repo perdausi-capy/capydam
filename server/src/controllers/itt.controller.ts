@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth.middleware';
+import ExcelJS from 'exceljs';
 
 const prisma = new PrismaClient();
 
@@ -615,5 +616,161 @@ export const saveFloorPlan = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error saving floor plan:', error);
     res.status(500).json({ error: 'Failed to save floor plan' });
+  }
+};
+
+// ==========================================
+// EXPORT ITT DATA
+// ==========================================
+
+export const exportIttData = async (req: Request, res: Response) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    
+    // 1. Workstations
+    const workstationsSheet = workbook.addWorksheet('Workstations');
+    workstationsSheet.columns = [
+      { header: 'Unit ID', key: 'unitId', width: 15 },
+      { header: 'Status', key: 'status', width: 15 },
+      { header: 'Assigned Users', key: 'assignedUsers', width: 30 },
+      { header: 'MOBO', key: 'mobo', width: 20 },
+      { header: 'CPU', key: 'cpu', width: 20 },
+      { header: 'RAM', key: 'ram', width: 15 },
+      { header: 'GPU', key: 'gpu', width: 20 },
+      { header: 'PSU', key: 'psu', width: 15 },
+      { header: 'Storage', key: 'storage', width: 20 },
+      { header: 'Monitors', key: 'monitors', width: 30 },
+      { header: 'Inventory Parts', key: 'parts', width: 30 },
+      { header: 'Notes', key: 'notes', width: 30 },
+    ];
+
+    const workstations = await prisma.workstation.findMany({
+      include: {
+        assignedUsers: { select: { name: true } },
+        monitors: true,
+        parts: { select: { itemName: true } },
+      },
+      orderBy: { unitId: 'asc' },
+    });
+
+    workstations.forEach(ws => {
+      workstationsSheet.addRow({
+        unitId: ws.unitId,
+        status: ws.status,
+        assignedUsers: ws.assignedUsers.map((u: any) => u.name).join(', '),
+        mobo: ws.mobo,
+        cpu: ws.cpu,
+        ram: ws.ram,
+        gpu: ws.gpu,
+        psu: ws.psu,
+        storage: ws.storage,
+        monitors: ws.monitors.map((m: any) => `${m.model} (${m.specs || 'N/A'})`).join(', '),
+        parts: ws.parts.map((p: any) => p.itemName).join(', '),
+        notes: ws.notes,
+      });
+    });
+
+    // 2. Daily Reports
+    const reportsSheet = workbook.addWorksheet('Daily Reports');
+    reportsSheet.columns = [
+      { header: 'Date', key: 'date', width: 15 },
+      { header: 'Author', key: 'author', width: 20 },
+      { header: 'Hours', key: 'hours', width: 10 },
+      { header: 'Reactive Tickets', key: 'reactiveTickets', width: 40 },
+      { header: 'Proactive Maintenance', key: 'proactiveMaintenance', width: 40 },
+      { header: 'Research Notes', key: 'researchNotes', width: 40 },
+      { header: 'Next Steps', key: 'nextSteps', width: 40 },
+    ];
+
+    const reports = await prisma.dailyReport.findMany({
+      include: { author: { select: { name: true } } },
+      orderBy: { date: 'desc' },
+    });
+
+    reports.forEach(r => {
+      reportsSheet.addRow({
+        date: r.date.toISOString().split('T')[0],
+        author: r.author.name,
+        hours: r.hours,
+        reactiveTickets: r.reactiveTickets.join('\n'),
+        proactiveMaintenance: r.proactiveMaintenance.join('\n'),
+        researchNotes: r.researchNotes,
+        nextSteps: r.nextSteps,
+      });
+    });
+
+    // 3. ITT Inventory
+    const inventorySheet = workbook.addWorksheet('Inventory');
+    inventorySheet.columns = [
+      { header: 'Item Name', key: 'itemName', width: 30 },
+      { header: 'Type', key: 'type', width: 15 },
+      { header: 'Serial Number', key: 'serialNumber', width: 20 },
+      { header: 'Status', key: 'status', width: 15 },
+      { header: 'Workstation', key: 'workstation', width: 15 },
+      { header: 'Purchase Date', key: 'purchaseDate', width: 15 },
+      { header: 'Notes', key: 'notes', width: 30 },
+    ];
+
+    const inventory = await prisma.ittInventory.findMany({
+      include: { workstation: { select: { unitId: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    inventory.forEach(item => {
+      inventorySheet.addRow({
+        itemName: item.itemName,
+        type: item.type,
+        serialNumber: item.serialNumber,
+        status: item.status,
+        workstation: item.workstation?.unitId || 'Unassigned',
+        purchaseDate: item.purchaseDate ? item.purchaseDate.toISOString().split('T')[0] : 'N/A',
+        notes: item.notes,
+      });
+    });
+
+    // 4. Maintenance Ledgers
+    const ledgerSheet = workbook.addWorksheet('Maintenance Ledgers');
+    ledgerSheet.columns = [
+      { header: 'Date', key: 'date', width: 15 },
+      { header: 'Workstation / Hardware', key: 'workstation', width: 25 },
+      { header: 'Issue', key: 'issue', width: 40 },
+      { header: 'Action Taken', key: 'actionTaken', width: 40 },
+      { header: 'Status', key: 'status', width: 15 },
+      { header: 'Assigned Tech', key: 'assignedTech', width: 20 },
+    ];
+
+    const ledgers = await prisma.maintenanceLedger.findMany({
+      include: {
+        workstation: { select: { unitId: true } },
+        assignedTech: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    ledgers.forEach(l => {
+      ledgerSheet.addRow({
+        date: l.createdAt.toISOString().split('T')[0],
+        workstation: l.workstation?.unitId || l.otherHardware || 'N/A',
+        issue: l.issue,
+        actionTaken: l.actionTaken,
+        status: l.status,
+        assignedTech: l.assignedTech?.name || 'Unassigned',
+      });
+    });
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=' + 'ITT_Data_Export.xlsx'
+    );
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.send(Buffer.from(buffer));
+  } catch (error) {
+    console.error('Error exporting ITT data:', error);
+    res.status(500).json({ error: 'Failed to export ITT data' });
   }
 };
